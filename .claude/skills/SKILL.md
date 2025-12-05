@@ -1,32 +1,25 @@
+---
+name: flow-ui
+description: "Primary Color만 바꾸면 브랜드 완성 - 자연어 요청으로 완성형 UI 생성"
+---
+
 # Flow UI Skill
 
 > **"Primary Color만 바꾸면 브랜드 완성"**
 > 자연어 요청으로 정의된 룰에 따라 완성형 UI를 생성하는 디자인 시스템 스킬
 
----
+## Requirements
 
-## Skill Metadata
+- Next.js 15+
+- React 19+
+- Tailwind CSS 4+
+- shadcn/ui (new-york style)
 
-```yaml
-name: flow-ui
-version: 2.0.0
-description: Primary Color 기반 디자인 시스템 - 자연어 요청 → 완성형 UI 생성
-author: Team Jane
-triggers:
-  - UI 컴포넌트 요청
-  - 페이지/화면 생성 요청
-  - 랜딩페이지 구축 요청
-  - 디자인 시스템 적용 요청
-requirements:
-  - Next.js 15+
-  - React 19+
-  - Tailwind CSS 4+
-  - shadcn/ui (new-york style)
-behavior:
-  - 응답 형식: 설계 요약 (3~5줄) → 코드
-  - 문서 자동 생성 금지
-  - Feature Batch 완료 후 사용자 요청 시만 문서화
-```
+## Behavior
+
+- 응답 형식: 설계 요약 (3~5줄) → 코드
+- 문서 자동 생성 금지
+- Feature Batch 완료 후 사용자 요청 시만 문서화
 
 ---
 
@@ -339,12 +332,3 @@ export default function LoginPage() {
   )
 }
 ```
-
----
-
-## 변경 이력
-
-| 날짜 | 버전 | 변경 내용 |
-|-----|------|---------|
-| 2025-12-05 | 1.0.0 | 초기 스킬 패키징 |
-| 2025-12-05 | 2.0.0 | 토큰 효율 원칙 추가, PRD 템플릿 생성, 워크플로우 개선 |
