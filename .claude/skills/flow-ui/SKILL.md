@@ -1,6 +1,6 @@
 ---
 name: flow-ui
-description: "Primary Color만 바꾸면 브랜드 완성 - 자연어 요청으로 완성형 UI 생성"
+description: "Primary Color 기반 디자인 시스템으로 완성형 UI를 생성합니다. Use when the user requests UI components, pages, landing pages, login screens, hero sections, forms, cards, or any React/Next.js UI development with shadcn/ui and Tailwind CSS."
 ---
 
 # Flow UI Skill
