@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, forwardRef, useImperativeHandle } from "react"
-import Phaser from "phaser"
+import * as Phaser from "phaser"
 import { createGameConfig } from "./config"
 import { MainScene } from "./scenes/MainScene"
 import { eventBridge, GameEvents } from "./events"

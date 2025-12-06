@@ -2,7 +2,7 @@
  * Interactive Object System
  * Objects that players can interact with (E key)
  */
-import Phaser from "phaser"
+import * as Phaser from "phaser"
 
 // Interaction types
 export type InteractionType = "info" | "portal" | "npc" | "item" | "door"

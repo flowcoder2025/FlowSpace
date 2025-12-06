@@ -2,7 +2,7 @@
  * Main Game Scene
  * Handles map rendering, player movement, and camera
  */
-import Phaser from "phaser"
+import * as Phaser from "phaser"
 import { MAP_CONFIG } from "../config"
 import { eventBridge, GameEvents, type PlayerPosition } from "../events"
 import {
@@ -55,6 +55,12 @@ export class MainScene extends Phaser.Scene {
   private playerAvatarColor: AvatarColor = "default"
   private nicknameText!: Phaser.GameObjects.Text
   private isSceneActive = false
+
+  // Queue for pending remote player events (received before scene is ready)
+  private pendingRemotePlayerEvents: Array<{
+    type: "join" | "update" | "leave"
+    data: PlayerPosition & { avatarColor?: AvatarColor; nickname?: string }
+  }> = []
 
   // Event handler references for cleanup
   private handleRemotePlayerUpdate!: (data: unknown) => void
@@ -118,6 +124,9 @@ export class MainScene extends Phaser.Scene {
 
     // Listen for remote player events
     this.setupMultiplayerEvents()
+
+    // Process any remote player events that arrived before scene was ready
+    this.processPendingRemotePlayerEvents()
 
     // Emit game ready event
     eventBridge.emit(GameEvents.GAME_READY)
@@ -512,20 +521,32 @@ export class MainScene extends Phaser.Scene {
   private setupMultiplayerEvents() {
     // Store handler references for cleanup
     this.handleRemotePlayerUpdate = (data: unknown) => {
-      if (!this.isSceneActive) return
       const position = data as PlayerPosition & { avatarColor?: AvatarColor; nickname?: string }
+      // Queue event if scene is not ready yet
+      if (!this.isSceneActive || !this.add) {
+        this.pendingRemotePlayerEvents.push({ type: "update", data: position })
+        return
+      }
       this.updateRemotePlayer(position)
     }
 
     this.handleRemotePlayerJoin = (data: unknown) => {
-      if (!this.isSceneActive) return
       const position = data as PlayerPosition & { avatarColor?: AvatarColor; nickname?: string }
+      // Queue event if scene is not ready yet
+      if (!this.isSceneActive || !this.add) {
+        this.pendingRemotePlayerEvents.push({ type: "join", data: position })
+        return
+      }
       this.addRemotePlayer(position)
     }
 
     this.handleRemotePlayerLeave = (data: unknown) => {
-      if (!this.isSceneActive) return
       const { id } = data as { id: string }
+      // Queue event if scene is not ready yet
+      if (!this.isSceneActive || !this.add) {
+        this.pendingRemotePlayerEvents.push({ type: "leave", data: { id } as PlayerPosition })
+        return
+      }
       this.removeRemotePlayer(id)
     }
 
@@ -535,7 +556,29 @@ export class MainScene extends Phaser.Scene {
     eventBridge.on(GameEvents.REMOTE_PLAYER_LEAVE, this.handleRemotePlayerLeave)
   }
 
+  private processPendingRemotePlayerEvents() {
+    // Process all pending events now that scene is ready
+    while (this.pendingRemotePlayerEvents.length > 0) {
+      const event = this.pendingRemotePlayerEvents.shift()
+      if (!event) continue
+
+      switch (event.type) {
+        case "join":
+          this.addRemotePlayer(event.data)
+          break
+        case "update":
+          this.updateRemotePlayer(event.data)
+          break
+        case "leave":
+          this.removeRemotePlayer(event.data.id)
+          break
+      }
+    }
+  }
+
   private addRemotePlayer(position: PlayerPosition & { avatarColor?: AvatarColor; nickname?: string }) {
+    // Safety check - ensure scene is fully ready before creating game objects
+    if (!this.add || !this.isSceneActive) return
     if (this.remotePlayers.has(position.id)) return
 
     const avatarColor = position.avatarColor || "yellow"

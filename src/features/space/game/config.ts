@@ -1,7 +1,7 @@
 /**
  * Phaser Game Configuration
  */
-import Phaser from "phaser"
+import * as Phaser from "phaser"
 
 // Map configuration
 export const MAP_CONFIG = {

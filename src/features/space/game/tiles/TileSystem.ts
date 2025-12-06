@@ -2,7 +2,7 @@
  * Procedural Tile System
  * Generates tile textures programmatically using Phaser Graphics API
  */
-import Phaser from "phaser"
+import * as Phaser from "phaser"
 
 // Tile configuration
 export const TILE_CONFIG = {

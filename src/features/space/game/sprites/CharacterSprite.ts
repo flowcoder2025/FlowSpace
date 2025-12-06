@@ -2,7 +2,7 @@
  * Procedural Character Sprite Generator
  * Creates pixel-art style character sprites programmatically
  */
-import Phaser from "phaser"
+import * as Phaser from "phaser"
 
 // Character sprite configuration
 export const CHARACTER_CONFIG = {
