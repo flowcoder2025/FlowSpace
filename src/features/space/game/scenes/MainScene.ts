@@ -577,50 +577,61 @@ export class MainScene extends Phaser.Scene {
   }
 
   private addRemotePlayer(position: PlayerPosition & { avatarColor?: AvatarColor; nickname?: string }) {
-    // Safety check - ensure scene is fully ready before creating game objects
-    if (!this.add || !this.isSceneActive) return
+    // Comprehensive safety check - verify scene system is fully active
+    // Check multiple conditions because Phaser's internal state can be inconsistent
+    if (!this.isSceneActive) return
+    if (!this.sys?.isActive()) return
+    if (!this.sys?.game) return
+    if (!this.sys?.displayList) return // DisplayList must exist for game objects
     if (this.remotePlayers.has(position.id)) return
 
-    const avatarColor = position.avatarColor || "yellow"
-    const textureKey = `character-${avatarColor}`
+    try {
+      const avatarColor = position.avatarColor || "yellow"
+      const textureKey = `character-${avatarColor}`
 
-    // Create shadow
-    const shadow = this.add.ellipse(
-      position.x,
-      position.y + CHARACTER_CONFIG.HEIGHT / 2,
-      CHARACTER_CONFIG.WIDTH - 4,
-      8,
-      0x000000,
-      0.3
-    )
-    shadow.setDepth(0)
-    this.remotePlayerShadows.set(position.id, shadow)
+      // Create shadow
+      const shadow = this.add.ellipse(
+        position.x,
+        position.y + CHARACTER_CONFIG.HEIGHT / 2,
+        CHARACTER_CONFIG.WIDTH - 4,
+        8,
+        0x000000,
+        0.3
+      )
+      shadow.setDepth(0)
+      this.remotePlayerShadows.set(position.id, shadow)
 
-    // Create sprite
-    const player = this.add.sprite(position.x, position.y, textureKey)
-    player.setDepth(1)
-    player.setOrigin(0.5, 0.5)
+      // Create sprite
+      const player = this.add.sprite(position.x, position.y, textureKey)
+      player.setDepth(1)
+      player.setOrigin(0.5, 0.5)
 
-    // Play idle animation
-    const idleAnim = getAnimationKey(position.direction || "down", false, avatarColor)
-    if (this.anims.exists(idleAnim)) {
-      player.play(idleAnim)
-    }
+      // Play idle animation
+      const idleAnim = getAnimationKey(position.direction || "down", false, avatarColor)
+      if (this.anims?.exists(idleAnim)) {
+        player.play(idleAnim)
+      }
 
-    this.remotePlayers.set(position.id, player)
+      this.remotePlayers.set(position.id, player)
 
-    // Create nickname text
-    if (position.nickname) {
-      const nameText = this.add
-        .text(position.x, position.y - CHARACTER_CONFIG.HEIGHT / 2 - 8, position.nickname, {
-          fontSize: "12px",
-          color: "#ffffff",
-          backgroundColor: "#00000080",
-          padding: { x: 4, y: 2 },
-        })
-        .setOrigin(0.5, 1)
-        .setDepth(2)
-      this.remotePlayerNames.set(position.id, nameText)
+      // Create nickname text
+      if (position.nickname) {
+        const nameText = this.add
+          .text(position.x, position.y - CHARACTER_CONFIG.HEIGHT / 2 - 8, position.nickname, {
+            fontSize: "12px",
+            color: "#ffffff",
+            backgroundColor: "#00000080",
+            padding: { x: 4, y: 2 },
+          })
+          .setOrigin(0.5, 1)
+          .setDepth(2)
+        this.remotePlayerNames.set(position.id, nameText)
+      }
+
+      console.log(`[MainScene] Remote player added: ${position.id}`)
+    } catch (error) {
+      // Scene might have been destroyed during execution - silently ignore
+      console.warn("[MainScene] Failed to add remote player, scene may be shutting down:", error)
     }
   }
 
