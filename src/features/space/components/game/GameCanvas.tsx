@@ -35,12 +35,16 @@ function GameLoadingState() {
   )
 }
 
+// Avatar color type
+type AvatarColor = "default" | "red" | "green" | "purple" | "orange" | "pink"
+
 // ============================================
 // GameCanvas Props
 // ============================================
 interface GameCanvasProps {
   playerId: string
   playerNickname: string
+  avatarColor?: AvatarColor
   onPlayerMove?: (position: { x: number; y: number; direction: string; isMoving: boolean }) => void
   className?: string
 }
@@ -51,6 +55,7 @@ interface GameCanvasProps {
 export function GameCanvas({
   playerId,
   playerNickname,
+  avatarColor = "default",
   onPlayerMove,
   className,
 }: GameCanvasProps) {
@@ -65,6 +70,7 @@ export function GameCanvas({
       <PhaserGame
         playerId={playerId}
         playerNickname={playerNickname}
+        avatarColor={avatarColor}
         onPlayerMove={onPlayerMove}
         onGameReady={handleGameReady}
       />

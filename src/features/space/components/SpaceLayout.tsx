@@ -223,6 +223,7 @@ export function SpaceLayout({
             <GameCanvas
               playerId={userId}
               playerNickname={userNickname}
+              avatarColor={userAvatarColor}
             />
           </Panel>
 
