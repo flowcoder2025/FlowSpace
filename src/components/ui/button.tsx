@@ -24,8 +24,9 @@ const buttonVariants = cva(
         default:
           "bg-primary text-primary-foreground hover:bg-primary/90 hover:shadow-lg hover:shadow-primary/25 hover:-translate-y-0.5 active:translate-y-0",
         // outline: Secondary 액션
+        // hover 시: 테두리 + 텍스트 → primary, 배경 → 투명 유지
         outline:
-          "border-2 border-border bg-background text-foreground hover:bg-muted hover:border-primary/50",
+          "border-2 border-border bg-transparent text-foreground hover:border-primary hover:text-primary hover:bg-transparent",
         // destructive: 위험 액션
         destructive:
           "bg-destructive text-white hover:bg-destructive/90 hover:shadow-lg hover:shadow-destructive/25 hover:-translate-y-0.5 active:translate-y-0",

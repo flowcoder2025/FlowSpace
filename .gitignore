@@ -33,3 +33,9 @@ Thumbs.db
 
 # Misc
 *.log
+
+# Playwright MCP browser data
+.playwright-mcp/
+
+# TypeScript build info
+tsconfig.tsbuildinfo

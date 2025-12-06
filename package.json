@@ -1,0 +1,54 @@
+{
+  "name": "flow-metaverse",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "socket:dev": "tsx server/socket-server.ts",
+    "dev:all": "concurrently \"npm run dev\" \"npm run socket:dev\"",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:migrate": "prisma migrate dev",
+    "db:seed": "prisma db seed",
+    "db:studio": "prisma studio"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
+  "dependencies": {
+    "@auth/prisma-adapter": "^2.0.0",
+    "@livekit/components-react": "^2.9.17",
+    "@prisma/client": "^6.0.0",
+    "@radix-ui/react-slot": "^1.2.4",
+    "bcryptjs": "^3.0.3",
+    "class-variance-authority": "^0.7.0",
+    "clsx": "^2.1.0",
+    "livekit-client": "^2.16.0",
+    "livekit-server-sdk": "^2.14.2",
+    "next": "^15.0.0",
+    "next-auth": "^5.0.0-beta.25",
+    "phaser": "^3.90.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-resizable-panels": "^3.0.6",
+    "socket.io": "^4.8.1",
+    "socket.io-client": "^4.8.1",
+    "tailwind-merge": "^2.5.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.17",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^20.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "eslint": "^9.0.0",
+    "eslint-config-next": "^15.0.0",
+    "prisma": "^6.0.0",
+    "tailwindcss": "^4.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0"
+  }
+}
