@@ -16,7 +16,7 @@ import { ControlBar } from "./controls/ControlBar"
 import { GameCanvas } from "./game/GameCanvas"
 import { useSocket } from "../socket"
 import { useLiveKit } from "../livekit"
-import type { ChatMessageData } from "../socket/types"
+import type { ChatMessageData, AvatarColor } from "../socket/types"
 import type { ChatMessage } from "../types/space.types"
 
 // ============================================
@@ -45,6 +45,7 @@ interface SpaceLayoutProps {
   spacePrimaryColor?: string | null
   userNickname: string
   userId: string
+  userAvatarColor?: AvatarColor
   onExit: () => void
 }
 
@@ -71,6 +72,7 @@ export function SpaceLayout({
   spacePrimaryColor,
   userNickname,
   userId,
+  userAvatarColor = "default",
   onExit,
 }: SpaceLayoutProps) {
   // Panel visibility
@@ -94,6 +96,7 @@ export function SpaceLayout({
     spaceId,
     playerId: userId,
     nickname: userNickname,
+    avatarColor: userAvatarColor,
     onChatMessage: handleChatMessage,
     onSystemMessage: handleSystemMessage,
   })

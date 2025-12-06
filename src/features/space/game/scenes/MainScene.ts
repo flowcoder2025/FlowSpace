@@ -43,7 +43,8 @@ export class MainScene extends Phaser.Scene {
   private walls!: Phaser.Physics.Arcade.StaticGroup
   private interactiveObjects: InteractiveObject[] = []
   private nearbyObject: InteractiveObject | null = null
-  private remotePlayers: Map<string, Phaser.GameObjects.Sprite> = new Map()
+  private remotePlayers: Map<string, Phaser.GameObjects.Container> = new Map()
+  private remotePlayerSprites: Map<string, Phaser.GameObjects.Sprite> = new Map()
   private remotePlayerShadows: Map<string, Phaser.GameObjects.Ellipse> = new Map()
   private remotePlayerNames: Map<string, Phaser.GameObjects.Text> = new Map()
   private playerDirection: "up" | "down" | "left" | "right" = "down"
@@ -66,6 +67,7 @@ export class MainScene extends Phaser.Scene {
   private handleRemotePlayerUpdate!: (data: unknown) => void
   private handleRemotePlayerJoin!: (data: unknown) => void
   private handleRemotePlayerLeave!: (data: unknown) => void
+  private handleRemotePlayerJump!: (data: unknown) => void
 
   // Jump configuration
   private readonly JUMP_HEIGHT = 20
@@ -550,10 +552,18 @@ export class MainScene extends Phaser.Scene {
       this.removeRemotePlayer(id)
     }
 
+    this.handleRemotePlayerJump = (data: unknown) => {
+      const { id } = data as { id: string; x: number; y: number }
+      // Skip if scene is not ready
+      if (!this.isSceneActive || !this.add) return
+      this.playRemotePlayerJump(id)
+    }
+
     // Listen for remote player events
     eventBridge.on(GameEvents.REMOTE_PLAYER_UPDATE, this.handleRemotePlayerUpdate)
     eventBridge.on(GameEvents.REMOTE_PLAYER_JOIN, this.handleRemotePlayerJoin)
     eventBridge.on(GameEvents.REMOTE_PLAYER_LEAVE, this.handleRemotePlayerLeave)
+    eventBridge.on(GameEvents.REMOTE_PLAYER_JUMPED, this.handleRemotePlayerJump)
   }
 
   private processPendingRemotePlayerEvents() {
@@ -586,10 +596,10 @@ export class MainScene extends Phaser.Scene {
     if (this.remotePlayers.has(position.id)) return
 
     try {
-      const avatarColor = position.avatarColor || "yellow"
+      const avatarColor = position.avatarColor || "default"
       const textureKey = `character-${avatarColor}`
 
-      // Create shadow
+      // Create shadow (at ground level below container)
       const shadow = this.add.ellipse(
         position.x,
         position.y + CHARACTER_CONFIG.HEIGHT / 2,
@@ -601,18 +611,21 @@ export class MainScene extends Phaser.Scene {
       shadow.setDepth(0)
       this.remotePlayerShadows.set(position.id, shadow)
 
-      // Create sprite
-      const player = this.add.sprite(position.x, position.y, textureKey)
-      player.setDepth(1)
-      player.setOrigin(0.5, 0.5)
+      // Create sprite at local origin (0, 0) - will be placed inside container
+      const sprite = this.add.sprite(0, 0, textureKey)
+      sprite.setOrigin(0.5, 0.5)
+
+      // Create container to hold sprite (position tween applied to container)
+      const container = this.add.container(position.x, position.y, [sprite])
+      container.setDepth(1)
+      this.remotePlayers.set(position.id, container)
+      this.remotePlayerSprites.set(position.id, sprite)
 
       // Play idle animation
       const idleAnim = getAnimationKey(position.direction || "down", false, avatarColor)
       if (this.anims?.exists(idleAnim)) {
-        player.play(idleAnim)
+        sprite.play(idleAnim)
       }
-
-      this.remotePlayers.set(position.id, player)
 
       // Create nickname text
       if (position.nickname) {
@@ -636,16 +649,16 @@ export class MainScene extends Phaser.Scene {
   }
 
   private updateRemotePlayer(position: PlayerPosition & { avatarColor?: AvatarColor; nickname?: string }) {
-    let player = this.remotePlayers.get(position.id)
-    if (!player) {
+    let container = this.remotePlayers.get(position.id)
+    if (!container) {
       this.addRemotePlayer(position)
-      player = this.remotePlayers.get(position.id)
+      container = this.remotePlayers.get(position.id)
     }
 
-    if (player) {
-      // Smooth position interpolation
+    if (container) {
+      // Smooth position interpolation on container (independent from sprite's local Y for jump)
       this.tweens.add({
-        targets: player,
+        targets: container,
         x: position.x,
         y: position.y,
         duration: 100,
@@ -664,33 +677,99 @@ export class MainScene extends Phaser.Scene {
         })
       }
 
-      // Update nickname position
+      // Update nickname position (account for sprite's local Y offset during jump)
+      const sprite = this.remotePlayerSprites.get(position.id)
+      const spriteYOffset = sprite ? sprite.y : 0
       const nameText = this.remotePlayerNames.get(position.id)
       if (nameText) {
         this.tweens.add({
           targets: nameText,
           x: position.x,
-          y: position.y - CHARACTER_CONFIG.HEIGHT / 2 - 8,
+          y: position.y + spriteYOffset - CHARACTER_CONFIG.HEIGHT / 2 - 8,
           duration: 100,
           ease: "Linear",
         })
       }
 
-      // Update animation
-      const avatarColor = position.avatarColor || "yellow"
-      const animKey = getAnimationKey(position.direction, position.isMoving, avatarColor)
-      if (this.anims.exists(animKey) && player.anims.currentAnim?.key !== animKey) {
-        player.play(animKey)
+      // Update animation on sprite (not container)
+      if (sprite) {
+        const avatarColor = position.avatarColor || "default"
+        const animKey = getAnimationKey(position.direction, position.isMoving, avatarColor)
+        if (this.anims.exists(animKey) && sprite.anims.currentAnim?.key !== animKey) {
+          sprite.play(animKey)
+        }
       }
     }
   }
 
+  private playRemotePlayerJump(id: string) {
+    const sprite = this.remotePlayerSprites.get(id)
+    const shadow = this.remotePlayerShadows.get(id)
+
+    if (!sprite) {
+      console.log(`[MainScene] Remote player sprite not found for jump: ${id}`)
+      return
+    }
+
+    // Jump animation on SPRITE's local Y (independent from container position)
+    // Same approach as local player - sprite starts at y=0, jumps to y=-JUMP_HEIGHT, returns to y=0
+    this.tweens.add({
+      targets: sprite,
+      y: -this.JUMP_HEIGHT,  // Local Y offset (relative to container)
+      scaleX: 1.1,
+      scaleY: 0.9,
+      duration: this.JUMP_DURATION / 2,
+      ease: "Quad.easeOut",
+      onComplete: () => {
+        // Fall down animation
+        this.tweens.add({
+          targets: sprite,
+          y: 0,  // Return to local origin
+          scaleX: 1,
+          scaleY: 1,
+          duration: this.JUMP_DURATION / 2,
+          ease: "Quad.easeIn",
+          onComplete: () => {
+            // Landing squash effect
+            this.tweens.add({
+              targets: sprite,
+              scaleX: 1.15,
+              scaleY: 0.85,
+              duration: 50,
+              yoyo: true,
+              ease: "Quad.easeOut",
+            })
+          },
+        })
+      },
+    })
+
+    // Shadow animation (shrink while jumping)
+    if (shadow) {
+      this.tweens.add({
+        targets: shadow,
+        scaleX: 0.6,
+        scaleY: 0.6,
+        alpha: 0.15,
+        duration: this.JUMP_DURATION / 2,
+        ease: "Quad.easeOut",
+        yoyo: true,
+      })
+    }
+
+    console.log(`[MainScene] Remote player jumped: ${id}`)
+  }
+
   private removeRemotePlayer(id: string) {
-    const player = this.remotePlayers.get(id)
-    if (player) {
-      player.destroy()
+    // Destroy container (also destroys contained sprite)
+    const container = this.remotePlayers.get(id)
+    if (container) {
+      container.destroy()
       this.remotePlayers.delete(id)
     }
+
+    // Remove sprite reference (sprite already destroyed with container)
+    this.remotePlayerSprites.delete(id)
 
     const shadow = this.remotePlayerShadows.get(id)
     if (shadow) {
@@ -803,10 +882,14 @@ export class MainScene extends Phaser.Scene {
     if (this.handleRemotePlayerLeave) {
       eventBridge.off(GameEvents.REMOTE_PLAYER_LEAVE, this.handleRemotePlayerLeave)
     }
+    if (this.handleRemotePlayerJump) {
+      eventBridge.off(GameEvents.REMOTE_PLAYER_JUMPED, this.handleRemotePlayerJump)
+    }
 
-    // Clean up remote players
-    this.remotePlayers.forEach((player) => player.destroy())
+    // Clean up remote players (containers destroy their children including sprites)
+    this.remotePlayers.forEach((container) => container.destroy())
     this.remotePlayers.clear()
+    this.remotePlayerSprites.clear() // Sprites already destroyed with containers
     this.remotePlayerShadows.forEach((shadow) => shadow.destroy())
     this.remotePlayerShadows.clear()
     this.remotePlayerNames.forEach((name) => name.destroy())

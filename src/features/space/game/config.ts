@@ -35,6 +35,11 @@ export function createGameConfig(
       autoCenter: Phaser.Scale.CENTER_BOTH,
     },
     scene: scenes,
+    // Disable audio to prevent "Cannot suspend a closed AudioContext" error
+    // This error occurs during HMR or component unmount in development
+    audio: {
+      disableWebAudio: true,
+    },
   }
 }
 

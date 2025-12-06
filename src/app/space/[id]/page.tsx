@@ -226,6 +226,7 @@ export default function SpacePage() {
       spacePrimaryColor={space.primaryColor}
       userNickname={session.nickname}
       userId={session.sessionToken}
+      userAvatarColor={session.avatar as "default" | "red" | "green" | "purple" | "orange" | "pink"}
       onExit={handleExit}
     />
   )

@@ -3,6 +3,9 @@
  * Shared type definitions for client-server communication
  */
 
+// Avatar color type
+export type AvatarColor = "default" | "red" | "green" | "purple" | "orange" | "pink"
+
 // Player position data
 export interface PlayerPosition {
   id: string
@@ -11,6 +14,14 @@ export interface PlayerPosition {
   y: number
   direction: "up" | "down" | "left" | "right"
   isMoving: boolean
+  avatarColor?: AvatarColor
+}
+
+// Player jump data
+export interface PlayerJumpData {
+  id: string
+  x: number
+  y: number
 }
 
 // Chat message data
@@ -32,11 +43,14 @@ export interface RoomData {
 // Client to Server events
 export interface ClientToServerEvents {
   // Connection
-  "join:space": (data: { spaceId: string; playerId: string; nickname: string }) => void
+  "join:space": (data: { spaceId: string; playerId: string; nickname: string; avatarColor?: AvatarColor }) => void
   "leave:space": () => void
 
   // Movement
   "player:move": (position: Omit<PlayerPosition, "nickname">) => void
+
+  // Jump
+  "player:jump": (data: PlayerJumpData) => void
 
   // Chat
   "chat:message": (data: { content: string }) => void
@@ -51,6 +65,9 @@ export interface ServerToClientEvents {
 
   // Movement
   "player:moved": (position: PlayerPosition) => void
+
+  // Jump
+  "player:jumped": (data: PlayerJumpData) => void
 
   // Chat
   "chat:message": (message: ChatMessageData) => void
@@ -67,4 +84,5 @@ export interface SocketData {
   spaceId: string
   playerId: string
   nickname: string
+  avatarColor?: AvatarColor
 }

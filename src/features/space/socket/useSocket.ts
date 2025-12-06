@@ -8,6 +8,8 @@ import type {
   PlayerPosition,
   ChatMessageData,
   RoomData,
+  PlayerJumpData,
+  AvatarColor,
 } from "./types"
 import { eventBridge, GameEvents } from "../game/events"
 
@@ -17,6 +19,7 @@ interface UseSocketOptions {
   spaceId: string
   playerId: string
   nickname: string
+  avatarColor?: AvatarColor
   onChatMessage?: (message: ChatMessageData) => void
   onSystemMessage?: (message: ChatMessageData) => void
   onPlayerJoined?: (player: PlayerPosition) => void
@@ -34,6 +37,7 @@ export function useSocket({
   spaceId,
   playerId,
   nickname,
+  avatarColor = "default",
   onChatMessage,
   onSystemMessage,
   onPlayerJoined,
@@ -60,8 +64,8 @@ export function useSocket({
       console.log("[Socket] Connected to server")
       setIsConnected(true)
 
-      // Join the space
-      socket.emit("join:space", { spaceId, playerId, nickname })
+      // Join the space with avatarColor
+      socket.emit("join:space", { spaceId, playerId, nickname, avatarColor })
     })
 
     socket.on("disconnect", () => {
@@ -125,6 +129,13 @@ export function useSocket({
       eventBridge.emit(GameEvents.REMOTE_PLAYER_UPDATE, position)
     })
 
+    // Jump events from server
+    socket.on("player:jumped", (data: PlayerJumpData) => {
+      console.log("[Socket] Remote player jumped:", data.id)
+      // Notify game about remote player jump
+      eventBridge.emit(GameEvents.REMOTE_PLAYER_JUMPED, data)
+    })
+
     // Chat events
     socket.on("chat:message", (message: ChatMessageData) => {
       onChatMessage?.(message)
@@ -143,19 +154,29 @@ export function useSocket({
         y: pos.y,
         direction: pos.direction,
         isMoving: pos.isMoving,
+        avatarColor,
       })
     }
 
+    // Listen for local player jump from game
+    const handleLocalPlayerJump = (data: unknown) => {
+      const jumpData = data as PlayerJumpData
+      socket.emit("player:jump", jumpData)
+      console.log("[Socket] Sending jump event:", jumpData.id)
+    }
+
     eventBridge.on(GameEvents.PLAYER_MOVED, handleLocalPlayerMove)
+    eventBridge.on(GameEvents.PLAYER_JUMPED, handleLocalPlayerJump)
 
     // Cleanup
     return () => {
       eventBridge.off(GameEvents.PLAYER_MOVED, handleLocalPlayerMove)
+      eventBridge.off(GameEvents.PLAYER_JUMPED, handleLocalPlayerJump)
       socket.emit("leave:space")
       socket.disconnect()
       socketRef.current = null
     }
-  }, [spaceId, playerId, nickname, onChatMessage, onSystemMessage, onPlayerJoined, onPlayerLeft])
+  }, [spaceId, playerId, nickname, avatarColor, onChatMessage, onSystemMessage, onPlayerJoined, onPlayerLeft])
 
   // Send chat message
   const sendMessage = useCallback((content: string) => {

@@ -14,6 +14,8 @@ import type {
   SocketData,
   PlayerPosition,
   ChatMessageData,
+  PlayerJumpData,
+  AvatarColor,
 } from "../src/features/space/socket/types"
 
 const PORT = parseInt(process.env.SOCKET_PORT || "3001", 10)
@@ -57,11 +59,12 @@ io.on("connection", (socket) => {
   console.log(`[Socket] Client connected: ${socket.id}`)
 
   // Join space
-  socket.on("join:space", ({ spaceId, playerId, nickname }) => {
+  socket.on("join:space", ({ spaceId, playerId, nickname, avatarColor }) => {
     // Store player data on socket
     socket.data.spaceId = spaceId
     socket.data.playerId = playerId
     socket.data.nickname = nickname
+    socket.data.avatarColor = avatarColor || "default"
 
     // Join socket room
     socket.join(spaceId)
@@ -77,6 +80,7 @@ io.on("connection", (socket) => {
       y: 320, // Center of map (10 * 32)
       direction: "down",
       isMoving: false,
+      avatarColor: avatarColor || "default",
     }
 
     // Add player to room
@@ -135,21 +139,33 @@ io.on("connection", (socket) => {
 
   // Player movement
   socket.on("player:move", (position) => {
-    const { spaceId, nickname } = socket.data
+    const { spaceId, nickname, avatarColor } = socket.data
 
     if (spaceId) {
       const room = rooms.get(spaceId)
       if (room) {
-        // Update player position in room state
+        // Update player position in room state (preserve avatarColor)
         const fullPosition: PlayerPosition = {
           ...position,
           nickname: nickname || "Unknown",
+          avatarColor: position.avatarColor || avatarColor || "default",
         }
         room.set(position.id, fullPosition)
 
         // Broadcast to other players in room
         socket.to(spaceId).emit("player:moved", fullPosition)
       }
+    }
+  })
+
+  // Player jump
+  socket.on("player:jump", (data: PlayerJumpData) => {
+    const { spaceId } = socket.data
+
+    if (spaceId) {
+      // Broadcast jump event to other players in room
+      socket.to(spaceId).emit("player:jumped", data)
+      console.log(`[Socket] Player ${data.id} jumped at (${data.x}, ${data.y})`)
     }
   })
 
