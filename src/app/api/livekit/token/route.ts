@@ -108,55 +108,76 @@ export async function POST(request: NextRequest) {
     }
 
     // 5. 세션 검증 (인증된 사용자 또는 게스트 세션)
+    // 🔒 보안: participantId는 서버에서 파생하여 클라이언트 입력을 덮어씀
     const session = await auth()
+    let serverParticipantId: string
+    let serverParticipantName: string = participantName
 
-    // 인증된 사용자인 경우 participantId 검증
+    // 인증된 사용자인 경우
     if (session?.user?.id) {
-      // 인증된 사용자의 participantId는 userId와 일치해야 함
-      // (또는 서버에서 발급한 ID 사용)
+      // 인증된 사용자의 participantId는 서버에서 생성
+      serverParticipantId = `user-${session.user.id}`
+      serverParticipantName = session.user.name || participantName
       if (IS_DEV) {
-        console.log("[LiveKit Token] Authenticated user:", session.user.id)
+        console.log("[LiveKit Token] Authenticated user:", session.user.id, "→ participantId:", serverParticipantId)
       }
     } else if (sessionToken) {
-      // 게스트 세션 토큰 검증
-      const guestSession = await prisma.guestSession.findUnique({
-        where: { sessionToken },
-        select: {
-          id: true,
-          nickname: true,
-          spaceId: true,
-          expiresAt: true,
-        },
-      }).catch(() => null)
+      // 개발 모드: dev- 접두사로 시작하는 세션 토큰은 테스트용
+      const isDevSessionToken = IS_DEV && sessionToken.startsWith("dev-")
 
-      if (!guestSession) {
-        return NextResponse.json(
-          { error: "Invalid session token" },
-          { status: 401 }
-        )
-      }
+      if (isDevSessionToken) {
+        // 개발 모드에서도 서버에서 participantId 생성
+        serverParticipantId = `dev-${Date.now()}`
+        console.log("[LiveKit Token] Dev mode session token → participantId:", serverParticipantId)
+      } else {
+        // 게스트 세션 토큰 검증
+        const guestSession = await prisma.guestSession.findUnique({
+          where: { sessionToken },
+          select: {
+            id: true,
+            nickname: true,
+            spaceId: true,
+            expiresAt: true,
+          },
+        }).catch(() => null)
 
-      // 세션 만료 여부 확인
-      if (new Date() > guestSession.expiresAt) {
-        return NextResponse.json(
-          { error: "Session has expired" },
-          { status: 401 }
-        )
-      }
+        if (!guestSession) {
+          return NextResponse.json(
+            { error: "Invalid session token" },
+            { status: 401 }
+          )
+        }
 
-      // roomName과 세션의 spaceId 일치 확인
-      const expectedRoomName = `space-${guestSession.spaceId}`
-      if (roomName !== expectedRoomName) {
-        return NextResponse.json(
-          { error: "Room name does not match session" },
-          { status: 403 }
-        )
-      }
+        // 세션 만료 여부 확인
+        if (new Date() > guestSession.expiresAt) {
+          return NextResponse.json(
+            { error: "Session has expired" },
+            { status: 401 }
+          )
+        }
 
-      if (IS_DEV) {
-        console.log("[LiveKit Token] Guest session validated:", guestSession.id)
+        // roomName과 세션의 spaceId 일치 확인
+        const expectedRoomName = `space-${guestSession.spaceId}`
+        if (roomName !== expectedRoomName) {
+          return NextResponse.json(
+            { error: "Room name does not match session" },
+            { status: 403 }
+          )
+        }
+
+        // 🔒 보안 핵심: 서버에서 participantId 생성 (클라이언트 입력 무시)
+        serverParticipantId = `guest-${guestSession.id}`
+        serverParticipantName = guestSession.nickname
+
+        if (IS_DEV) {
+          console.log("[LiveKit Token] Guest session validated:", guestSession.id, "→ participantId:", serverParticipantId)
+        }
       }
-    } else if (!IS_DEV) {
+    } else if (IS_DEV) {
+      // 개발환경에서 세션 없이 접근 시 임시 ID 생성
+      serverParticipantId = `dev-anon-${Date.now()}`
+      console.log("[LiveKit Token] Dev mode without session → participantId:", serverParticipantId)
+    } else {
       // 운영환경에서는 세션 필수
       return NextResponse.json(
         { error: "Authentication required" },
@@ -164,10 +185,10 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // 6. 토큰 생성
+    // 6. 토큰 생성 (🔒 서버에서 생성한 participantId 사용)
     const token = new AccessToken(apiKey, apiSecret, {
-      identity: participantId,
-      name: participantName,
+      identity: serverParticipantId,
+      name: serverParticipantName,
       ttl: 60 * 60 * 4, // 4 hours
     })
 
@@ -185,12 +206,17 @@ export async function POST(request: NextRequest) {
     if (IS_DEV) {
       console.log("[LiveKit Token] Token generated for:", {
         roomName,
-        participantId,
-        participantName,
+        participantId: serverParticipantId,
+        participantName: serverParticipantName,
       })
     }
 
-    return NextResponse.json({ token: jwt })
+    // 🔒 서버에서 생성한 participantId를 반환하여 클라이언트가 동기화에 사용
+    return NextResponse.json({
+      token: jwt,
+      participantId: serverParticipantId,
+      participantName: serverParticipantName,
+    })
   } catch (error) {
     console.error("[LiveKit Token] Error:", error)
     return NextResponse.json(

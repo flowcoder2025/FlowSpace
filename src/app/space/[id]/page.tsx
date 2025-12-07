@@ -70,7 +70,18 @@ export default function SpacePage() {
       return
     }
 
-    const storedSession = localStorage.getItem("guestSession")
+    // Safari 프라이빗 모드 등 localStorage 접근이 차단된 환경 대응
+    let storedSession: string | null = null
+    try {
+      storedSession = localStorage.getItem("guestSession")
+    } catch (storageError) {
+      // localStorage 접근 불가 (Safari 프라이빗 모드, 제3자 쿠키 차단 등)
+      console.warn("[SpacePage] localStorage access denied:", storageError)
+      setError("브라우저 저장소에 접근할 수 없습니다. 프라이빗 모드를 해제하거나 다른 브라우저를 사용해주세요.")
+      setLoading(false)
+      return
+    }
+
     if (storedSession) {
       try {
         const parsed = JSON.parse(storedSession) as GuestSession
@@ -155,7 +166,11 @@ export default function SpacePage() {
       }
 
       // Clear session
-      localStorage.removeItem("guestSession")
+      try {
+        localStorage.removeItem("guestSession")
+      } catch {
+        // localStorage 접근 불가 시 무시
+      }
     }
 
     router.push("/")
@@ -211,6 +226,7 @@ export default function SpacePage() {
       userNickname={session.nickname}
       userId={session.sessionToken}
       userAvatarColor={session.avatar as "default" | "red" | "green" | "purple" | "orange" | "pink"}
+      sessionToken={session.sessionToken}
       onExit={handleExit}
     />
   )

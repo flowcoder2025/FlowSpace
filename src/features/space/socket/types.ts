@@ -42,8 +42,14 @@ export interface RoomData {
 
 // Client to Server events
 export interface ClientToServerEvents {
-  // Connection
-  "join:space": (data: { spaceId: string; playerId: string; nickname: string; avatarColor?: AvatarColor }) => void
+  // Connection (🔒 sessionToken 추가 - 보안 검증용)
+  "join:space": (data: {
+    spaceId: string
+    playerId: string
+    nickname: string
+    avatarColor?: AvatarColor
+    sessionToken?: string // 게스트 세션 토큰 (서버에서 검증)
+  }) => void
   "leave:space": () => void
 
   // Movement
@@ -72,6 +78,9 @@ export interface ServerToClientEvents {
   // Chat
   "chat:message": (message: ChatMessageData) => void
   "chat:system": (message: ChatMessageData) => void
+
+  // Error (🔒 세션 검증 실패 등)
+  "error": (data: { message: string }) => void
 }
 
 // Inter-server events (not used in MVP)
@@ -85,4 +94,5 @@ export interface SocketData {
   playerId: string
   nickname: string
   avatarColor?: AvatarColor
+  sessionToken?: string // 🔒 세션 토큰 (중복 접속 방지용)
 }

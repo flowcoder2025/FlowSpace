@@ -19,6 +19,48 @@ import type {
 } from "../src/features/space/socket/types"
 
 const PORT = parseInt(process.env.SOCKET_PORT || "3001", 10)
+const NEXT_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000"
+const IS_DEV = process.env.NODE_ENV === "development"
+
+// ============================================
+// 🔒 세션 검증 함수
+// ============================================
+interface VerifySessionResult {
+  valid: boolean
+  participantId?: string
+  nickname?: string
+  avatar?: string
+  error?: string
+}
+
+async function verifyGuestSession(
+  sessionToken: string,
+  spaceId: string
+): Promise<VerifySessionResult> {
+  try {
+    const response = await fetch(`${NEXT_API_URL}/api/guest/verify`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionToken, spaceId }),
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      return { valid: false, error: errorData.error || "Session verification failed" }
+    }
+
+    const data = await response.json()
+    return {
+      valid: true,
+      participantId: data.participantId,
+      nickname: data.nickname,
+      avatar: data.avatar,
+    }
+  } catch (error) {
+    console.error("[Socket] Session verification error:", error)
+    return { valid: false, error: "Failed to verify session" }
+  }
+}
 
 // Create Socket.io server
 const io = new Server<
@@ -58,13 +100,63 @@ function removePlayerFromRoom(spaceId: string, playerId: string): void {
 io.on("connection", (socket) => {
   console.log(`[Socket] Client connected: ${socket.id}`)
 
-  // Join space
-  socket.on("join:space", ({ spaceId, playerId, nickname, avatarColor }) => {
-    // Store player data on socket
+  // Join space - 🔒 세션 토큰 검증 추가
+  socket.on("join:space", async ({ spaceId, playerId, nickname, avatarColor, sessionToken }) => {
+    // 🔒 보안: 세션 토큰 검증 (운영환경에서는 필수)
+    let verifiedPlayerId = playerId
+    let verifiedNickname = nickname
+    let verifiedAvatarColor = avatarColor || "default"
+
+    // 개발 모드에서 dev- 세션은 검증 스킵 (테스트 편의)
+    const isDevSession = IS_DEV && sessionToken?.startsWith("dev-")
+
+    if (sessionToken && !isDevSession) {
+      const verification = await verifyGuestSession(sessionToken, spaceId)
+
+      if (!verification.valid) {
+        console.warn(`[Socket] Session verification failed for ${socket.id}:`, verification.error)
+        // 운영환경에서는 연결 거부
+        if (!IS_DEV) {
+          socket.emit("error", { message: "Invalid session" })
+          socket.disconnect(true)
+          return
+        }
+        // 개발환경에서는 경고만 출력하고 진행
+        console.warn("[Socket] DEV MODE: Allowing connection despite invalid session")
+      } else {
+        // 🔒 서버에서 검증된 값으로 덮어쓰기 (클라이언트 입력 무시)
+        verifiedPlayerId = verification.participantId!
+        verifiedNickname = verification.nickname!
+        verifiedAvatarColor = (verification.avatar as AvatarColor) || "default"
+
+        if (IS_DEV) {
+          console.log(`[Socket] Session verified: ${verifiedPlayerId} (${verifiedNickname})`)
+        }
+      }
+    } else if (!IS_DEV && !sessionToken) {
+      // 운영환경에서 세션 토큰 없이 접근 시 거부
+      console.warn(`[Socket] No session token provided for ${socket.id}`)
+      socket.emit("error", { message: "Session token required" })
+      socket.disconnect(true)
+      return
+    } else if (IS_DEV) {
+      // 개발환경에서 세션 없이 접근 시 임시 ID 생성
+      if (!sessionToken) {
+        verifiedPlayerId = `dev-anon-${Date.now()}`
+        console.log(`[Socket] DEV MODE: No session, using temp ID: ${verifiedPlayerId}`)
+      } else {
+        // dev- 세션의 경우 서버에서 ID 생성
+        verifiedPlayerId = `dev-${Date.now()}`
+        console.log(`[Socket] DEV MODE: Dev session, using ID: ${verifiedPlayerId}`)
+      }
+    }
+
+    // Store player data on socket (🔒 검증된 값 사용)
     socket.data.spaceId = spaceId
-    socket.data.playerId = playerId
-    socket.data.nickname = nickname
-    socket.data.avatarColor = avatarColor || "default"
+    socket.data.playerId = verifiedPlayerId
+    socket.data.nickname = verifiedNickname
+    socket.data.avatarColor = verifiedAvatarColor
+    socket.data.sessionToken = sessionToken // 중복 접속 방지용
 
     // Join socket room
     socket.join(spaceId)
@@ -72,19 +164,26 @@ io.on("connection", (socket) => {
     // Get or create room state
     const room = getOrCreateRoom(spaceId)
 
+    // 🔒 중복 접속 체크: 같은 playerId가 이미 있으면 기존 세션 제거
+    const existingEntry = Array.from(room.entries()).find(([_, p]) => p.id === verifiedPlayerId)
+    if (existingEntry) {
+      console.log(`[Socket] Duplicate session detected for ${verifiedPlayerId}, updating position`)
+      // 기존 위치 정보 유지 (재연결 시 위치 보존)
+    }
+
     // Create initial player position
     const playerPosition: PlayerPosition = {
-      id: playerId,
-      nickname,
-      x: 480, // Center of map (15 * 32)
-      y: 320, // Center of map (10 * 32)
-      direction: "down",
+      id: verifiedPlayerId,
+      nickname: verifiedNickname,
+      x: existingEntry ? existingEntry[1].x : 480, // 기존 위치 또는 중앙
+      y: existingEntry ? existingEntry[1].y : 320,
+      direction: existingEntry ? existingEntry[1].direction : "down",
       isMoving: false,
-      avatarColor: avatarColor || "default",
+      avatarColor: verifiedAvatarColor,
     }
 
     // Add player to room
-    room.set(playerId, playerPosition)
+    room.set(verifiedPlayerId, playerPosition)
 
     // Send current room state to joining player
     socket.emit("room:joined", {
@@ -100,13 +199,13 @@ io.on("connection", (socket) => {
       id: `sys-${Date.now()}`,
       senderId: "system",
       senderNickname: "시스템",
-      content: `${nickname}님이 입장했습니다.`,
+      content: `${verifiedNickname}님이 입장했습니다.`,
       timestamp: Date.now(),
       type: "system",
     }
     io.to(spaceId).emit("chat:system", systemMessage)
 
-    console.log(`[Socket] Player ${playerId} (${nickname}) joined space ${spaceId}`)
+    console.log(`[Socket] Player ${verifiedPlayerId} (${verifiedNickname}) joined space ${spaceId}`)
   })
 
   // Leave space

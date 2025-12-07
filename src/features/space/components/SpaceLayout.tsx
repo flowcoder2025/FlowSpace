@@ -46,6 +46,7 @@ interface SpaceLayoutProps {
   userNickname: string
   userId: string
   userAvatarColor?: AvatarColor
+  sessionToken?: string // 게스트 세션 토큰 (LiveKit 인증용)
   onExit: () => void
 }
 
@@ -73,6 +74,7 @@ export function SpaceLayout({
   userNickname,
   userId,
   userAvatarColor = "default",
+  sessionToken,
   onExit,
 }: SpaceLayoutProps) {
   // Panel visibility
@@ -91,12 +93,13 @@ export function SpaceLayout({
     setMessages((prev) => [...prev, socketToChatMessage(data)])
   }, [])
 
-  // Socket connection for game position sync
+  // Socket connection for game position sync (🔒 sessionToken으로 서버 검증)
   const { isConnected, players, sendMessage } = useSocket({
     spaceId,
     playerId: userId,
     nickname: userNickname,
     avatarColor: userAvatarColor,
+    sessionToken, // 게스트 세션 인증용
     onChatMessage: handleChatMessage,
     onSystemMessage: handleSystemMessage,
   })
@@ -113,6 +116,7 @@ export function SpaceLayout({
     spaceId,
     participantId: userId,
     participantName: userNickname,
+    sessionToken, // 게스트 세션 인증용
     enabled: true,
   })
 

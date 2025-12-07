@@ -461,6 +461,12 @@ export function useLiveKit({
 
     try {
       setMediaError(null)
+
+      // 사용자 인터랙션 시 AudioContext resume (브라우저 자동재생 정책 대응)
+      await room.startAudio().catch(() => {
+        // AudioContext가 이미 실행 중이거나 실패 - 무시해도 됨
+      })
+
       const newState = !mediaState.isCameraEnabled
       if (IS_DEV) {
         console.log("[LiveKit] Toggling camera:", newState ? "ON" : "OFF")
@@ -487,6 +493,12 @@ export function useLiveKit({
 
     try {
       setMediaError(null)
+
+      // 사용자 인터랙션 시 AudioContext resume (브라우저 자동재생 정책 대응)
+      await room.startAudio().catch(() => {
+        // AudioContext가 이미 실행 중이거나 실패 - 무시해도 됨
+      })
+
       const newState = !mediaState.isMicrophoneEnabled
       if (IS_DEV) {
         console.log("[LiveKit] Toggling microphone:", newState ? "ON" : "OFF")

@@ -21,6 +21,7 @@ interface UseSocketOptions {
   playerId: string
   nickname: string
   avatarColor?: AvatarColor
+  sessionToken?: string // 🔒 세션 토큰 (서버 검증용)
   onChatMessage?: (message: ChatMessageData) => void
   onSystemMessage?: (message: ChatMessageData) => void
   onPlayerJoined?: (player: PlayerPosition) => void
@@ -39,6 +40,7 @@ export function useSocket({
   playerId,
   nickname,
   avatarColor = "default",
+  sessionToken,
   onChatMessage,
   onSystemMessage,
   onPlayerJoined,
@@ -88,8 +90,8 @@ export function useSocket({
       console.log("[Socket] Connected to server")
       setIsConnected(true)
 
-      // Join the space with avatarColor
-      socket.emit("join:space", { spaceId, playerId, nickname, avatarColor })
+      // Join the space with avatarColor and sessionToken (🔒 서버 검증용)
+      socket.emit("join:space", { spaceId, playerId, nickname, avatarColor, sessionToken })
     })
 
     socket.on("disconnect", () => {
@@ -190,15 +192,25 @@ export function useSocket({
         return next
       })
 
-      // Notify game about remote player movement
-      eventBridge.emit(GameEvents.REMOTE_PLAYER_UPDATE, position)
+      // Only notify game if it's ready - prevents errors when move events arrive
+      // before the scene is fully initialized or before the player has been added
+      if (gameReadyRef.current) {
+        eventBridge.emit(GameEvents.REMOTE_PLAYER_UPDATE, position)
+      }
+      // If game isn't ready, position is still stored in players map
+      // and will be used when the player is eventually added via REMOTE_PLAYER_JOIN
     })
 
     // Jump events from server
     socket.on("player:jumped", (data: PlayerJumpData) => {
-      console.log("[Socket] Remote player jumped:", data.id)
-      // Notify game about remote player jump
-      eventBridge.emit(GameEvents.REMOTE_PLAYER_JUMPED, data)
+      // Only notify game if it's ready - prevents errors when jump events arrive
+      // before the scene is fully initialized
+      if (gameReadyRef.current) {
+        if (IS_DEV) {
+          console.log("[Socket] Remote player jumped:", data.id)
+        }
+        eventBridge.emit(GameEvents.REMOTE_PLAYER_JUMPED, data)
+      }
     })
 
     // Chat events
@@ -244,7 +256,7 @@ export function useSocket({
     }
   // Only reconnect when essential connection params change (not on callback changes)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [spaceId, playerId, nickname, avatarColor])
+  }, [spaceId, playerId, nickname, avatarColor, sessionToken])
 
   // Send chat message
   const sendMessage = useCallback((content: string) => {

@@ -24,6 +24,9 @@ import {
   type InteractiveObjectConfig,
 } from "../objects"
 
+// Development mode flag for debug logs
+const IS_DEV = process.env.NODE_ENV === "development"
+
 // Avatar color type
 type AvatarColor = "default" | "red" | "green" | "purple" | "orange" | "pink"
 
@@ -47,6 +50,10 @@ export class MainScene extends Phaser.Scene {
   private remotePlayerSprites: Map<string, Phaser.GameObjects.Sprite> = new Map()
   private remotePlayerShadows: Map<string, Phaser.GameObjects.Ellipse> = new Map()
   private remotePlayerNames: Map<string, Phaser.GameObjects.Text> = new Map()
+  // Track failed remote player additions to prevent infinite retry loops
+  private failedRemotePlayers: Map<string, { timestamp: number; retryCount: number }> = new Map()
+  private readonly MAX_RETRY_COUNT = 3
+  private readonly RETRY_COOLDOWN_MS = 5000
   private playerDirection: "up" | "down" | "left" | "right" = "down"
   private isMoving = false
   private isJumping = false
@@ -133,7 +140,9 @@ export class MainScene extends Phaser.Scene {
     // Emit game ready event after a frame delay to ensure Phaser scene is fully active
     // This prevents race conditions where GAME_READY is emitted before the scene can handle events
     this.time.delayedCall(0, () => {
-      console.log("[MainScene] Emitting GAME_READY after scene is fully active")
+      if (IS_DEV) {
+        console.log("[MainScene] Emitting GAME_READY after scene is fully active")
+      }
       eventBridge.emit(GameEvents.GAME_READY)
     })
   }
@@ -524,12 +533,26 @@ export class MainScene extends Phaser.Scene {
     this.cameras.main.setZoom(1.5)
   }
 
+  /**
+   * Check if scene is truly active and can create game objects
+   * This checks both our flag AND Phaser's internal displayList
+   * (displayList becomes null when scene is destroyed, but this.add object still exists)
+   */
+  private isSceneTrulyActive(): boolean {
+    return this.isSceneActive && !!this.sys?.displayList
+  }
+
   private setupMultiplayerEvents() {
     // Store handler references for cleanup
     this.handleRemotePlayerUpdate = (data: unknown) => {
       const position = data as PlayerPosition & { avatarColor?: AvatarColor; nickname?: string }
-      // Queue event if scene is not ready yet
-      if (!this.isSceneActive || !this.add) {
+      // Queue event if scene is not ready yet or being destroyed
+      if (!this.isSceneTrulyActive()) {
+        // Only queue if scene is still initializing (not shutting down)
+        if (this.isSceneActive && !this.sys?.displayList) {
+          // Scene is shutting down, ignore the event
+          return
+        }
         this.pendingRemotePlayerEvents.push({ type: "update", data: position })
         return
       }
@@ -538,8 +561,13 @@ export class MainScene extends Phaser.Scene {
 
     this.handleRemotePlayerJoin = (data: unknown) => {
       const position = data as PlayerPosition & { avatarColor?: AvatarColor; nickname?: string }
-      // Queue event if scene is not ready yet
-      if (!this.isSceneActive || !this.add) {
+      // Queue event if scene is not ready yet or being destroyed
+      if (!this.isSceneTrulyActive()) {
+        // Only queue if scene is still initializing (not shutting down)
+        if (this.isSceneActive && !this.sys?.displayList) {
+          // Scene is shutting down, ignore the event
+          return
+        }
         this.pendingRemotePlayerEvents.push({ type: "join", data: position })
         return
       }
@@ -548,8 +576,13 @@ export class MainScene extends Phaser.Scene {
 
     this.handleRemotePlayerLeave = (data: unknown) => {
       const { id } = data as { id: string }
-      // Queue event if scene is not ready yet
-      if (!this.isSceneActive || !this.add) {
+      // Queue event if scene is not ready yet or being destroyed
+      if (!this.isSceneTrulyActive()) {
+        // Only queue if scene is still initializing (not shutting down)
+        if (this.isSceneActive && !this.sys?.displayList) {
+          // Scene is shutting down, ignore the event
+          return
+        }
         this.pendingRemotePlayerEvents.push({ type: "leave", data: { id } as PlayerPosition })
         return
       }
@@ -558,8 +591,8 @@ export class MainScene extends Phaser.Scene {
 
     this.handleRemotePlayerJump = (data: unknown) => {
       const { id } = data as { id: string; x: number; y: number }
-      // Skip if scene is not ready
-      if (!this.isSceneActive || !this.add) return
+      // Skip if scene is not ready or being destroyed
+      if (!this.isSceneTrulyActive()) return
       this.playRemotePlayerJump(id)
     }
 
@@ -590,18 +623,34 @@ export class MainScene extends Phaser.Scene {
     }
   }
 
-  private addRemotePlayer(position: PlayerPosition & { avatarColor?: AvatarColor; nickname?: string }) {
-    // Safety check - verify scene is active and not shutting down
-    // Check both our flag and Phaser's add object (null when scene is destroyed)
-    if (!this.isSceneActive || !this.add) {
+  private addRemotePlayer(position: PlayerPosition & { avatarColor?: AvatarColor; nickname?: string }): boolean {
+    // Safety check - verify scene is truly active (including Phaser's internal displayList)
+    // This prevents TypeError when React Strict Mode destroys the first Phaser instance
+    if (!this.isSceneTrulyActive()) {
       // Silently ignore if scene is shutting down (React Strict Mode can cause this)
-      return
+      return false
     }
     if (this.remotePlayers.has(position.id)) {
-      return
+      return true // Already exists, considered success
     }
 
-    console.log(`[MainScene] Adding remote player: ${position.id}, nickname: ${position.nickname}`)
+    // Check if this player failed recently and is in cooldown
+    const failedEntry = this.failedRemotePlayers.get(position.id)
+    if (failedEntry) {
+      const timeSinceFailure = Date.now() - failedEntry.timestamp
+      if (failedEntry.retryCount >= this.MAX_RETRY_COUNT) {
+        // Max retries exceeded, only retry after full cooldown
+        if (timeSinceFailure < this.RETRY_COOLDOWN_MS) {
+          return false // Still in cooldown, skip silently
+        }
+        // Cooldown passed, reset and allow retry
+        this.failedRemotePlayers.delete(position.id)
+      }
+    }
+
+    if (IS_DEV) {
+      console.log(`[MainScene] Adding remote player: ${position.id}, nickname: ${position.nickname}`)
+    }
 
     try {
       const avatarColor = position.avatarColor || "default"
@@ -649,28 +698,48 @@ export class MainScene extends Phaser.Scene {
         this.remotePlayerNames.set(position.id, nameText)
       }
 
-      console.log(`[MainScene] Remote player added: ${position.id}`)
-    } catch (error) {
-      // Scene might have been destroyed during execution - silently ignore
-      // Only log if scene is still fully active (real error vs React Strict Mode cleanup)
-      // Check both isSceneActive flag AND this.add to confirm scene is truly active
-      if (this.isSceneActive && this.add) {
-        console.warn("[MainScene] Failed to add remote player:", error)
+      // Success - remove from failed list if present
+      this.failedRemotePlayers.delete(position.id)
+      if (IS_DEV) {
+        console.log(`[MainScene] Remote player added: ${position.id}`)
       }
+      return true
+    } catch (error) {
+      // Track this failure to prevent infinite retry loop
+      const existing = this.failedRemotePlayers.get(position.id)
+      const retryCount = existing ? existing.retryCount + 1 : 1
+      this.failedRemotePlayers.set(position.id, {
+        timestamp: Date.now(),
+        retryCount,
+      })
+
+      // Scene might have been destroyed during execution - silently ignore
+      // Only log if scene is still truly active (real error vs React Strict Mode cleanup)
+      if (this.isSceneTrulyActive()) {
+        console.warn(`[MainScene] Failed to add remote player (attempt ${retryCount}/${this.MAX_RETRY_COUNT}):`, error)
+      }
+      return false
     }
   }
 
   private updateRemotePlayer(position: PlayerPosition & { avatarColor?: AvatarColor; nickname?: string }) {
-    // Safety check - silently ignore if scene is not active (React Strict Mode cleanup)
-    if (!this.isSceneActive || !this.add) {
+    // Safety check - silently ignore if scene is not truly active (React Strict Mode cleanup)
+    if (!this.isSceneTrulyActive()) {
       return
     }
 
     try {
       let container = this.remotePlayers.get(position.id)
       if (!container) {
-        this.addRemotePlayer(position)
+        // Try to add the player - if it fails, skip this update entirely
+        const success = this.addRemotePlayer(position)
+        if (!success) {
+          return // Player addition failed or in cooldown, skip update
+        }
         container = this.remotePlayers.get(position.id)
+        if (!container) {
+          return // Still no container after add attempt, skip
+        }
       }
 
       if (container && this.tweens) {
@@ -720,7 +789,7 @@ export class MainScene extends Phaser.Scene {
       }
     } catch (error) {
       // Silently ignore errors during scene shutdown (React Strict Mode cleanup)
-      if (this.isSceneActive) {
+      if (this.isSceneTrulyActive()) {
         console.warn("[MainScene] Failed to update remote player:", error)
       }
     }
@@ -731,7 +800,9 @@ export class MainScene extends Phaser.Scene {
     const shadow = this.remotePlayerShadows.get(id)
 
     if (!sprite) {
-      console.log(`[MainScene] Remote player sprite not found for jump: ${id}`)
+      if (IS_DEV) {
+        console.log(`[MainScene] Remote player sprite not found for jump: ${id}`)
+      }
       return
     }
 
@@ -781,7 +852,9 @@ export class MainScene extends Phaser.Scene {
       })
     }
 
-    console.log(`[MainScene] Remote player jumped: ${id}`)
+    if (IS_DEV) {
+      console.log(`[MainScene] Remote player jumped: ${id}`)
+    }
   }
 
   private removeRemotePlayer(id: string) {
@@ -806,6 +879,9 @@ export class MainScene extends Phaser.Scene {
       nameText.destroy()
       this.remotePlayerNames.delete(id)
     }
+
+    // Clean up failed player tracking
+    this.failedRemotePlayers.delete(id)
   }
 
   update() {
@@ -918,5 +994,6 @@ export class MainScene extends Phaser.Scene {
     this.remotePlayerShadows.clear()
     this.remotePlayerNames.forEach((name) => name.destroy())
     this.remotePlayerNames.clear()
+    this.failedRemotePlayers.clear() // Clear failed player tracking
   }
 }

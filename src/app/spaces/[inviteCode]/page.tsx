@@ -165,7 +165,15 @@ export default function SpaceEntryPage() {
       const session = await res.json()
 
       // Store session in localStorage
-      localStorage.setItem("guestSession", JSON.stringify(session))
+      try {
+        localStorage.setItem("guestSession", JSON.stringify(session))
+      } catch (storageError) {
+        // Safari 프라이빗 모드 등 localStorage 접근이 차단된 환경
+        console.warn("[Entry] localStorage access denied:", storageError)
+        setFormError("브라우저 저장소에 접근할 수 없습니다. 프라이빗 모드를 해제해주세요.")
+        setEntering(false)
+        return
+      }
 
       // Show loading screen
       setShowLoading(true)
