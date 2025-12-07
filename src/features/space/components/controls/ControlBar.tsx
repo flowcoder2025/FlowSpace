@@ -58,6 +58,29 @@ const SettingsIcon = () => (
 )
 
 // ============================================
+// MediaError Type (from useLiveKit)
+// ============================================
+export type MediaError = {
+  type: "permission_denied" | "not_found" | "not_connected" | "unknown"
+  message: string
+}
+
+// ============================================
+// AlertIcon for error display
+// ============================================
+const AlertIcon = () => (
+  <svg className="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+  </svg>
+)
+
+const CloseIcon = () => (
+  <svg className="size-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+  </svg>
+)
+
+// ============================================
 // ControlBar Props
 // ============================================
 interface ControlBarProps {
@@ -66,12 +89,14 @@ interface ControlBarProps {
   isScreenSharing: boolean
   isChatOpen: boolean
   isParticipantsOpen: boolean
+  mediaError?: MediaError | null
   onToggleMic: () => void
   onToggleCamera: () => void
   onToggleScreenShare: () => void
   onToggleChat: () => void
   onToggleParticipants: () => void
   onOpenSettings?: () => void
+  onDismissError?: () => void
 }
 
 // ============================================
@@ -83,15 +108,33 @@ export function ControlBar({
   isScreenSharing,
   isChatOpen,
   isParticipantsOpen,
+  mediaError,
   onToggleMic,
   onToggleCamera,
   onToggleScreenShare,
   onToggleChat,
   onToggleParticipants,
   onOpenSettings,
+  onDismissError,
 }: ControlBarProps) {
   return (
-    <div className="flex h-14 shrink-0 items-center justify-center border-t bg-background/95 px-4 backdrop-blur">
+    <div className="relative flex h-14 shrink-0 items-center justify-center border-t bg-background/95 px-4 backdrop-blur">
+      {/* Media Error Alert */}
+      {mediaError && (
+        <div className="absolute -top-12 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-lg bg-destructive px-4 py-2 text-destructive-foreground shadow-lg">
+          <AlertIcon />
+          <span className="text-sm">{mediaError.message}</span>
+          {onDismissError && (
+            <button
+              onClick={onDismissError}
+              className="ml-2 rounded p-0.5 hover:bg-destructive-foreground/20"
+              aria-label="에러 닫기"
+            >
+              <CloseIcon />
+            </button>
+          )}
+        </div>
+      )}
       <HStack gap="sm">
         {/* Mic Toggle */}
         <Button

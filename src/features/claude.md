@@ -240,3 +240,4 @@ import { LoginForm } from "./components/LoginForm"
 | 2025-12-05 | 초기 생성 |
 | 2025-12-05 | /docs 참조 섹션 추가, 토큰 효율 원칙 적용 |
 | 2025-12-07 | FlowSpace 프로젝트 반영: space 모듈 중심으로 구조 업데이트 |
+| 2025-12-07 | LiveKit/Spaces API 보안 강화, 게스트 세션 검증 API 추가 |

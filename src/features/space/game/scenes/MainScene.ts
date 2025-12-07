@@ -652,60 +652,76 @@ export class MainScene extends Phaser.Scene {
       console.log(`[MainScene] Remote player added: ${position.id}`)
     } catch (error) {
       // Scene might have been destroyed during execution - silently ignore
-      console.warn("[MainScene] Failed to add remote player, scene may be shutting down:", error)
+      // Only log if scene is still fully active (real error vs React Strict Mode cleanup)
+      // Check both isSceneActive flag AND this.add to confirm scene is truly active
+      if (this.isSceneActive && this.add) {
+        console.warn("[MainScene] Failed to add remote player:", error)
+      }
     }
   }
 
   private updateRemotePlayer(position: PlayerPosition & { avatarColor?: AvatarColor; nickname?: string }) {
-    let container = this.remotePlayers.get(position.id)
-    if (!container) {
-      this.addRemotePlayer(position)
-      container = this.remotePlayers.get(position.id)
+    // Safety check - silently ignore if scene is not active (React Strict Mode cleanup)
+    if (!this.isSceneActive || !this.add) {
+      return
     }
 
-    if (container) {
-      // Smooth position interpolation on container (independent from sprite's local Y for jump)
-      this.tweens.add({
-        targets: container,
-        x: position.x,
-        y: position.y,
-        duration: 100,
-        ease: "Linear",
-      })
+    try {
+      let container = this.remotePlayers.get(position.id)
+      if (!container) {
+        this.addRemotePlayer(position)
+        container = this.remotePlayers.get(position.id)
+      }
 
-      // Update shadow position
-      const shadow = this.remotePlayerShadows.get(position.id)
-      if (shadow) {
+      if (container && this.tweens) {
+        // Smooth position interpolation on container (independent from sprite's local Y for jump)
         this.tweens.add({
-          targets: shadow,
+          targets: container,
           x: position.x,
-          y: position.y + CHARACTER_CONFIG.HEIGHT / 2,
+          y: position.y,
           duration: 100,
           ease: "Linear",
         })
-      }
 
-      // Update nickname position (account for sprite's local Y offset during jump)
-      const sprite = this.remotePlayerSprites.get(position.id)
-      const spriteYOffset = sprite ? sprite.y : 0
-      const nameText = this.remotePlayerNames.get(position.id)
-      if (nameText) {
-        this.tweens.add({
-          targets: nameText,
-          x: position.x,
-          y: position.y + spriteYOffset - CHARACTER_CONFIG.HEIGHT / 2 - 8,
-          duration: 100,
-          ease: "Linear",
-        })
-      }
-
-      // Update animation on sprite (not container)
-      if (sprite) {
-        const avatarColor = position.avatarColor || "default"
-        const animKey = getAnimationKey(position.direction, position.isMoving, avatarColor)
-        if (this.anims.exists(animKey) && sprite.anims.currentAnim?.key !== animKey) {
-          sprite.play(animKey)
+        // Update shadow position
+        const shadow = this.remotePlayerShadows.get(position.id)
+        if (shadow) {
+          this.tweens.add({
+            targets: shadow,
+            x: position.x,
+            y: position.y + CHARACTER_CONFIG.HEIGHT / 2,
+            duration: 100,
+            ease: "Linear",
+          })
         }
+
+        // Update nickname position (account for sprite's local Y offset during jump)
+        const sprite = this.remotePlayerSprites.get(position.id)
+        const spriteYOffset = sprite ? sprite.y : 0
+        const nameText = this.remotePlayerNames.get(position.id)
+        if (nameText) {
+          this.tweens.add({
+            targets: nameText,
+            x: position.x,
+            y: position.y + spriteYOffset - CHARACTER_CONFIG.HEIGHT / 2 - 8,
+            duration: 100,
+            ease: "Linear",
+          })
+        }
+
+        // Update animation on sprite (not container)
+        if (sprite && this.anims) {
+          const avatarColor = position.avatarColor || "default"
+          const animKey = getAnimationKey(position.direction, position.isMoving, avatarColor)
+          if (this.anims.exists(animKey) && sprite.anims.currentAnim?.key !== animKey) {
+            sprite.play(animKey)
+          }
+        }
+      }
+    } catch (error) {
+      // Silently ignore errors during scene shutdown (React Strict Mode cleanup)
+      if (this.isSceneActive) {
+        console.warn("[MainScene] Failed to update remote player:", error)
       }
     }
   }

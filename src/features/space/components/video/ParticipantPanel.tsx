@@ -29,6 +29,9 @@ export function ParticipantPanel({
     return a.participantName.localeCompare(b.participantName)
   })
 
+  // 화면공유 중인 참가자 필터링
+  const screenShareTracks = tracks.filter((track) => track.screenTrack)
+
   const participantCount = tracks.length
 
   return (
@@ -42,6 +45,23 @@ export function ParticipantPanel({
       {/* Participant Grid */}
       <div className="flex-1 overflow-y-auto p-2">
         <VStack gap="sm">
+          {/* 화면공유 타일 (있을 경우 상단에 표시) */}
+          {screenShareTracks.length > 0 && (
+            <>
+              {screenShareTracks.map((track) => (
+                <VideoTile
+                  key={`${track.participantId}-screen`}
+                  track={track}
+                  isLocal={track.participantId === localParticipantId}
+                  isScreenShare
+                  className="ring-2 ring-primary/50"
+                />
+              ))}
+              <div className="border-t border-border" />
+            </>
+          )}
+
+          {/* 일반 참가자 타일 */}
           {participantCount === 0 ? (
             <Text tone="muted" size="sm" className="py-8 text-center">
               참가자가 없습니다

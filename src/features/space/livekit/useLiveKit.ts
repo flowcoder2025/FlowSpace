@@ -30,6 +30,7 @@ interface UseLiveKitOptions {
   spaceId: string
   participantId: string
   participantName: string
+  sessionToken?: string // 게스트 세션 토큰 (인증 검증용)
   enabled?: boolean
 }
 
@@ -54,6 +55,7 @@ export function useLiveKit({
   spaceId,
   participantId,
   participantName,
+  sessionToken,
   enabled = true,
 }: UseLiveKitOptions): UseLiveKitReturn {
   const roomRef = useRef<Room | null>(null)
@@ -95,16 +97,18 @@ export function useLiveKit({
         roomName: `space-${spaceId}`,
         participantName,
         participantId,
+        sessionToken, // 게스트 세션 검증용
       }),
     })
 
     if (!response.ok) {
-      throw new Error("Failed to get LiveKit token")
+      const errorData = await response.json().catch(() => ({}))
+      throw new Error(errorData.error || "Failed to get LiveKit token")
     }
 
     const data = await response.json()
     return data.token
-  }, [spaceId, participantId, participantName])
+  }, [spaceId, participantId, participantName, sessionToken])
 
   // Update participant tracks
   const updateParticipantTracks = useCallback((room: Room) => {
@@ -225,11 +229,13 @@ export function useLiveKit({
         })
         clearTimeout(timeoutId)
       } catch {
-        // 서버 없음 - 조용히 비활성화
+        // 서버 없음 - 조용히 비활성화 (재연결 허용을 위해 플래그 원복)
         console.info("[LiveKit] 개발 모드: 서버 미실행 상태, 비디오/오디오 기능 비활성화")
         setIsAvailable(false)
         setConnectionError("LiveKit server not running")
         isConnectingRef.current = false
+        // 중요: 나중에 서버를 띄웠을 때 재연결이 가능하도록 플래그 원복
+        connectionAttemptedRef.current = false
         return
       }
     }
@@ -348,6 +354,22 @@ export function useLiveKit({
 
       // 미디어 디바이스 에러 핸들링
       room.on(RoomEvent.MediaDevicesError, (error) => {
+        // Filter out user cancellation errors (screen share picker cancelled)
+        const errorName = error instanceof Error ? error.name : ""
+        const errorMessage = error instanceof Error ? error.message : String(error)
+        const isUserCancellation =
+          errorName === "NotAllowedError" ||
+          errorMessage.includes("Permission denied") ||
+          errorMessage.includes("cancelled") ||
+          errorMessage.includes("canceled")
+
+        if (isUserCancellation) {
+          if (IS_DEV) {
+            console.log("[LiveKit] Media device access cancelled by user")
+          }
+          return
+        }
+
         console.error("[LiveKit] Media device error:", error)
         setMediaError(parseMediaError(error))
       })
@@ -499,6 +521,27 @@ export function useLiveKit({
       updateMediaState(room.localParticipant)
       return true
     } catch (error) {
+      // User cancelled screen share picker - not an error, just silently return
+      const errorName = error instanceof Error ? error.name : ""
+      const errorMessage = error instanceof Error ? error.message : String(error)
+
+      // Check for user cancellation patterns (various browser messages)
+      const isUserCancellation =
+        errorName === "NotAllowedError" ||
+        errorMessage.includes("Permission denied") ||
+        errorMessage.includes("cancelled") ||
+        errorMessage.includes("canceled") ||
+        errorMessage.includes("user denied") ||
+        errorMessage.includes("AbortError")
+
+      if (isUserCancellation) {
+        // User cancelled or denied - don't show error for screen share cancellation
+        if (IS_DEV) {
+          console.log("[LiveKit] Screen share cancelled by user:", errorMessage)
+        }
+        return false
+      }
+
       console.error("[LiveKit] Screen share toggle error:", error)
       const parsedError = parseMediaError(error)
       setMediaError(parsedError)

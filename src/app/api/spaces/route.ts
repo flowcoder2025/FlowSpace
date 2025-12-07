@@ -6,8 +6,17 @@
  */
 
 import { NextRequest, NextResponse } from "next/server"
+import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { SpaceAccessType, SpaceStatus, TemplateKey } from "@prisma/client"
+
+// ============================================
+// Configuration
+// ============================================
+const IS_DEV = process.env.NODE_ENV === "development"
+
+// 개발환경 테스트용 사용자 ID (seed.ts의 TEST_USER_ID와 동일)
+const DEV_TEST_USER_ID = "test-user-dev-001"
 
 // ============================================
 // Types
@@ -28,20 +37,52 @@ interface CreateSpaceBody {
 // ============================================
 export async function POST(request: NextRequest) {
   try {
+    // 1. 인증 확인
+    const session = await auth()
+    let ownerId: string
+
+    if (session?.user?.id) {
+      // 인증된 사용자
+      ownerId = session.user.id
+    } else if (IS_DEV) {
+      // 개발 환경에서만 테스트 사용자 허용
+      console.warn("[Spaces API] Using dev test user - not for production!")
+      ownerId = DEV_TEST_USER_ID
+    } else {
+      // 운영 환경에서는 인증 필수
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      )
+    }
+
+    // 2. Request body 파싱
     const body: CreateSpaceBody = await request.json()
 
-    // TODO: 인증 구현 후 실제 사용자 ID 사용
-    // const session = await auth()
-    // if (!session?.user?.id) {
-    //   return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    // }
-    // const ownerId = session.user.id
+    // 3. 필수 필드 검증
+    if (!body.name || !body.templateKey) {
+      return NextResponse.json(
+        { error: "Missing required fields: name, templateKey" },
+        { status: 400 }
+      )
+    }
 
-    // 임시: 테스트용 사용자 ID (실제 구현 시 제거)
-    // seed.ts의 TEST_USER_ID와 동일한 값 사용
-    const ownerId = "test-user-dev-001"
+    // 4. 입력값 검증
+    if (body.name.length > 100) {
+      return NextResponse.json(
+        { error: "Name must be 100 characters or less" },
+        { status: 400 }
+      )
+    }
 
-    // 템플릿 조회
+    if (body.description && body.description.length > 500) {
+      return NextResponse.json(
+        { error: "Description must be 500 characters or less" },
+        { status: 400 }
+      )
+    }
+
+    // 5. 템플릿 조회
     const template = await prisma.template.findUnique({
       where: { key: body.templateKey },
     })
@@ -53,7 +94,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // 공간 생성
+    // 6. 공간 생성
     const space = await prisma.space.create({
       data: {
         name: body.name,
@@ -71,6 +112,10 @@ export async function POST(request: NextRequest) {
         template: true,
       },
     })
+
+    if (IS_DEV) {
+      console.log("[Spaces API] Space created:", space.id, "by", ownerId)
+    }
 
     return NextResponse.json(space, { status: 201 })
   } catch (error) {
@@ -90,8 +135,8 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const ownerId = searchParams.get("ownerId")
     const status = searchParams.get("status") as SpaceStatus | null
-    const limit = parseInt(searchParams.get("limit") ?? "10")
-    const offset = parseInt(searchParams.get("offset") ?? "0")
+    const limit = Math.min(parseInt(searchParams.get("limit") ?? "10"), 100) // 최대 100개
+    const offset = Math.max(parseInt(searchParams.get("offset") ?? "0"), 0)
 
     const where = {
       ...(ownerId && { ownerId }),

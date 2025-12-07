@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useMemo } from "react"
+import { useState, useCallback, useMemo, useEffect } from "react"
 import {
   Panel,
   PanelGroup,
@@ -104,6 +104,7 @@ export function SpaceLayout({
   // LiveKit for audio/video
   const {
     mediaState,
+    mediaError,
     toggleCamera,
     toggleMicrophone,
     toggleScreenShare,
@@ -114,6 +115,24 @@ export function SpaceLayout({
     participantName: userNickname,
     enabled: true,
   })
+
+  // Dismiss media error state
+  const [dismissedError, setDismissedError] = useState(false)
+
+  // Reset dismissed state when error changes
+  const handleDismissError = useCallback(() => {
+    setDismissedError(true)
+  }, [])
+
+  // Show error only if not dismissed
+  const displayError = mediaError && !dismissedError ? mediaError : null
+
+  // Reset dismissed state when new error occurs
+  useEffect(() => {
+    if (mediaError) {
+      setDismissedError(false)
+    }
+  }, [mediaError])
 
   // Ensure local participant is in tracks (fallback if LiveKit not connected)
   const allParticipantTracks = useMemo(() => {
@@ -255,11 +274,13 @@ export function SpaceLayout({
         isScreenSharing={mediaState.isScreenShareEnabled}
         isChatOpen={isChatOpen}
         isParticipantsOpen={isParticipantsOpen}
+        mediaError={displayError}
         onToggleMic={handleToggleMic}
         onToggleCamera={handleToggleCamera}
         onToggleScreenShare={handleToggleScreenShare}
         onToggleChat={handleToggleChat}
         onToggleParticipants={handleToggleParticipants}
+        onDismissError={handleDismissError}
       />
 
       {/* Screen Share Overlay - Show when someone is sharing (except self) */}

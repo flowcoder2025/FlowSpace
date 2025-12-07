@@ -41,22 +41,49 @@ const AudioBlockedIcon = () => (
   </svg>
 )
 
+const FullscreenIcon = () => (
+  <svg className="size-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+  </svg>
+)
+
+const ExitFullscreenIcon = () => (
+  <svg className="size-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5l5.25 5.25" />
+  </svg>
+)
+
+const PipIcon = () => (
+  <svg className="size-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8M3 17V7a2 2 0 012-2h6" />
+    <rect x="3" y="13" width="8" height="6" rx="1" strokeWidth={2} />
+  </svg>
+)
+
 // ============================================
 // VideoTile Props
 // ============================================
 interface VideoTileProps {
   track: ParticipantTrack
   isLocal?: boolean
+  isScreenShare?: boolean  // 화면공유 전용 타일
   className?: string
 }
 
 // ============================================
 // VideoTile Component
 // ============================================
-export function VideoTile({ track, isLocal = false, className }: VideoTileProps) {
+export function VideoTile({ track, isLocal = false, isScreenShare = false, className }: VideoTileProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
   const [audioBlocked, setAudioBlocked] = useState(false)
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const [isPipActive, setIsPipActive] = useState(false)
+  const [showControls, setShowControls] = useState(false)
+
+  // 화면공유 모드일 때는 screenTrack, 아니면 videoTrack 사용
+  const activeVideoTrack = isScreenShare ? track.screenTrack : track.videoTrack
 
   // 오디오 재생 시도 함수
   const tryPlayAudio = useCallback(async () => {
@@ -79,30 +106,57 @@ export function VideoTile({ track, isLocal = false, className }: VideoTileProps)
     }
   }, [track.audioTrack, track.participantName, isLocal])
 
+  // Track video ended state (when remote user turns off camera)
+  const [videoEnded, setVideoEnded] = useState(false)
+
+  // Reset videoEnded when track changes
+  useEffect(() => {
+    setVideoEnded(false)
+  }, [activeVideoTrack])
+
   // Attach video track to video element
   useEffect(() => {
     const video = videoRef.current
     if (!video) return
 
-    if (track.videoTrack) {
-      const stream = new MediaStream([track.videoTrack])
+    if (activeVideoTrack && !videoEnded) {
+      const stream = new MediaStream([activeVideoTrack])
       video.srcObject = stream
+
+      // Handle track ended event (when remote user turns off camera)
+      const handleTrackEnded = () => {
+        if (IS_DEV) {
+          console.log("[VideoTile] Video track ended for:", track.participantName)
+        }
+        setVideoEnded(true)
+        video.srcObject = null
+      }
+
+      // Check if track is already ended
+      if (activeVideoTrack.readyState === "ended") {
+        handleTrackEnded()
+        return
+      }
+
+      activeVideoTrack.addEventListener("ended", handleTrackEnded)
 
       if (IS_DEV) {
         console.log("[VideoTile] Video track attached for:", track.participantName, {
-          trackId: track.videoTrack.id,
-          enabled: track.videoTrack.enabled,
-          readyState: track.videoTrack.readyState,
+          trackId: activeVideoTrack.id,
+          enabled: activeVideoTrack.enabled,
+          readyState: activeVideoTrack.readyState,
+          isScreenShare,
         })
+      }
+
+      return () => {
+        activeVideoTrack.removeEventListener("ended", handleTrackEnded)
+        video.srcObject = null
       }
     } else {
       video.srcObject = null
     }
-
-    return () => {
-      video.srcObject = null
-    }
-  }, [track.videoTrack, track.participantName])
+  }, [activeVideoTrack, track.participantName, isScreenShare, videoEnded])
 
   // Attach audio track to audio element (for remote participants only)
   useEffect(() => {
@@ -151,16 +205,90 @@ export function VideoTile({ track, isLocal = false, className }: VideoTileProps)
     }
   }, [audioBlocked, tryPlayAudio])
 
-  const hasVideo = !!track.videoTrack
+  // Fullscreen change detection
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement)
+    }
+    document.addEventListener("fullscreenchange", handleFullscreenChange)
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFullscreenChange)
+    }
+  }, [])
+
+  // PIP change detection
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video) return
+
+    const handleEnterPip = () => {
+      setIsPipActive(true)
+      if (IS_DEV) {
+        console.log("[VideoTile] Entered PIP mode for:", track.participantName)
+      }
+    }
+    const handleLeavePip = () => {
+      setIsPipActive(false)
+      if (IS_DEV) {
+        console.log("[VideoTile] Left PIP mode for:", track.participantName)
+      }
+    }
+
+    video.addEventListener("enterpictureinpicture", handleEnterPip)
+    video.addEventListener("leavepictureinpicture", handleLeavePip)
+
+    return () => {
+      video.removeEventListener("enterpictureinpicture", handleEnterPip)
+      video.removeEventListener("leavepictureinpicture", handleLeavePip)
+    }
+  }, [track.participantName])
+
+  // Toggle fullscreen handler
+  const handleToggleFullscreen = useCallback(async () => {
+    if (!containerRef.current) return
+
+    try {
+      if (!document.fullscreenElement) {
+        await containerRef.current.requestFullscreen()
+      } else {
+        await document.exitFullscreen()
+      }
+    } catch (error) {
+      console.error("[VideoTile] Fullscreen toggle error:", error)
+    }
+  }, [])
+
+  // Toggle PIP handler
+  const handleTogglePip = useCallback(async () => {
+    const video = videoRef.current
+    if (!video) return
+
+    try {
+      if (document.pictureInPictureElement === video) {
+        await document.exitPictureInPicture()
+      } else if (document.pictureInPictureEnabled) {
+        await video.requestPictureInPicture()
+      }
+    } catch (error) {
+      console.error("[VideoTile] PIP toggle error:", error)
+    }
+  }, [])
+
+  const hasVideo = !!activeVideoTrack && !videoEnded
   const hasAudio = !!track.audioTrack
+  const canPip = hasVideo && document.pictureInPictureEnabled && !isLocal
 
   return (
     <div
+      ref={containerRef}
       className={cn(
-        "relative aspect-video overflow-hidden rounded-lg bg-muted",
+        "group relative aspect-video overflow-hidden rounded-lg bg-muted",
         track.isSpeaking && "ring-2 ring-primary ring-offset-2",
+        isFullscreen && "fixed inset-0 z-50 aspect-auto rounded-none",
         className
       )}
+      onMouseEnter={() => setShowControls(true)}
+      onMouseLeave={() => setShowControls(false)}
     >
       {/* Video element */}
       {hasVideo ? (
@@ -186,7 +314,41 @@ export function VideoTile({ track, isLocal = false, className }: VideoTileProps)
         <audio ref={audioRef} autoPlay playsInline className="hidden" />
       )}
 
-      {/* Overlay info */}
+      {/* Video controls overlay (top-right) - visible on hover */}
+      {hasVideo && (
+        <div
+          className={cn(
+            "absolute right-2 top-2 flex items-center gap-1 transition-opacity duration-200",
+            showControls || isFullscreen ? "opacity-100" : "opacity-0"
+          )}
+        >
+          {/* PIP Button (for remote videos only) */}
+          {canPip && (
+            <button
+              onClick={handleTogglePip}
+              className={cn(
+                "rounded bg-black/60 p-1.5 text-white transition-colors hover:bg-black/80",
+                isPipActive && "bg-primary/80 hover:bg-primary/90"
+              )}
+              title={isPipActive ? "PIP 종료" : "PIP 모드"}
+              aria-label={isPipActive ? "PIP 모드 종료" : "PIP 모드 시작"}
+            >
+              <PipIcon />
+            </button>
+          )}
+          {/* Fullscreen Button */}
+          <button
+            onClick={handleToggleFullscreen}
+            className="rounded bg-black/60 p-1.5 text-white transition-colors hover:bg-black/80"
+            title={isFullscreen ? "전체화면 종료" : "전체화면"}
+            aria-label={isFullscreen ? "전체화면 종료" : "전체화면으로 보기"}
+          >
+            {isFullscreen ? <ExitFullscreenIcon /> : <FullscreenIcon />}
+          </button>
+        </div>
+      )}
+
+      {/* Overlay info (bottom) */}
       <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
@@ -198,6 +360,7 @@ export function VideoTile({ track, isLocal = false, className }: VideoTileProps)
             <Text size="xs" className="truncate text-white">
               {track.participantName}
               {isLocal && " (나)"}
+              {isScreenShare && " - 화면공유"}
             </Text>
           </div>
           <div className="flex items-center gap-1">
