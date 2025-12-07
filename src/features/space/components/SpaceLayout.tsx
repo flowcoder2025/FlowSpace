@@ -94,7 +94,7 @@ export function SpaceLayout({
   }, [])
 
   // Socket connection for game position sync (🔒 sessionToken으로 서버 검증)
-  const { isConnected, players, sendMessage } = useSocket({
+  const { isConnected, players, socketError, sendMessage } = useSocket({
     spaceId,
     playerId: userId,
     nickname: userNickname,
@@ -217,6 +217,19 @@ export function SpaceLayout({
         userNickname={userNickname}
         onExit={onExit}
       />
+
+      {/* 🔒 Socket Error Banner (세션 검증 실패 등) */}
+      {socketError && (
+        <div className="bg-destructive/10 border-b border-destructive px-4 py-2 text-center text-sm text-destructive">
+          {socketError.type === "session_invalid" ? (
+            <span>세션이 만료되었습니다. 페이지를 새로고침하거나 다시 입장해 주세요.</span>
+          ) : socketError.type === "connection_failed" ? (
+            <span>서버에 연결할 수 없습니다. 네트워크 연결을 확인해 주세요.</span>
+          ) : (
+            <span>{socketError.message}</span>
+          )}
+        </div>
+      )}
 
       {/* Main Content with Resizable Panels */}
       <div className="flex-1 overflow-hidden">

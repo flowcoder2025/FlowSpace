@@ -44,6 +44,8 @@ interface UseLiveKitReturn {
   participantTracks: Map<string, ParticipantTrack>
   mediaState: MediaState
   mediaError: MediaError | null
+  /** 🔒 서버에서 파생된 실제 participantId (props와 다를 수 있음) */
+  effectiveParticipantId: string | null
   toggleCamera: () => Promise<boolean>
   toggleMicrophone: () => Promise<boolean>
   toggleScreenShare: () => Promise<boolean>
@@ -74,6 +76,8 @@ export function useLiveKit({
     isScreenShareEnabled: false,
   })
   const [mediaError, setMediaError] = useState<MediaError | null>(null)
+  // 🔒 서버에서 파생된 실제 participantId (클라이언트 props와 다를 수 있음)
+  const [effectiveParticipantId, setEffectiveParticipantId] = useState<string | null>(null)
 
   // 미디어 에러 파싱 헬퍼
   const parseMediaError = useCallback((error: unknown): MediaError => {
@@ -88,8 +92,16 @@ export function useLiveKit({
     return { type: "unknown", message: errorMessage }
   }, [])
 
+  // Token 응답 타입 (서버에서 파생된 participantId 포함)
+  interface TokenResponse {
+    token: string
+    participantId: string
+    participantName: string
+  }
+
   // Get access token from API
-  const getToken = useCallback(async (): Promise<string> => {
+  // 🔒 서버에서 파생된 participantId를 반환하여 클라이언트 동기화에 사용
+  const getToken = useCallback(async (): Promise<TokenResponse> => {
     const response = await fetch("/api/livekit/token", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -107,7 +119,12 @@ export function useLiveKit({
     }
 
     const data = await response.json()
-    return data.token
+    // 🔒 서버 응답 전체 반환 (token + 서버에서 파생된 participantId)
+    return {
+      token: data.token,
+      participantId: data.participantId,
+      participantName: data.participantName,
+    }
   }, [spaceId, participantId, participantName, sessionToken])
 
   // Update participant tracks
@@ -251,7 +268,14 @@ export function useLiveKit({
     }
 
     try {
-      const token = await getToken()
+      // 🔒 서버에서 토큰과 함께 파생된 participantId를 받음
+      const tokenResponse = await getToken()
+
+      // 🔒 서버에서 파생된 participantId를 상태에 저장
+      setEffectiveParticipantId(tokenResponse.participantId)
+      if (IS_DEV) {
+        console.log("[LiveKit] Server-derived participantId:", tokenResponse.participantId)
+      }
 
       // 토큰 획득 후 마운트 상태 재확인
       if (!mountedRef.current) {
@@ -374,8 +398,8 @@ export function useLiveKit({
         setMediaError(parseMediaError(error))
       })
 
-      // Connect to room
-      await room.connect(LIVEKIT_URL, token)
+      // Connect to room (🔒 서버에서 받은 토큰 사용)
+      await room.connect(LIVEKIT_URL, tokenResponse.token)
 
       // 연결 완료 후 마운트 상태 확인
       if (!mountedRef.current) {
@@ -627,6 +651,7 @@ export function useLiveKit({
     participantTracks,
     mediaState,
     mediaError,
+    effectiveParticipantId, // 🔒 서버에서 파생된 실제 participantId
     toggleCamera,
     toggleMicrophone,
     toggleScreenShare,

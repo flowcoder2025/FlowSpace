@@ -28,9 +28,16 @@ interface UseSocketOptions {
   onPlayerLeft?: (playerId: string) => void
 }
 
+// 🔒 Socket 에러 타입 (세션 검증 실패 등)
+export type SocketError = {
+  type: "session_invalid" | "connection_failed" | "unknown"
+  message: string
+}
+
 interface UseSocketReturn {
   isConnected: boolean
   players: Map<string, PlayerPosition>
+  socketError: SocketError | null // 🔒 세션 검증 실패 시 에러
   sendMessage: (content: string) => void
   disconnect: () => void
 }
@@ -49,6 +56,8 @@ export function useSocket({
   const socketRef = useRef<Socket<ServerToClientEvents, ClientToServerEvents> | null>(null)
   const [isConnected, setIsConnected] = useState(false)
   const [players, setPlayers] = useState<Map<string, PlayerPosition>>(new Map())
+  // 🔒 세션 검증 실패 등 서버 에러 상태
+  const [socketError, setSocketError] = useState<SocketError | null>(null)
 
   // Use refs to persist state across useEffect re-runs (fixes timing race condition)
   const pendingPlayersRef = useRef<PlayerPosition[]>([])
@@ -222,6 +231,32 @@ export function useSocket({
       onSystemMessageRef.current?.(message)
     })
 
+    // 🔒 Error events (세션 검증 실패 등)
+    socket.on("error", (data: { message: string }) => {
+      console.error("[Socket] Server error:", data.message)
+
+      // 에러 메시지에 따라 타입 분류
+      const errorType: SocketError["type"] = data.message.includes("session") || data.message.includes("expired")
+        ? "session_invalid"
+        : data.message.includes("connection")
+        ? "connection_failed"
+        : "unknown"
+
+      setSocketError({
+        type: errorType,
+        message: data.message,
+      })
+    })
+
+    // 연결 에러 (connect_error 이벤트)
+    socket.on("connect_error", (error) => {
+      console.error("[Socket] Connection error:", error.message)
+      setSocketError({
+        type: "connection_failed",
+        message: "서버에 연결할 수 없습니다.",
+      })
+    })
+
     // Listen for local player movement from game
     const handleLocalPlayerMove = (position: unknown) => {
       const pos = position as PlayerPosition
@@ -276,6 +311,7 @@ export function useSocket({
   return {
     isConnected,
     players,
+    socketError, // 🔒 세션 검증 실패 시 에러
     sendMessage,
     disconnect,
   }
