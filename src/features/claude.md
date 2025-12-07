@@ -1,7 +1,10 @@
 # Features 가이드 (기능 모듈)
 
 > **역할**: 기능별 모듈 개발 가이드
-> **상위**: `/claude.md` (루트 헌법)
+> **상위**: `/CLAUDE.md` (루트 헌법)
+>
+> ⚠️ **필수**: 이 파일을 읽기 전 `/CLAUDE.md` 섹션 0 (컨텍스트 로딩 프로토콜)을 확인하세요.
+> 핵심 금지 사항과 전역 원칙은 루트 헌법에서 정의됩니다.
 
 ---
 
@@ -10,14 +13,25 @@
 ```
 /src/features
 ├── claude.md          # [현재 파일]
-├── /auth              # 인증 기능
-│   └── claude.md      # 인증 로컬 가이드
-├── /dashboard         # 대시보드 기능
-│   └── claude.md
-├── /projects          # 프로젝트 관리
-│   └── claude.md
-└── /settings          # 설정 기능
-    └── claude.md
+└── /space             # 📌 공간 기능 (핵심 모듈)
+    ├── /components    # 공간 전용 컴포넌트
+    │   ├── SpaceLayout.tsx     # 전체 레이아웃 컨테이너
+    │   ├── SpaceHeader.tsx     # 상단 헤더
+    │   ├── /sidebar            # 채팅 패널
+    │   ├── /video              # 비디오 타일, 참가자 패널
+    │   ├── /game               # 게임 캔버스 래퍼
+    │   └── /controls           # 하단 컨트롤 바
+    ├── /game          # Phaser 게임 엔진
+    │   ├── PhaserGame.tsx      # Phaser 인스턴스 래퍼
+    │   ├── /scenes             # 게임 씬 (MainScene)
+    │   ├── /objects            # 상호작용 오브젝트
+    │   ├── /tiles              # 타일 시스템
+    │   └── /sprites            # 캐릭터 스프라이트
+    ├── /livekit       # LiveKit 연동 (음성/영상)
+    ├── /socket        # Socket.io 연동 (실시간 동기화)
+    ├── /hooks         # 공간 관련 훅
+    ├── /types         # 타입 정의
+    └── index.ts       # 통합 export
 ```
 
 ---
@@ -170,39 +184,44 @@ import { LoginForm } from "./components/LoginForm"
 
 ---
 
-## 7. 기존 Feature 가이드
+## 7. FlowSpace Feature 가이드
 
-### 7.1 Auth (/auth)
-
-| 항목 | 내용 |
-|-----|------|
-| 범위 | 로그인, 회원가입, OAuth, 세션 관리 |
-| 권한 | 미인증 사용자 접근 가능 |
-| 상태 | 세션 기반 (NextAuth) |
-
-### 7.2 Dashboard (/dashboard)
+### 7.1 Space (/space) - 핵심 모듈
 
 | 항목 | 내용 |
 |-----|------|
-| 범위 | 메인 대시보드, 통계, 최근 활동 |
-| 권한 | 인증된 사용자만 |
-| 상태 | 서버 컴포넌트 우선 |
+| 범위 | 2D 메타버스 공간 (게임 캔버스, 비디오, 채팅) |
+| 권한 | 게스트/인증 사용자 모두 접근 가능 |
+| 상태 | Phaser 게임 상태 + LiveKit + Socket.io |
 
-### 7.3 Projects (/projects)
+#### 7.1.1 주요 컴포넌트
 
-| 항목 | 내용 |
-|-----|------|
-| 범위 | 프로젝트 CRUD, 협업, 공유 |
-| 권한 | owner/editor/viewer 기반 |
-| 상태 | ReBAC 권한 시스템 연동 |
+| 컴포넌트 | 역할 |
+|---------|------|
+| `SpaceLayout` | 전체 레이아웃 컨테이너 (react-resizable-panels) |
+| `SpaceHeader` | 상단 헤더 (로고, 공간명, 사용자 정보) |
+| `ChatPanel` | 좌측 채팅 패널 (리사이즈/숨김 가능) |
+| `ParticipantPanel` | 우측 참가자 비디오 그리드 |
+| `VideoTile` | 개별 비디오 타일 |
+| `GameCanvas` | Phaser 캔버스 래퍼 |
+| `ControlBar` | 하단 컨트롤 바 (마이크/카메라/화면공유) |
 
-### 7.4 Settings (/settings)
+#### 7.1.2 게임 엔진 구조
 
-| 항목 | 내용 |
-|-----|------|
-| 범위 | 프로필, 구독, 알림 설정 |
-| 권한 | 본인만 |
-| 상태 | 폼 상태 관리 |
+| 모듈 | 역할 |
+|------|------|
+| `PhaserGame.tsx` | Phaser 인스턴스 React 래퍼 |
+| `MainScene.ts` | 메인 게임 씬 (맵, 캐릭터, 카메라) |
+| `CharacterSprite.ts` | 캐릭터 스프라이트 및 이동 |
+| `TileSystem.ts` | 타일맵 렌더링 |
+| `InteractiveObject.ts` | 상호작용 오브젝트 |
+
+#### 7.1.3 실시간 연동
+
+| 모듈 | 역할 | 훅 |
+|------|------|-----|
+| LiveKit | 음성/영상 통화 | `useLiveKit` |
+| Socket.io | 위치/상태 동기화, 채팅 | `useSocket` |
 
 ---
 
@@ -220,3 +239,4 @@ import { LoginForm } from "./components/LoginForm"
 |-----|------|
 | 2025-12-05 | 초기 생성 |
 | 2025-12-05 | /docs 참조 섹션 추가, 토큰 효율 원칙 적용 |
+| 2025-12-07 | FlowSpace 프로젝트 반영: space 모듈 중심으로 구조 업데이트 |

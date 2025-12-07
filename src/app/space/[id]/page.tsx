@@ -95,27 +95,28 @@ export default function SpacePage() {
   useEffect(() => {
     if (!session) return
 
+    // Dev mode: API 호출 없이 바로 목업 데이터 사용 (404 에러 방지)
+    if (devMode) {
+      setSpace({
+        id: spaceId,
+        name: "Dev Test Space",
+        template: {
+          key: "office",
+          name: "Office",
+          assetsPath: "/assets/templates/office",
+        },
+        logoUrl: null,
+        primaryColor: null,
+        loadingMessage: null,
+      })
+      setLoading(false)
+      return
+    }
+
     async function fetchSpace() {
       try {
         const res = await fetch(`/api/spaces/${spaceId}`)
         if (!res.ok) {
-          // Dev mode: API 실패 시 목업 데이터 사용
-          if (devMode) {
-            setSpace({
-              id: spaceId,
-              name: "Dev Test Space",
-              template: {
-                key: "office",
-                name: "Office",
-                assetsPath: "/assets/templates/office",
-              },
-              logoUrl: null,
-              primaryColor: null,
-              loadingMessage: null,
-            })
-            setLoading(false)
-            return
-          }
           if (res.status === 404) {
             setError("존재하지 않는 공간입니다")
           } else {
@@ -126,23 +127,6 @@ export default function SpacePage() {
         const data = await res.json()
         setSpace(data)
       } catch (err) {
-        // Dev mode: 네트워크 에러 시에도 목업 데이터 사용
-        if (devMode) {
-          setSpace({
-            id: spaceId,
-            name: "Dev Test Space",
-            template: {
-              key: "office",
-              name: "Office",
-              assetsPath: "/assets/templates/office",
-            },
-            logoUrl: null,
-            primaryColor: null,
-            loadingMessage: null,
-          })
-          setLoading(false)
-          return
-        }
         setError("공간을 불러올 수 없습니다")
         console.error(err)
       } finally {

@@ -1,9 +1,11 @@
 "use client"
 
-import { useRef, useEffect } from "react"
+import { useRef, useEffect, useState, useCallback } from "react"
 import { cn } from "@/lib/utils"
 import { Text } from "@/components/ui"
 import type { ParticipantTrack } from "../../livekit/types"
+
+const IS_DEV = process.env.NODE_ENV === "development"
 
 // ============================================
 // Icons
@@ -33,6 +35,12 @@ const SpeakingIcon = () => (
   </svg>
 )
 
+const AudioBlockedIcon = () => (
+  <svg className="size-3" fill="currentColor" viewBox="0 0 20 20">
+    <path fillRule="evenodd" d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM12 7a1 1 0 011 1v4a1 1 0 11-2 0V8a1 1 0 011-1zm0 8a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+  </svg>
+)
+
 // ============================================
 // VideoTile Props
 // ============================================
@@ -48,39 +56,100 @@ interface VideoTileProps {
 export function VideoTile({ track, isLocal = false, className }: VideoTileProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
+  const [audioBlocked, setAudioBlocked] = useState(false)
+
+  // 오디오 재생 시도 함수
+  const tryPlayAudio = useCallback(async () => {
+    if (!audioRef.current || !track.audioTrack || isLocal) return
+
+    try {
+      await audioRef.current.play()
+      setAudioBlocked(false)
+      if (IS_DEV) {
+        console.log("[VideoTile] Audio playback started for:", track.participantName)
+      }
+    } catch (error) {
+      // NotAllowedError = 브라우저 autoplay 정책에 의해 차단됨
+      if ((error as Error).name === "NotAllowedError") {
+        console.warn("[VideoTile] Audio playback blocked by browser policy. Click anywhere to enable.")
+        setAudioBlocked(true)
+      } else {
+        console.error("[VideoTile] Audio playback error:", error)
+      }
+    }
+  }, [track.audioTrack, track.participantName, isLocal])
 
   // Attach video track to video element
   useEffect(() => {
-    if (videoRef.current && track.videoTrack) {
+    const video = videoRef.current
+    if (!video) return
+
+    if (track.videoTrack) {
       const stream = new MediaStream([track.videoTrack])
-      videoRef.current.srcObject = stream
-    } else if (videoRef.current) {
-      videoRef.current.srcObject = null
+      video.srcObject = stream
+
+      if (IS_DEV) {
+        console.log("[VideoTile] Video track attached for:", track.participantName, {
+          trackId: track.videoTrack.id,
+          enabled: track.videoTrack.enabled,
+          readyState: track.videoTrack.readyState,
+        })
+      }
+    } else {
+      video.srcObject = null
     }
 
     return () => {
-      if (videoRef.current) {
-        videoRef.current.srcObject = null
-      }
+      video.srcObject = null
     }
-  }, [track.videoTrack])
+  }, [track.videoTrack, track.participantName])
 
   // Attach audio track to audio element (for remote participants only)
   useEffect(() => {
-    if (!isLocal && audioRef.current && track.audioTrack) {
+    const audio = audioRef.current
+    if (!audio || isLocal) return
+
+    if (track.audioTrack) {
       const stream = new MediaStream([track.audioTrack])
-      audioRef.current.srcObject = stream
-      audioRef.current.play().catch(console.error)
-    } else if (audioRef.current) {
-      audioRef.current.srcObject = null
+      audio.srcObject = stream
+
+      if (IS_DEV) {
+        console.log("[VideoTile] Audio track attached for:", track.participantName, {
+          trackId: track.audioTrack.id,
+          enabled: track.audioTrack.enabled,
+          readyState: track.audioTrack.readyState,
+        })
+      }
+
+      // 오디오 재생 시도
+      tryPlayAudio()
+    } else {
+      audio.srcObject = null
+      setAudioBlocked(false)
     }
 
     return () => {
-      if (audioRef.current) {
-        audioRef.current.srcObject = null
-      }
+      audio.srcObject = null
     }
-  }, [track.audioTrack, isLocal])
+  }, [track.audioTrack, track.participantName, isLocal, tryPlayAudio])
+
+  // 전역 클릭 이벤트로 차단된 오디오 재생 시도
+  useEffect(() => {
+    if (!audioBlocked) return
+
+    const handleUserInteraction = () => {
+      tryPlayAudio()
+    }
+
+    // 사용자 인터랙션 시 오디오 재생 시도
+    document.addEventListener("click", handleUserInteraction, { once: true })
+    document.addEventListener("keydown", handleUserInteraction, { once: true })
+
+    return () => {
+      document.removeEventListener("click", handleUserInteraction)
+      document.removeEventListener("keydown", handleUserInteraction)
+    }
+  }, [audioBlocked, tryPlayAudio])
 
   const hasVideo = !!track.videoTrack
   const hasAudio = !!track.audioTrack
@@ -132,6 +201,11 @@ export function VideoTile({ track, isLocal = false, className }: VideoTileProps)
             </Text>
           </div>
           <div className="flex items-center gap-1">
+            {audioBlocked && (
+              <div className="rounded bg-warning/80 p-0.5 text-white" title="클릭하여 오디오 활성화">
+                <AudioBlockedIcon />
+              </div>
+            )}
             {!hasAudio && (
               <div className="rounded bg-destructive/80 p-0.5 text-white">
                 <MicOffIcon />

@@ -9,5 +9,12 @@ rtc:
 keys:
   devkey: devsecret
 
+# Room settings - 빠른 연결 해제 감지
+room:
+  # 빈 방이 닫히기까지 대기 시간 (초)
+  empty_timeout: 60
+  # 참가자 연결 해제 후 제거까지 대기 시간 (초) - 기본값 10초에서 2초로 단축
+  departure_timeout: 2
+
 # Development mode settings
 log_level: info

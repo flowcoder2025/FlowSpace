@@ -14,6 +14,7 @@ import type {
 import { eventBridge, GameEvents } from "../game/events"
 
 const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3001"
+const IS_DEV = process.env.NODE_ENV === "development"
 
 interface UseSocketOptions {
   spaceId: string
@@ -47,8 +48,31 @@ export function useSocket({
   const [isConnected, setIsConnected] = useState(false)
   const [players, setPlayers] = useState<Map<string, PlayerPosition>>(new Map())
 
+  // Use refs to persist state across useEffect re-runs (fixes timing race condition)
+  const pendingPlayersRef = useRef<PlayerPosition[]>([])
+  const gameReadyRef = useRef(false)
+
+  // Store callbacks in refs to avoid useEffect re-runs on callback changes
+  // This prevents socket reconnection when parent component re-renders
+  const onChatMessageRef = useRef(onChatMessage)
+  const onSystemMessageRef = useRef(onSystemMessage)
+  const onPlayerJoinedRef = useRef(onPlayerJoined)
+  const onPlayerLeftRef = useRef(onPlayerLeft)
+
+  // Keep callback refs up to date
+  useEffect(() => {
+    onChatMessageRef.current = onChatMessage
+    onSystemMessageRef.current = onSystemMessage
+    onPlayerJoinedRef.current = onPlayerJoined
+    onPlayerLeftRef.current = onPlayerLeft
+  })
+
   // Initialize socket connection
   useEffect(() => {
+    // Reset refs on new connection (important for React Strict Mode)
+    pendingPlayersRef.current = []
+    gameReadyRef.current = false
+
     // Create socket connection
     const socket: Socket<ServerToClientEvents, ClientToServerEvents> = io(SOCKET_URL, {
       transports: ["websocket", "polling"],
@@ -73,24 +97,55 @@ export function useSocket({
       setIsConnected(false)
     })
 
-    // Room events
+    // Handle GAME_READY event - sync all pending players
+    const handleGameReady = () => {
+      gameReadyRef.current = true
+      const pendingCount = pendingPlayersRef.current.length
+      if (IS_DEV) {
+        console.log("[Socket] Game ready, syncing", pendingCount, "pending players")
+      }
+      // Emit all pending players to game
+      pendingPlayersRef.current.forEach((player) => {
+        if (player.id !== playerId) {
+          if (IS_DEV) {
+            console.log("[Socket] Emitting REMOTE_PLAYER_JOIN for:", player.id, player.nickname)
+          }
+          eventBridge.emit(GameEvents.REMOTE_PLAYER_JOIN, player)
+        }
+      })
+      pendingPlayersRef.current = [] // Clear after sync
+    }
+    eventBridge.on(GameEvents.GAME_READY, handleGameReady)
+
+    // Room events - handles existing players when joining
     socket.on("room:joined", (data: RoomData) => {
-      console.log("[Socket] Joined room:", data.spaceId, "Players:", data.players.length)
+      console.log("[Socket] Joined room:", data.spaceId, "Players:", data.players.length, "GameReady:", gameReadyRef.current)
 
       // Initialize players map
       const playersMap = new Map<string, PlayerPosition>()
       data.players.forEach((player) => {
         if (player.id !== playerId) {
           playersMap.set(player.id, player)
-          // Notify game about remote player
-          eventBridge.emit(GameEvents.REMOTE_PLAYER_JOIN, player)
+
+          // If game is ready, emit immediately; otherwise queue for later
+          if (gameReadyRef.current) {
+            if (IS_DEV) {
+              console.log("[Socket] Game ready, emitting REMOTE_PLAYER_JOIN immediately:", player.id, player.nickname)
+            }
+            eventBridge.emit(GameEvents.REMOTE_PLAYER_JOIN, player)
+          } else {
+            pendingPlayersRef.current.push(player)
+            if (IS_DEV) {
+              console.log("[Socket] Queued player for later sync:", player.id, player.nickname, "Queue size:", pendingPlayersRef.current.length)
+            }
+          }
         }
       })
       setPlayers(playersMap)
     })
 
     socket.on("player:joined", (player: PlayerPosition) => {
-      console.log("[Socket] Player joined:", player.nickname)
+      console.log("[Socket] Player joined:", player.nickname, "GameReady:", gameReadyRef.current)
 
       setPlayers((prev) => {
         const next = new Map(prev)
@@ -98,9 +153,19 @@ export function useSocket({
         return next
       })
 
-      // Notify game about remote player
-      eventBridge.emit(GameEvents.REMOTE_PLAYER_JOIN, player)
-      onPlayerJoined?.(player)
+      // If game is ready, emit immediately; otherwise queue for later
+      if (gameReadyRef.current) {
+        if (IS_DEV) {
+          console.log("[Socket] Game ready, emitting REMOTE_PLAYER_JOIN for new player:", player.id, player.nickname)
+        }
+        eventBridge.emit(GameEvents.REMOTE_PLAYER_JOIN, player)
+      } else {
+        pendingPlayersRef.current.push(player)
+        if (IS_DEV) {
+          console.log("[Socket] Queued new player for later sync:", player.id, player.nickname, "Queue size:", pendingPlayersRef.current.length)
+        }
+      }
+      onPlayerJoinedRef.current?.(player)
     })
 
     socket.on("player:left", ({ id }) => {
@@ -114,7 +179,7 @@ export function useSocket({
 
       // Notify game about remote player leaving
       eventBridge.emit(GameEvents.REMOTE_PLAYER_LEAVE, { id })
-      onPlayerLeft?.(id)
+      onPlayerLeftRef.current?.(id)
     })
 
     // Movement events
@@ -138,11 +203,11 @@ export function useSocket({
 
     // Chat events
     socket.on("chat:message", (message: ChatMessageData) => {
-      onChatMessage?.(message)
+      onChatMessageRef.current?.(message)
     })
 
     socket.on("chat:system", (message: ChatMessageData) => {
-      onSystemMessage?.(message)
+      onSystemMessageRef.current?.(message)
     })
 
     // Listen for local player movement from game
@@ -170,13 +235,16 @@ export function useSocket({
 
     // Cleanup
     return () => {
+      eventBridge.off(GameEvents.GAME_READY, handleGameReady)
       eventBridge.off(GameEvents.PLAYER_MOVED, handleLocalPlayerMove)
       eventBridge.off(GameEvents.PLAYER_JUMPED, handleLocalPlayerJump)
       socket.emit("leave:space")
       socket.disconnect()
       socketRef.current = null
     }
-  }, [spaceId, playerId, nickname, avatarColor, onChatMessage, onSystemMessage, onPlayerJoined, onPlayerLeft])
+  // Only reconnect when essential connection params change (not on callback changes)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [spaceId, playerId, nickname, avatarColor])
 
   // Send chat message
   const sendMessage = useCallback((content: string) => {

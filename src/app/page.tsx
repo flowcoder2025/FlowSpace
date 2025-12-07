@@ -169,9 +169,9 @@ export default function LandingPage() {
         <Container>
           <HStack justify="between" align="center" className="h-16">
             <Link href="/" className="flex items-center gap-2">
-              <img src="/logo.jpg" alt="Flow Metaverse" className="size-8 rounded-lg object-contain" />
+              <img src="/FlowSpace_logo_transparent_clean.png" alt="FlowSpace" className="size-8 rounded-lg object-contain" />
               <Text weight="semibold" size="lg">
-                Flow Metaverse
+                FlowSpace
               </Text>
             </Link>
             <HStack gap="md">
@@ -341,8 +341,8 @@ export default function LandingPage() {
           <HStack justify="between" align="center">
             <VStack gap="sm">
               <HStack gap="sm" align="center">
-                <img src="/logo.jpg" alt="Flow Metaverse" className="size-6 rounded object-contain" />
-                <Text weight="semibold">Flow Metaverse</Text>
+                <img src="/FlowSpace_logo_transparent_clean.png" alt="FlowSpace" className="size-6 rounded object-contain" />
+                <Text weight="semibold">FlowSpace</Text>
               </HStack>
               <Text tone="muted" size="sm">
                 WorkAdventure 기반 오픈소스 메타버스 플랫폼

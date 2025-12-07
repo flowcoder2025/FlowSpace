@@ -130,8 +130,12 @@ export class MainScene extends Phaser.Scene {
     // Process any remote player events that arrived before scene was ready
     this.processPendingRemotePlayerEvents()
 
-    // Emit game ready event
-    eventBridge.emit(GameEvents.GAME_READY)
+    // Emit game ready event after a frame delay to ensure Phaser scene is fully active
+    // This prevents race conditions where GAME_READY is emitted before the scene can handle events
+    this.time.delayedCall(0, () => {
+      console.log("[MainScene] Emitting GAME_READY after scene is fully active")
+      eventBridge.emit(GameEvents.GAME_READY)
+    })
   }
 
   private createMap() {
@@ -587,13 +591,17 @@ export class MainScene extends Phaser.Scene {
   }
 
   private addRemotePlayer(position: PlayerPosition & { avatarColor?: AvatarColor; nickname?: string }) {
-    // Comprehensive safety check - verify scene system is fully active
-    // Check multiple conditions because Phaser's internal state can be inconsistent
-    if (!this.isSceneActive) return
-    if (!this.sys?.isActive()) return
-    if (!this.sys?.game) return
-    if (!this.sys?.displayList) return // DisplayList must exist for game objects
-    if (this.remotePlayers.has(position.id)) return
+    // Safety check - verify scene is active and not shutting down
+    // Check both our flag and Phaser's add object (null when scene is destroyed)
+    if (!this.isSceneActive || !this.add) {
+      // Silently ignore if scene is shutting down (React Strict Mode can cause this)
+      return
+    }
+    if (this.remotePlayers.has(position.id)) {
+      return
+    }
+
+    console.log(`[MainScene] Adding remote player: ${position.id}, nickname: ${position.nickname}`)
 
     try {
       const avatarColor = position.avatarColor || "default"

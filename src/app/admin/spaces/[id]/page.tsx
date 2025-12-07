@@ -254,9 +254,9 @@ export default function SpaceManagePage() {
           <HStack justify="between" className="h-16">
             <HStack gap="default">
               <Link href="/" className="flex items-center gap-2">
-                <img src="/logo.jpg" alt="Flow Metaverse" className="size-8 rounded-lg object-contain" />
+                <img src="/FlowSpace_logo_transparent_clean.png" alt="FlowSpace" className="size-8 rounded-lg object-contain" />
                 <Text weight="semibold" size="lg">
-                  Flow Metaverse
+                  FlowSpace
                 </Text>
               </Link>
               <Text tone="muted">/</Text>
