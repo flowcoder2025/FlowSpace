@@ -34,6 +34,24 @@ interface GuestSession {
   spaceId: string
 }
 
+// 🔒 서버에서 파생된 유효한 사용자 정보 (세션 검증 후)
+interface VerifiedUser {
+  participantId: string // 서버 파생 ID (guest-{sessionId} 또는 user-{userId})
+  nickname: string
+  avatar: string
+}
+
+// /api/guest/verify 응답 타입
+interface VerifyResponse {
+  valid: boolean
+  sessionId: string
+  participantId: string
+  nickname: string
+  avatar: string
+  spaceId: string
+  expiresAt: string
+}
+
 // ============================================
 // Dev Mode Check
 // ============================================
@@ -53,6 +71,8 @@ export default function SpacePage() {
 
   const [space, setSpace] = useState<SpaceData | null>(null)
   const [session, setSession] = useState<GuestSession | null>(null)
+  // 🔒 서버 검증된 사용자 정보 (participantId는 서버에서 파생)
+  const [verifiedUser, setVerifiedUser] = useState<VerifiedUser | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -101,6 +121,59 @@ export default function SpacePage() {
       setLoading(false)
     }
   }, [spaceId, devMode])
+
+  // 🔒 서버에서 세션 검증 및 서버 파생 participantId 조회
+  useEffect(() => {
+    if (!session) return
+
+    // Dev mode: 검증 API 호출 없이 가상 ID 생성
+    if (devMode) {
+      setVerifiedUser({
+        participantId: `dev-${session.sessionToken}`,
+        nickname: session.nickname,
+        avatar: session.avatar,
+      })
+      return
+    }
+
+    async function verifySession() {
+      try {
+        const res = await fetch("/api/guest/verify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sessionToken: session!.sessionToken,
+            spaceId: session!.spaceId,
+          }),
+        })
+
+        if (!res.ok) {
+          const errorData = await res.json()
+          console.error("[SpacePage] Session verification failed:", errorData)
+          setError("세션이 만료되었거나 유효하지 않습니다. 다시 입장해주세요.")
+          setLoading(false)
+          return
+        }
+
+        const data: VerifyResponse = await res.json()
+
+        // 🔒 서버에서 파생된 participantId 저장
+        setVerifiedUser({
+          participantId: data.participantId,
+          nickname: data.nickname,
+          avatar: data.avatar,
+        })
+
+        console.log("[SpacePage] Session verified, participantId:", data.participantId)
+      } catch (err) {
+        console.error("[SpacePage] Failed to verify session:", err)
+        setError("세션 검증에 실패했습니다.")
+        setLoading(false)
+      }
+    }
+
+    verifySession()
+  }, [session, devMode])
 
   // Fetch space data
   useEffect(() => {
@@ -200,8 +273,8 @@ export default function SpacePage() {
     )
   }
 
-  // Error state
-  if (error || !space || !session) {
+  // Error state (🔒 verifiedUser도 체크 - 서버 검증 필수)
+  if (error || !space || !session || !verifiedUser) {
     return (
       <main className="min-h-screen bg-muted/30">
         <Container>
@@ -217,15 +290,16 @@ export default function SpacePage() {
   }
 
   // Main space view with ZEP-style layout
+  // 🔒 userId는 서버 파생 participantId 사용 (session.sessionToken 대신)
   return (
     <SpaceLayout
       spaceId={space.id}
       spaceName={space.name}
       spaceLogoUrl={space.logoUrl}
       spacePrimaryColor={space.primaryColor}
-      userNickname={session.nickname}
-      userId={session.sessionToken}
-      userAvatarColor={session.avatar as "default" | "red" | "green" | "purple" | "orange" | "pink"}
+      userNickname={verifiedUser.nickname}
+      userId={verifiedUser.participantId}
+      userAvatarColor={verifiedUser.avatar as "default" | "red" | "green" | "purple" | "orange" | "pink"}
       sessionToken={session.sessionToken}
       onExit={handleExit}
     />
