@@ -117,7 +117,17 @@ export function VideoTile({ track, isLocal = false, isScreenShare = false, class
   // isVideoMuted/isScreenMuted 플래그를 우선 체크하여 mute 상태에서 마지막 프레임 표시 방지
   // 🔧 로컬 사용자는 muted 체크 건너뜀 (자신의 카메라는 항상 표시)
   const isTrackMuted = isScreenShare ? track.isScreenMuted : track.isVideoMuted
-  const shouldShowVideo = !!activeVideoTrack && activeVideoTrack.readyState !== "ended" && (isLocal || !isTrackMuted)
+
+  // 🔑 핵심 개선: 실제 MediaStreamTrack 상태가 가장 신뢰할 수 있는 소스
+  // isTrackMuted 플래그가 동기화 지연으로 부정확할 수 있으므로
+  // 트랙이 실제로 활성 상태(enabled + live)이면 isTrackMuted 무시
+  const isTrackActuallyLive = activeVideoTrack &&
+    activeVideoTrack.enabled &&
+    activeVideoTrack.readyState === "live"
+
+  const shouldShowVideo = !!activeVideoTrack &&
+    activeVideoTrack.readyState !== "ended" &&
+    (isLocal || !isTrackMuted || isTrackActuallyLive)
 
   // Attach video track to video element
   // 🔑 mute 상태 변화 및 revision 변경도 의존성에 포함하여 재실행
@@ -129,9 +139,10 @@ export function VideoTile({ track, isLocal = false, isScreenShare = false, class
     if (!shouldShowVideo) {
       clearVideoElement(video)
       if (IS_DEV) {
-        console.log("[VideoTile] Clearing video for:", track.participantName, {
+        console.log("[VideoTile] Clearing video for:", track.participantName, track.participantId, {
           hasTrack: !!activeVideoTrack,
           isTrackMuted,
+          isTrackActuallyLive,
           shouldShowVideo,
           revision: track.revision,
         })
@@ -153,12 +164,13 @@ export function VideoTile({ track, isLocal = false, isScreenShare = false, class
     })
 
     if (IS_DEV) {
-      console.log("[VideoTile] Video track attached for:", track.participantName, {
+      console.log("[VideoTile] Video track attached for:", track.participantName, track.participantId, {
         trackId: activeVideoTrack.id,
         enabled: activeVideoTrack.enabled,
         readyState: activeVideoTrack.readyState,
         isScreenShare,
         isTrackMuted,
+        isTrackActuallyLive,
         revision: track.revision,
       })
     }

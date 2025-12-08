@@ -50,7 +50,7 @@ export function ParticipantPanel({
             <>
               {screenShareTracks.map((track) => (
                 <VideoTile
-                  key={`${track.participantId}-screen`}
+                  key={`${track.participantId}-screen-${track.revision ?? 0}`}
                   track={track}
                   isLocal={track.participantId === localParticipantId}
                   isScreenShare
@@ -69,7 +69,7 @@ export function ParticipantPanel({
           ) : (
             tracks.map((track) => (
               <VideoTile
-                key={track.participantId}
+                key={`${track.participantId}-${track.revision ?? 0}`}
                 track={track}
                 isLocal={track.participantId === localParticipantId}
               />
