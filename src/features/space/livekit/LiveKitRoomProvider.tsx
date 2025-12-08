@@ -20,6 +20,15 @@ import { LiveKitMediaInternalProvider } from "./LiveKitMediaContext"
 const LIVEKIT_URL = process.env.NEXT_PUBLIC_LIVEKIT_URL || "ws://localhost:7880"
 const IS_DEV = process.env.NODE_ENV === "development"
 
+/**
+ * 환경변수로 개발 환경에서 LiveKit 스킵 지원
+ * .env.local에 NEXT_PUBLIC_SKIP_LIVEKIT_IN_DEV=true 설정 시 LiveKit 연결 비활성화
+ *
+ * 기본값: 개발 환경 + localhost URL일 때 서버 상태 자동 감지
+ */
+const SKIP_LIVEKIT_ENV = process.env.NEXT_PUBLIC_SKIP_LIVEKIT_IN_DEV === "true"
+const AUTO_SKIP_IN_DEV = IS_DEV && LIVEKIT_URL === "ws://localhost:7880"
+
 // 토큰 응답 타입
 interface TokenResponse {
   token: string
@@ -124,10 +133,23 @@ export function LiveKitRoomProvider({
 
   // Check if LiveKit server is available (dev mode only)
   const checkServerAvailability = useCallback(async (): Promise<boolean> => {
-    if (!IS_DEV || LIVEKIT_URL !== "ws://localhost:7880") {
+    // 환경변수로 명시적 스킵 (NEXT_PUBLIC_SKIP_LIVEKIT_IN_DEV=true)
+    if (SKIP_LIVEKIT_ENV) {
+      console.info("[LiveKitProvider] SKIP_LIVEKIT_IN_DEV 활성화: LiveKit 비활성화")
+      setState(prev => ({
+        ...prev,
+        isConnecting: false,
+        connectionError: null, // 의도적 스킵이므로 에러 아님
+      }))
+      return false
+    }
+
+    // 프로덕션이거나 커스텀 URL이면 바로 연결 시도
+    if (!AUTO_SKIP_IN_DEV) {
       return true
     }
 
+    // 개발 모드 + localhost: 서버 상태 자동 감지
     try {
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 1000)
@@ -167,8 +189,11 @@ export function LiveKitRoomProvider({
   }, [checkServerAvailability, fetchToken])
 
   // Room options
+  // 🔧 adaptiveStream: false로 설정하여 모든 트랙 즉시 구독
+  // adaptiveStream: true는 비디오 요소가 뷰포트에 있을 때만 미디어 데이터를 수신하는데,
+  // VideoTile에서 shouldShowVideo가 false일 때 비디오가 숨겨져서 catch-22 발생
   const roomOptions = useMemo((): RoomOptions => ({
-    adaptiveStream: true,
+    adaptiveStream: false,  // 🔧 즉시 구독으로 변경
     dynacast: true,
     videoCaptureDefaults: {
       resolution: { width: 640, height: 480, frameRate: 24 },

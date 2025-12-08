@@ -58,7 +58,7 @@ const SettingsIcon = () => (
 )
 
 // ============================================
-// MediaError Type (from useLiveKit)
+// MediaError Type (also exported from LiveKitMediaContext)
 // ============================================
 export type MediaError = {
   type: "permission_denied" | "not_found" | "not_connected" | "unknown"

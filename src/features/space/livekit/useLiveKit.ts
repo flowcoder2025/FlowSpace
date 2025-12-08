@@ -15,8 +15,13 @@ import type { LiveKitConfig, MediaState, ParticipantTrack } from "./types"
 const LIVEKIT_URL = process.env.NEXT_PUBLIC_LIVEKIT_URL || "ws://localhost:7880"
 const IS_DEV = process.env.NODE_ENV === "development"
 
-// 개발 환경에서 LiveKit 서버가 기본 localhost인 경우 연결 시도 전 서버 확인
-const SKIP_LIVEKIT_IN_DEV = IS_DEV && LIVEKIT_URL === "ws://localhost:7880"
+/**
+ * 개발 환경에서 LiveKit 스킵 조건:
+ * 1. NEXT_PUBLIC_SKIP_LIVEKIT_IN_DEV=true 환경변수로 명시적 스킵
+ * 2. 개발 환경 + localhost URL일 때 서버 상태 자동 감지
+ */
+const SKIP_LIVEKIT_ENV = process.env.NEXT_PUBLIC_SKIP_LIVEKIT_IN_DEV === "true"
+const SKIP_LIVEKIT_IN_DEV = SKIP_LIVEKIT_ENV || (IS_DEV && LIVEKIT_URL === "ws://localhost:7880")
 
 // 미디어 에러 타입
 export type MediaError = {

@@ -4,7 +4,7 @@
  * LiveKitMediaContext
  *
  * LiveKit 미디어 상태를 컨텍스트로 제공
- * LiveKitRoom 컨텍스트 외부에서도 안전하게 사용 가능
+ * @livekit/components-react의 useTracks 훅을 사용하여 트랙 상태 자동 동기화
  */
 
 import { createContext, useContext, ReactNode, useMemo, useCallback, useState, useEffect, useRef } from "react"
@@ -13,21 +13,18 @@ import {
   useParticipants,
   useMaybeRoomContext,
   useConnectionState,
+  useTracks,
 } from "@livekit/components-react"
-import { Track, RemoteTrackPublication, ConnectionState, RemoteParticipant, RemoteTrack, TrackPublication, Participant } from "livekit-client"
+import {
+  Track,
+  ConnectionState,
+  RemoteTrackPublication,
+  RoomEvent,
+  RemoteParticipant,
+  Participant,
+  TrackPublication,
+} from "livekit-client"
 import type { ParticipantTrack, MediaState } from "./types"
-
-// 🔑 구독된 트랙을 직접 저장하는 타입
-interface SubscribedTrackInfo {
-  video?: MediaStreamTrack
-  audio?: MediaStreamTrack
-  screen?: MediaStreamTrack
-  isVideoMuted: boolean
-  isAudioMuted: boolean
-  isScreenMuted: boolean
-  // 🔧 트랙 상태 변경 시 React가 감지할 수 있도록 revision 카운터
-  revision: number
-}
 
 const IS_DEV = process.env.NODE_ENV === "development"
 
@@ -89,7 +86,11 @@ export function LiveKitMediaFallbackProvider({ children }: { children: ReactNode
 
 /**
  * LiveKitMediaInternalProvider - Uses LiveKit hooks (MUST be inside LiveKitRoom)
- * This component safely uses all LiveKit hooks because it's only rendered inside LiveKitRoom
+ *
+ * 핵심: useTracks 훅을 사용하여 트랙 상태를 자동으로 동기화
+ * - 트랙 구독/해제 자동 추적
+ * - mute/unmute 상태 자동 감지
+ * - React 상태와 LiveKit 이벤트 간의 동기화를 라이브러리가 처리
  */
 export function LiveKitMediaInternalProvider({ children }: { children: ReactNode }) {
   const [mediaError, setMediaError] = useState<MediaError | null>(null)
@@ -97,11 +98,11 @@ export function LiveKitMediaInternalProvider({ children }: { children: ReactNode
   // Room context
   const room = useMaybeRoomContext()
 
-  // 🔑 연결 상태 확인 - connect={false}일 때 안전 처리
+  // 연결 상태 확인
   const connectionState = useConnectionState(room)
   const isConnected = connectionState === ConnectionState.Connected
 
-  // Local participant - 🔑 reactive 값들을 직접 구조 분해
+  // Local participant - reactive 값들을 직접 구조 분해
   const {
     localParticipant,
     isCameraEnabled,
@@ -109,333 +110,169 @@ export function LiveKitMediaInternalProvider({ children }: { children: ReactNode
     isScreenShareEnabled,
   } = useLocalParticipant()
 
-  // All participants
+  // All participants (local + remote)
   const participants = useParticipants()
 
-  // 🔑 useTracks 제거 - 직접 participant.getTrackPublication()으로 트랙 가져옴
-  // useTracks의 타이밍 이슈로 인해 트랙 구독 완료 전에 빈 결과를 반환하는 문제 해결
+  // 🔑 핵심: useTracks 훅으로 구독된 트랙만 자동 추적
+  // 라이브러리가 트랙 구독 상태, mute 상태 등을 자동으로 React 상태와 동기화
+  const tracks = useTracks(
+    [
+      { source: Track.Source.Camera, withPlaceholder: true },
+      { source: Track.Source.Microphone, withPlaceholder: false },
+      { source: Track.Source.ScreenShare, withPlaceholder: true },
+    ],
+    { onlySubscribed: false }
+  )
 
-  // 🔑 구독된 트랙을 직접 저장 (participant identity → 트랙 정보)
-  const [subscribedTracks, setSubscribedTracks] = useState<Map<string, SubscribedTrackInfo>>(new Map())
+  // 🔧 Adaptive Stream 대응: room.remoteParticipants를 직접 순회하여 카메라/화면공유 퍼블리케이션 구독
+  const subscriptionAttemptedRef = useRef<Set<string>>(new Set())
 
-  // 🔑 참가자 목록 변경 감지용
-  const [participantUpdateTrigger, setParticipantUpdateTrigger] = useState(0)
-
-  // 🔑 원격 참가자 트랙 구독 및 직접 저장
   useEffect(() => {
-    if (!room) return
+    if (!room || !isConnected) return
 
-    // 모든 원격 참가자의 트랙 publication 구독
-    const subscribeToRemoteTracks = () => {
-      room.remoteParticipants.forEach((participant) => {
-        participant.trackPublications.forEach((publication) => {
-          if (publication instanceof RemoteTrackPublication) {
-            if (!publication.isSubscribed && publication.kind !== "unknown") {
-              publication.setSubscribed(true)
-              if (IS_DEV) {
-                console.log("[LiveKitMediaContext] Subscribing to track:", {
-                  participant: participant.identity,
-                  source: publication.source,
-                  kind: publication.kind,
-                })
-              }
+    const shouldSubscribeSource = (source: Track.Source) =>
+      source === Track.Source.Camera || source === Track.Source.ScreenShare
+
+    const subscribeParticipantTracks = (participant: RemoteParticipant) => {
+      participant.trackPublications.forEach((publication) => {
+        if (
+          publication instanceof RemoteTrackPublication &&
+          shouldSubscribeSource(publication.source)
+        ) {
+          const key = `${participant.identity}-${publication.trackSid}`
+          if (!subscriptionAttemptedRef.current.has(key) && !publication.isSubscribed) {
+            publication.setSubscribed(true)
+            subscriptionAttemptedRef.current.add(key)
+            if (IS_DEV) {
+              console.log("[LiveKitMediaContext] 📡 Subscribing remote track", {
+                participant: participant.identity,
+                source: publication.source,
+              })
             }
           }
-        })
+        }
       })
     }
 
-    // 초기 구독
-    subscribeToRemoteTracks()
+    room.remoteParticipants.forEach((participant) => subscribeParticipantTracks(participant))
 
-    // 새 트랙이 publish될 때마다 구독
-    const handleTrackPublished = () => {
-      subscribeToRemoteTracks()
+    const handleParticipantConnected = (participant: RemoteParticipant) => {
+      subscribeParticipantTracks(participant)
     }
 
-    // 참가자가 들어올 때마다 구독
-    const handleParticipantConnected = () => {
-      setTimeout(subscribeToRemoteTracks, 100)
-      setParticipantUpdateTrigger(prev => prev + 1)
-    }
-
-    // 🔑 핵심: trackSubscribed 이벤트에서 실제 track을 직접 state에 저장
-    const handleTrackSubscribed = (
-      track: RemoteTrack,
-      publication: RemoteTrackPublication,
-      participant: RemoteParticipant
-    ) => {
-      const identity = participant.identity
-      const source = publication.source
-      const mediaTrack = track.mediaStreamTrack
-
-      if (IS_DEV) {
-        console.log("[LiveKitMediaContext] 🎯 Track SUBSCRIBED - storing directly:", {
-          identity,
-          source,
-          trackId: mediaTrack?.id,
-          enabled: mediaTrack?.enabled,
-          readyState: mediaTrack?.readyState,
-        })
-      }
-
-      setSubscribedTracks(prev => {
-        const newMap = new Map(prev)
-        const existing = newMap.get(identity) || {
-          isVideoMuted: true,
-          isAudioMuted: true,
-          isScreenMuted: true,
-          revision: 0,
-        }
-
-        if (source === Track.Source.Camera) {
-          existing.video = mediaTrack
-          existing.isVideoMuted = publication.isMuted
-        } else if (source === Track.Source.Microphone) {
-          existing.audio = mediaTrack
-          existing.isAudioMuted = publication.isMuted
-        } else if (source === Track.Source.ScreenShare) {
-          existing.screen = mediaTrack
-          existing.isScreenMuted = publication.isMuted
-        }
-        existing.revision = (existing.revision || 0) + 1
-
-        newMap.set(identity, existing)
-        return newMap
-      })
-    }
-
-    // 트랙 구독 해제 시 제거
-    const handleTrackUnsubscribed = (
-      track: RemoteTrack,
-      publication: RemoteTrackPublication,
-      participant: RemoteParticipant
-    ) => {
-      const identity = participant.identity
-      const source = publication.source
-
-      if (IS_DEV) {
-        console.log("[LiveKitMediaContext] Track UNSUBSCRIBED:", { identity, source })
-      }
-
-      setSubscribedTracks(prev => {
-        const newMap = new Map(prev)
-        const existing = newMap.get(identity)
-        if (existing) {
-          if (source === Track.Source.Camera) {
-            existing.video = undefined
-            existing.isVideoMuted = true
-          } else if (source === Track.Source.Microphone) {
-            existing.audio = undefined
-            existing.isAudioMuted = true
-          } else if (source === Track.Source.ScreenShare) {
-            existing.screen = undefined
-            existing.isScreenMuted = true
-          }
-          newMap.set(identity, existing)
-        }
-        return newMap
-      })
-    }
-
-    // 🔑 트랙 mute/unmute 상태 업데이트
-    const handleTrackMuted = (
+    const handleTrackPublished = (
       publication: TrackPublication,
       participant: Participant
     ) => {
-      // 로컬 참가자는 무시 (로컬은 publication에서 직접 가져옴)
-      if (participant === room.localParticipant) return
-
-      const identity = participant.identity
-      const source = publication.source
-
-      if (IS_DEV) {
-        console.log("[LiveKitMediaContext] Track MUTED:", { identity, source, isMuted: publication.isMuted })
+      if (
+        participant instanceof RemoteParticipant &&
+        publication instanceof RemoteTrackPublication &&
+        shouldSubscribeSource(publication.source)
+      ) {
+        subscribeParticipantTracks(participant)
       }
-
-      setSubscribedTracks(prev => {
-        const newMap = new Map(prev)
-        const existing = newMap.get(identity)
-        if (existing) {
-          if (source === Track.Source.Camera) {
-            existing.isVideoMuted = true
-          } else if (source === Track.Source.Microphone) {
-            existing.isAudioMuted = true
-          } else if (source === Track.Source.ScreenShare) {
-            existing.isScreenMuted = true
-          }
-          // 🔧 revision 증가 - React가 상태 변경을 감지하도록
-          existing.revision = (existing.revision || 0) + 1
-          newMap.set(identity, existing)
-        }
-        return newMap
-      })
     }
 
-    const handleTrackUnmuted = (
-      publication: TrackPublication,
-      participant: Participant
-    ) => {
-      // 로컬 참가자는 무시
-      if (participant === room.localParticipant) return
-
-      const identity = participant.identity
-      const source = publication.source
-
-      if (IS_DEV) {
-        console.log("[LiveKitMediaContext] Track UNMUTED:", { identity, source })
-      }
-
-      setSubscribedTracks(prev => {
-        const newMap = new Map(prev)
-        const existing = newMap.get(identity)
-        if (existing) {
-          if (source === Track.Source.Camera) {
-            existing.isVideoMuted = false
-          } else if (source === Track.Source.Microphone) {
-            existing.isAudioMuted = false
-          } else if (source === Track.Source.ScreenShare) {
-            existing.isScreenMuted = false
-          }
-          // 🔧 revision 증가 - React가 상태 변경을 감지하도록 (같은 MediaStreamTrack 재사용 시 특히 중요)
-          existing.revision = (existing.revision || 0) + 1
-          newMap.set(identity, existing)
-        }
-        return newMap
-      })
-    }
-
-    // 참가자 나갈 때 트랙 정보 제거
-    const handleParticipantDisconnected = (participant: RemoteParticipant) => {
-      const identity = participant.identity
-      if (IS_DEV) {
-        console.log("[LiveKitMediaContext] Participant disconnected, removing tracks:", identity)
-      }
-      setSubscribedTracks(prev => {
-        const newMap = new Map(prev)
-        newMap.delete(identity)
-        return newMap
-      })
-      setParticipantUpdateTrigger(prev => prev + 1)
-    }
-
-    room.on("trackPublished", handleTrackPublished)
-    room.on("participantConnected", handleParticipantConnected)
-    room.on("participantDisconnected", handleParticipantDisconnected)
-    room.on("trackSubscribed", handleTrackSubscribed)
-    room.on("trackUnsubscribed", handleTrackUnsubscribed)
-    room.on("trackMuted", handleTrackMuted)
-    room.on("trackUnmuted", handleTrackUnmuted)
+    room.on(RoomEvent.ParticipantConnected, handleParticipantConnected)
+    room.on(RoomEvent.TrackPublished, handleTrackPublished)
 
     return () => {
-      room.off("trackPublished", handleTrackPublished)
-      room.off("participantConnected", handleParticipantConnected)
-      room.off("participantDisconnected", handleParticipantDisconnected)
-      room.off("trackSubscribed", handleTrackSubscribed)
-      room.off("trackUnsubscribed", handleTrackUnsubscribed)
-      room.off("trackMuted", handleTrackMuted)
-      room.off("trackUnmuted", handleTrackUnmuted)
+      room.off(RoomEvent.ParticipantConnected, handleParticipantConnected)
+      room.off(RoomEvent.TrackPublished, handleTrackPublished)
     }
-  }, [room])
+  }, [room, isConnected])
 
-  // Build participant tracks map
-  // 🔑 subscribedTracks에서 직접 트랙 가져오기 (trackSubscribed 이벤트에서 저장된 트랙)
+  // 연결 시 자동으로 오디오 시작 (브라우저 autoplay 정책 대응)
+  useEffect(() => {
+    if (!room || !isConnected) return
+
+    room.startAudio().then(() => {
+      if (IS_DEV) {
+        console.log("[LiveKitMediaContext] Audio context started")
+      }
+    }).catch(() => {
+      // 사용자 인터랙션 없이는 실패할 수 있음 - 정상적인 동작
+    })
+
+    const handleUserInteraction = () => {
+      room.startAudio().catch(() => {})
+    }
+    document.addEventListener("click", handleUserInteraction, { once: true })
+    document.addEventListener("keydown", handleUserInteraction, { once: true })
+
+    return () => {
+      document.removeEventListener("click", handleUserInteraction)
+      document.removeEventListener("keydown", handleUserInteraction)
+    }
+  }, [room, isConnected])
+
+  // 🔑 participantTracks 빌드: useTracks 결과를 participants와 결합
   const participantTracks = useMemo(() => {
-    const tracks = new Map<string, ParticipantTrack>()
+    const map = new Map<string, ParticipantTrack>()
 
-    // 연결되지 않았거나 참가자가 없으면 빈 Map 반환
     if (!isConnected || participants.length === 0) {
-      return tracks
+      return map
     }
 
+    // 기본 엔트리 생성
     participants.forEach((participant) => {
-      const identity = participant.identity
-      const isLocal = participant === localParticipant
-
-      const trackInfo: ParticipantTrack = {
-        participantId: identity,
-        participantName: participant.name || identity,
+      map.set(participant.identity, {
+        participantId: participant.identity,
+        participantName: participant.name || participant.identity,
         isSpeaking: participant.isSpeaking,
         isVideoMuted: true,
         isAudioMuted: true,
         isScreenMuted: true,
-      }
+      })
+    })
 
-      if (isLocal) {
-        // 🔑 로컬 참가자는 직접 publication에서 가져오기
-        const cameraPublication = participant.getTrackPublication(Track.Source.Camera)
-        const screenPublication = participant.getTrackPublication(Track.Source.ScreenShare)
-        const micPublication = participant.getTrackPublication(Track.Source.Microphone)
+    tracks.forEach((trackRef) => {
+      const identity = trackRef.participant.identity
+      const entry = map.get(identity)
+      if (!entry) return
 
-        if (cameraPublication?.track) {
-          const mediaTrack = cameraPublication.track.mediaStreamTrack
+      const publication = trackRef.publication
+      const mediaTrack = publication?.track?.mediaStreamTrack
+      const isMuted = publication?.isMuted ?? true
+
+      switch (trackRef.source) {
+        case Track.Source.Camera:
           if (mediaTrack && mediaTrack.readyState !== "ended") {
-            trackInfo.videoTrack = mediaTrack
-            trackInfo.isVideoMuted = cameraPublication.isMuted
+            entry.videoTrack = mediaTrack
           }
-        }
-
-        if (screenPublication?.track) {
-          const mediaTrack = screenPublication.track.mediaStreamTrack
+          entry.isVideoMuted = isMuted
+          break
+        case Track.Source.Microphone:
           if (mediaTrack && mediaTrack.readyState !== "ended") {
-            trackInfo.screenTrack = mediaTrack
-            trackInfo.isScreenMuted = screenPublication.isMuted
+            entry.audioTrack = mediaTrack
           }
-        }
-
-        if (micPublication?.track) {
-          const mediaTrack = micPublication.track.mediaStreamTrack
+          entry.isAudioMuted = isMuted
+          break
+        case Track.Source.ScreenShare:
           if (mediaTrack && mediaTrack.readyState !== "ended") {
-            trackInfo.audioTrack = mediaTrack
-            trackInfo.isAudioMuted = micPublication.isMuted
+            entry.screenTrack = mediaTrack
           }
-        }
-      } else {
-        // 🔑 원격 참가자는 subscribedTracks에서 가져오기 (trackSubscribed 이벤트에서 저장됨)
-        const subscribed = subscribedTracks.get(identity)
-        if (subscribed) {
-          if (subscribed.video && subscribed.video.readyState !== "ended") {
-            trackInfo.videoTrack = subscribed.video
-            trackInfo.isVideoMuted = subscribed.isVideoMuted
-          } else {
-            trackInfo.isVideoMuted = subscribed.isVideoMuted
-          }
-
-          if (subscribed.screen && subscribed.screen.readyState !== "ended") {
-            trackInfo.screenTrack = subscribed.screen
-            trackInfo.isScreenMuted = subscribed.isScreenMuted
-          }
-
-          if (subscribed.audio && subscribed.audio.readyState !== "ended") {
-            trackInfo.audioTrack = subscribed.audio
-            trackInfo.isAudioMuted = subscribed.isAudioMuted
-          } else {
-            trackInfo.isAudioMuted = subscribed.isAudioMuted
-          }
-
-          // 🔧 revision 카운터 포함 - VideoTile에서 트랙 상태 변경 감지용
-          trackInfo.revision = subscribed.revision
-        }
-      }
-
-      tracks.set(identity, trackInfo)
-
-      if (IS_DEV) {
-        console.log("[LiveKitMediaContext] Participant track:", {
-          identity,
-          isLocal,
-          hasVideo: !!trackInfo.videoTrack,
-          hasAudio: !!trackInfo.audioTrack,
-          hasScreen: !!trackInfo.screenTrack,
-          isVideoMuted: trackInfo.isVideoMuted,
-        })
+          entry.isScreenMuted = isMuted
+          break
       }
     })
 
-    return tracks
-  }, [participants, localParticipant, isConnected, subscribedTracks, participantUpdateTrigger])
+    if (IS_DEV) {
+      map.forEach((track, identity) => {
+        console.log("[LiveKitMediaContext] Participant track:", {
+          identity,
+          hasVideo: !!track.videoTrack,
+          hasAudio: !!track.audioTrack,
+          hasScreen: !!track.screenTrack,
+          isVideoMuted: track.isVideoMuted,
+        })
+      })
+    }
 
-  // Media state - 🔑 useLocalParticipant의 reactive 값 직접 사용
+    return map
+  }, [participants, tracks, isConnected])
+
+  // Media state - useLocalParticipant의 reactive 값 직접 사용
   const mediaState: MediaState = useMemo(() => ({
     isCameraEnabled: isCameraEnabled ?? false,
     isMicrophoneEnabled: isMicrophoneEnabled ?? false,
@@ -477,7 +314,6 @@ export function LiveKitMediaInternalProvider({ children }: { children: ReactNode
     try {
       setMediaError(null)
 
-      // Resume audio context (browser autoplay policy)
       if (room) {
         await room.startAudio().catch(() => {})
       }
@@ -515,10 +351,7 @@ export function LiveKitMediaInternalProvider({ children }: { children: ReactNode
 
       const newState = !localParticipant.isMicrophoneEnabled
       if (IS_DEV) {
-        console.log(
-          "[LiveKitMediaContext] Toggle microphone:",
-          newState ? "ON" : "OFF"
-        )
+        console.log("[LiveKitMediaContext] Toggle microphone:", newState ? "ON" : "OFF")
       }
 
       await localParticipant.setMicrophoneEnabled(newState)
@@ -545,10 +378,7 @@ export function LiveKitMediaInternalProvider({ children }: { children: ReactNode
 
       const newState = !localParticipant.isScreenShareEnabled
       if (IS_DEV) {
-        console.log(
-          "[LiveKitMediaContext] Toggle screen share:",
-          newState ? "ON" : "OFF"
-        )
+        console.log("[LiveKitMediaContext] Toggle screen share:", newState ? "ON" : "OFF")
       }
 
       await localParticipant.setScreenShareEnabled(newState)
@@ -557,7 +387,6 @@ export function LiveKitMediaInternalProvider({ children }: { children: ReactNode
       const errorName = error instanceof Error ? error.name : ""
       const errorMessage = error instanceof Error ? error.message : String(error)
 
-      // User cancelled - not an error
       const isUserCancellation =
         errorName === "NotAllowedError" ||
         errorMessage.includes("Permission denied") ||
@@ -578,7 +407,6 @@ export function LiveKitMediaInternalProvider({ children }: { children: ReactNode
   }, [localParticipant, parseMediaError])
 
   // Context value
-  // 🔑 isAvailable은 실제 연결 상태 기준
   const value = useMemo<LiveKitMediaContextValue>(
     () => ({
       participantTracks,
