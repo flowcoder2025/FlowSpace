@@ -155,6 +155,9 @@ export const ID_TEXT: Record<string, string> = {
   "BTN.CTA.START": BUTTON_TEXT.getStarted,
   "BTN.CTA.LEARN_MORE": BUTTON_TEXT.learnMore,
 
+  // Navigation
+  "BTN.NAV.DASHBOARD": BUTTON_TEXT.dashboard,
+
   // Status
   "LID.STATUS.LOADING": STATUS_TEXT.loading,
   "LID.STATUS.SAVING": STATUS_TEXT.saving,

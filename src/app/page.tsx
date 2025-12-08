@@ -1,4 +1,5 @@
 import Link from "next/link"
+import { auth } from "@/lib/auth"
 import {
   Container,
   Section,
@@ -161,7 +162,9 @@ const AnalyticsIcon = () => (
 // ============================================
 // Landing Page
 // ============================================
-export default function LandingPage() {
+export default async function LandingPage() {
+  const session = await auth()
+
   return (
     <main>
       {/* Navigation */}
@@ -175,14 +178,29 @@ export default function LandingPage() {
               </Text>
             </Link>
             <HStack gap="md">
-              <Button variant="outline" asChild>
-                <Link href="/login">{getText("BTN.AUTH.LOGIN")}</Link>
-              </Button>
-              <Button asChild>
-                <Link href="/spaces/new">
-                  {getText("BTN.LANDING.CREATE_SPACE")}
-                </Link>
-              </Button>
+              {session?.user ? (
+                <>
+                  <Button variant="outline" asChild>
+                    <Link href="/admin">{getText("BTN.NAV.DASHBOARD")}</Link>
+                  </Button>
+                  <Button asChild>
+                    <Link href="/spaces/new">
+                      {getText("BTN.LANDING.CREATE_SPACE")}
+                    </Link>
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button variant="outline" asChild>
+                    <Link href="/login">{getText("BTN.AUTH.LOGIN")}</Link>
+                  </Button>
+                  <Button asChild>
+                    <Link href="/spaces/new">
+                      {getText("BTN.LANDING.CREATE_SPACE")}
+                    </Link>
+                  </Button>
+                </>
+              )}
             </HStack>
           </HStack>
         </Container>
