@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, Suspense } from "react"
-import { useSearchParams, useRouter } from "next/navigation"
+import { useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { signIn } from "next-auth/react"
 import {
@@ -16,24 +16,12 @@ import {
   CardContent,
   CardTitle,
   CardDescription,
-  Input,
-  Label,
 } from "@/components/ui"
 import { getText } from "@/lib/text-config"
 
 // ============================================
 // Icons
 // ============================================
-const GitHubIcon = () => (
-  <svg className="size-5" fill="currentColor" viewBox="0 0 24 24">
-    <path
-      fillRule="evenodd"
-      d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"
-      clipRule="evenodd"
-    />
-  </svg>
-)
-
 const GoogleIcon = () => (
   <svg className="size-5" viewBox="0 0 24 24">
     <path
@@ -56,322 +44,60 @@ const GoogleIcon = () => (
 )
 
 // ============================================
-// Auth Form (Login + Register)
+// Auth Form (Google OAuth Only)
 // ============================================
 function AuthForm() {
   const searchParams = useSearchParams()
-  const router = useRouter()
   const callbackUrl = searchParams.get("callbackUrl") || "/admin"
   const error = searchParams.get("error")
 
-  const [mode, setMode] = useState<"login" | "register">("login")
-  const [isLoading, setIsLoading] = useState<"github" | "google" | "credentials" | null>(null)
-  const [formError, setFormError] = useState<string | null>(null)
-  const [successMessage, setSuccessMessage] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
 
-  // Form fields
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
-  const [confirmPassword, setConfirmPassword] = useState("")
-  const [name, setName] = useState("")
-
-  const handleOAuthSignIn = async (provider: "github" | "google") => {
-    setIsLoading(provider)
-    setFormError(null)
+  const handleGoogleSignIn = async () => {
+    setIsLoading(true)
     try {
-      await signIn(provider, { callbackUrl })
+      await signIn("google", { callbackUrl })
     } catch (err) {
       console.error("Sign in error:", err)
-      setIsLoading(null)
+      setIsLoading(false)
     }
-  }
-
-  const handleCredentialsSignIn = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setFormError(null)
-    setIsLoading("credentials")
-
-    try {
-      const result = await signIn("credentials", {
-        email,
-        password,
-        redirect: false,
-      })
-
-      if (result?.error) {
-        setFormError("이메일 또는 비밀번호가 일치하지 않습니다")
-        setIsLoading(null)
-        return
-      }
-
-      router.push(callbackUrl)
-    } catch (err) {
-      console.error("Sign in error:", err)
-      setFormError("로그인에 실패했습니다")
-      setIsLoading(null)
-    }
-  }
-
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setFormError(null)
-    setSuccessMessage(null)
-
-    // Validation
-    if (!email || !password) {
-      setFormError("이메일과 비밀번호를 입력해주세요")
-      return
-    }
-
-    if (password !== confirmPassword) {
-      setFormError("비밀번호가 일치하지 않습니다")
-      return
-    }
-
-    if (password.length < 8) {
-      setFormError("비밀번호는 8자 이상이어야 합니다")
-      return
-    }
-
-    setIsLoading("credentials")
-
-    try {
-      const res = await fetch("/api/auth/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, name: name || undefined }),
-      })
-
-      const data = await res.json()
-
-      if (!res.ok) {
-        setFormError(data.error || "회원가입에 실패했습니다")
-        setIsLoading(null)
-        return
-      }
-
-      // Success - switch to login mode
-      setSuccessMessage("회원가입이 완료되었습니다. 로그인해주세요.")
-      setMode("login")
-      setPassword("")
-      setConfirmPassword("")
-      setIsLoading(null)
-    } catch (err) {
-      console.error("Register error:", err)
-      setFormError("회원가입에 실패했습니다")
-      setIsLoading(null)
-    }
-  }
-
-  const resetForm = () => {
-    setFormError(null)
-    setSuccessMessage(null)
-    setPassword("")
-    setConfirmPassword("")
   }
 
   return (
-    <VStack gap="default">
-      {/* Mode Tabs */}
-      <div className="flex w-full rounded-lg bg-muted p-1">
-        <button
-          type="button"
-          onClick={() => { setMode("login"); resetForm() }}
-          className={`flex-1 rounded-md py-2 text-sm font-medium transition-colors ${
-            mode === "login"
-              ? "bg-background text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          로그인
-        </button>
-        <button
-          type="button"
-          onClick={() => { setMode("register"); resetForm() }}
-          className={`flex-1 rounded-md py-2 text-sm font-medium transition-colors ${
-            mode === "register"
-              ? "bg-background text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          회원가입
-        </button>
-      </div>
-
-      {/* Error/Success Messages */}
-      {(error || formError) && (
+    <VStack gap="lg">
+      {/* Error Messages */}
+      {error && (
         <div className="rounded-lg bg-destructive/10 p-3 text-center">
           <Text size="sm" className="text-destructive">
             {error === "OAuthAccountNotLinked"
               ? "이 이메일은 다른 로그인 방식으로 등록되어 있습니다."
-              : formError || getText("LID.AUTH.ERROR.DEFAULT")}
+              : error === "OAuthCallback"
+              ? "로그인 중 오류가 발생했습니다. 다시 시도해주세요."
+              : getText("LID.AUTH.ERROR.DEFAULT")}
           </Text>
         </div>
       )}
 
-      {successMessage && (
-        <div className="rounded-lg bg-primary/10 p-3 text-center">
-          <Text size="sm" className="text-primary">
-            {successMessage}
-          </Text>
-        </div>
-      )}
-
-      {/* Login Form */}
-      {mode === "login" && (
-        <form onSubmit={handleCredentialsSignIn}>
-          <VStack gap="default">
-            <VStack gap="sm">
-              <Label htmlFor="email">이메일</Label>
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="이메일을 입력하세요"
-                disabled={isLoading !== null}
-              />
-            </VStack>
-
-            <VStack gap="sm">
-              <Label htmlFor="password">비밀번호</Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="비밀번호를 입력하세요"
-                disabled={isLoading !== null}
-              />
-            </VStack>
-
-            <Button
-              type="submit"
-              size="lg"
-              className="w-full"
-              disabled={isLoading !== null}
-            >
-              {isLoading === "credentials" ? getText("LID.STATUS.LOADING") : "로그인"}
-            </Button>
-          </VStack>
-        </form>
-      )}
-
-      {/* Register Form */}
-      {mode === "register" && (
-        <form onSubmit={handleRegister}>
-          <VStack gap="default">
-            <VStack gap="sm">
-              <Label htmlFor="name">이름 (선택)</Label>
-              <Input
-                id="name"
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="이름을 입력하세요"
-                disabled={isLoading !== null}
-              />
-            </VStack>
-
-            <VStack gap="sm">
-              <Label htmlFor="register-email">이메일</Label>
-              <Input
-                id="register-email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="이메일을 입력하세요"
-                disabled={isLoading !== null}
-              />
-            </VStack>
-
-            <VStack gap="sm">
-              <Label htmlFor="register-password">비밀번호</Label>
-              <Input
-                id="register-password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="8자 이상, 영문+숫자 포함"
-                disabled={isLoading !== null}
-              />
-            </VStack>
-
-            <VStack gap="sm">
-              <Label htmlFor="confirm-password">비밀번호 확인</Label>
-              <Input
-                id="confirm-password"
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="비밀번호를 다시 입력하세요"
-                disabled={isLoading !== null}
-              />
-            </VStack>
-
-            <Button
-              type="submit"
-              size="lg"
-              className="w-full"
-              disabled={isLoading !== null}
-            >
-              {isLoading === "credentials" ? getText("LID.STATUS.LOADING") : "회원가입"}
-            </Button>
-          </VStack>
-        </form>
-      )}
-
-      {/* Divider */}
-      <div className="relative my-2">
-        <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t" />
-        </div>
-        <div className="relative flex justify-center text-xs uppercase">
-          <span className="bg-card px-2 text-muted-foreground">또는</span>
-        </div>
-      </div>
-
-      {/* OAuth Buttons */}
-      <VStack gap="sm">
-        {/* Google Login */}
-        <Button
-          variant="outline"
-          size="lg"
-          className="w-full"
-          onClick={() => handleOAuthSignIn("google")}
-          disabled={isLoading !== null}
-        >
-          <HStack gap="sm" align="center" justify="center">
-            <GoogleIcon />
-            <span>
-              {isLoading === "google"
-                ? getText("LID.STATUS.LOADING")
-                : "Google로 계속하기"}
-            </span>
-          </HStack>
-        </Button>
-
-        {/* GitHub Login */}
-        <Button
-          variant="outline"
-          size="lg"
-          className="w-full"
-          onClick={() => handleOAuthSignIn("github")}
-          disabled={isLoading !== null}
-        >
-          <HStack gap="sm" align="center" justify="center">
-            <GitHubIcon />
-            <span>
-              {isLoading === "github"
-                ? getText("LID.STATUS.LOADING")
-                : "GitHub로 계속하기"}
-            </span>
-          </HStack>
-        </Button>
-      </VStack>
+      {/* Google Login Button */}
+      <Button
+        variant="outline"
+        size="lg"
+        className="w-full py-6"
+        onClick={handleGoogleSignIn}
+        disabled={isLoading}
+      >
+        <HStack gap="sm" align="center" justify="center">
+          <GoogleIcon />
+          <span className="text-base">
+            {isLoading
+              ? getText("LID.STATUS.LOADING")
+              : "Google로 계속하기"}
+          </span>
+        </HStack>
+      </Button>
 
       {/* Guest Entry Info */}
-      <VStack gap="xs" align="center" className="pt-2 text-center">
+      <VStack gap="xs" align="center" className="pt-4 text-center">
         <Text tone="muted" size="sm">
           공간에 게스트로 입장하시려면
         </Text>
@@ -388,17 +114,9 @@ function AuthForm() {
 // ============================================
 function AuthFormFallback() {
   return (
-    <VStack gap="default">
-      <div className="flex w-full rounded-lg bg-muted p-1">
-        <div className="h-9 flex-1 animate-pulse rounded-md bg-muted-foreground/20" />
-        <div className="h-9 flex-1 animate-pulse rounded-md bg-muted-foreground/20" />
-      </div>
-      <div className="h-10 w-full animate-pulse rounded-md bg-muted" />
-      <div className="h-10 w-full animate-pulse rounded-md bg-muted" />
-      <div className="h-12 w-full animate-pulse rounded-md bg-muted" />
-      <div className="my-4 h-px w-full bg-border" />
-      <div className="h-12 w-full animate-pulse rounded-md bg-muted" />
-      <div className="h-12 w-full animate-pulse rounded-md bg-muted" />
+    <VStack gap="lg">
+      <div className="h-14 w-full animate-pulse rounded-md bg-muted" />
+      <div className="h-4 w-2/3 mx-auto animate-pulse rounded bg-muted" />
     </VStack>
   )
 }
@@ -433,7 +151,7 @@ export default function LoginPage() {
                   {getText("LID.AUTH.LOGIN.TITLE")}
                 </CardTitle>
                 <CardDescription>
-                  계정에 로그인하거나 새로 가입하세요
+                  Google 계정으로 시작하세요
                 </CardDescription>
               </CardHeader>
               <CardContent>
