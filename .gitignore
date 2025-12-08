@@ -10,11 +10,14 @@ build/
 dist/
 
 # Environment
+# 공통 설정 (DB 시크릿 포함)
 .env
+# 로컬 오버라이드
 .env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*.local
+# 운영 환경 시크릿 (LiveKit Cloud 등)
+.env.production
+# 참고: .env.development는 커밋 가능 (로컬 개발 설정, 민감 정보 없음)
 
 # Debug
 npm-debug.log*
