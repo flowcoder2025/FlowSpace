@@ -20,6 +20,8 @@ import type {
 
 const PORT = parseInt(process.env.SOCKET_PORT || "3001", 10)
 const NEXT_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000"
+// 🔒 보안: NODE_ENV === "development"로 명시적 제한
+// staging, test, 미설정 환경에서 인증 우회 방지
 const IS_DEV = process.env.NODE_ENV === "development"
 
 // ============================================
@@ -145,9 +147,9 @@ io.on("connection", (socket) => {
         verifiedPlayerId = `dev-anon-${Date.now()}`
         console.log(`[Socket] DEV MODE: No session, using temp ID: ${verifiedPlayerId}`)
       } else {
-        // dev- 세션의 경우 서버에서 ID 생성
-        verifiedPlayerId = `dev-${Date.now()}`
-        console.log(`[Socket] DEV MODE: Dev session, using ID: ${verifiedPlayerId}`)
+        // dev- 세션의 경우 클라이언트가 보낸 ID 그대로 사용 (page.tsx에서 이미 생성됨)
+        // verifiedPlayerId는 이미 playerId로 초기화되어 있음
+        console.log(`[Socket] DEV MODE: Dev session, using client ID: ${verifiedPlayerId}`)
       }
     }
 
@@ -185,10 +187,11 @@ io.on("connection", (socket) => {
     // Add player to room
     room.set(verifiedPlayerId, playerPosition)
 
-    // Send current room state to joining player
+    // Send current room state to joining player (🔒 yourPlayerId 포함 - 클라이언트가 서버 파생 ID 인지)
     socket.emit("room:joined", {
       spaceId,
       players: Array.from(room.values()),
+      yourPlayerId: verifiedPlayerId,
     })
 
     // Notify other players in room
@@ -237,35 +240,46 @@ io.on("connection", (socket) => {
   })
 
   // Player movement
+  // 🔒 보안: 클라이언트가 보낸 position.id를 신뢰하지 않고 socket.data.playerId 사용
   socket.on("player:move", (position) => {
-    const { spaceId, nickname, avatarColor } = socket.data
+    const { spaceId, playerId, nickname, avatarColor } = socket.data
 
-    if (spaceId) {
-      const room = rooms.get(spaceId)
-      if (room) {
-        // Update player position in room state (preserve avatarColor)
-        const fullPosition: PlayerPosition = {
-          ...position,
-          nickname: nickname || "Unknown",
-          avatarColor: position.avatarColor || avatarColor || "default",
-        }
-        room.set(position.id, fullPosition)
+    // 🔒 playerId가 없으면 아직 join:space 완료 전이므로 무시
+    if (!spaceId || !playerId) return
 
-        // Broadcast to other players in room
-        socket.to(spaceId).emit("player:moved", fullPosition)
+    const room = rooms.get(spaceId)
+    if (room) {
+      // 🔒 클라이언트 ID/avatarColor 무시, 서버에서 검증된 값으로 덮어쓰기
+      const fullPosition: PlayerPosition = {
+        ...position,
+        id: playerId, // 🔒 서버 검증 ID 강제 사용
+        nickname: nickname || "Unknown",
+        avatarColor: avatarColor || "default", // 🔒 서버 검증 색상 강제 사용 (클라이언트 값 무시)
       }
+      room.set(playerId, fullPosition)
+
+      // Broadcast to other players in room
+      socket.to(spaceId).emit("player:moved", fullPosition)
     }
   })
 
   // Player jump
+  // 🔒 보안: 클라이언트가 보낸 data.id를 신뢰하지 않고 socket.data.playerId 사용
   socket.on("player:jump", (data: PlayerJumpData) => {
-    const { spaceId } = socket.data
+    const { spaceId, playerId } = socket.data
 
-    if (spaceId) {
-      // Broadcast jump event to other players in room
-      socket.to(spaceId).emit("player:jumped", data)
-      console.log(`[Socket] Player ${data.id} jumped at (${data.x}, ${data.y})`)
+    // 🔒 playerId가 없으면 아직 join:space 완료 전이므로 무시
+    if (!spaceId || !playerId) return
+
+    // 🔒 클라이언트 ID 무시, 서버에서 검증된 playerId로 덮어쓰기
+    const verifiedJumpData: PlayerJumpData = {
+      ...data,
+      id: playerId, // 🔒 서버 검증 ID 강제 사용
     }
+
+    // Broadcast jump event to other players in room
+    socket.to(spaceId).emit("player:jumped", verifiedJumpData)
+    console.log(`[Socket] Player ${playerId} jumped at (${verifiedJumpData.x}, ${verifiedJumpData.y})`)
   })
 
   // Chat message

@@ -106,57 +106,79 @@ export function VideoTile({ track, isLocal = false, isScreenShare = false, class
     }
   }, [track.audioTrack, track.participantName, isLocal])
 
-  // Track video ended state (when remote user turns off camera)
-  const [videoEnded, setVideoEnded] = useState(false)
+  // 🔧 비디오 엘리먼트 클리어 헬퍼 (브라우저 버퍼 완전 해제)
+  const clearVideoElement = useCallback((video: HTMLVideoElement) => {
+    video.srcObject = null
+    // 🔧 load()를 호출해야 브라우저가 마지막 프레임 버퍼를 완전히 해제
+    video.load()
+  }, [])
 
-  // Reset videoEnded when track changes
-  useEffect(() => {
-    setVideoEnded(false)
-  }, [activeVideoTrack])
+  // 🔧 트랙이 존재하고 아직 live 상태이며 muted가 아닌 경우만 비디오 표시
+  // isVideoMuted/isScreenMuted 플래그를 우선 체크하여 mute 상태에서 마지막 프레임 표시 방지
+  // 🔧 로컬 사용자는 muted 체크 건너뜀 (자신의 카메라는 항상 표시)
+  const isTrackMuted = isScreenShare ? track.isScreenMuted : track.isVideoMuted
+  const shouldShowVideo = !!activeVideoTrack && activeVideoTrack.readyState !== "ended" && (isLocal || !isTrackMuted)
 
   // Attach video track to video element
+  // 🔑 mute 상태 변화 및 revision 변경도 의존성에 포함하여 재실행
   useEffect(() => {
     const video = videoRef.current
     if (!video) return
 
-    if (activeVideoTrack && !videoEnded) {
-      const stream = new MediaStream([activeVideoTrack])
-      video.srcObject = stream
-
-      // Handle track ended event (when remote user turns off camera)
-      const handleTrackEnded = () => {
-        if (IS_DEV) {
-          console.log("[VideoTile] Video track ended for:", track.participantName)
-        }
-        setVideoEnded(true)
-        video.srcObject = null
-      }
-
-      // Check if track is already ended
-      if (activeVideoTrack.readyState === "ended") {
-        handleTrackEnded()
-        return
-      }
-
-      activeVideoTrack.addEventListener("ended", handleTrackEnded)
-
+    // 트랙이 없거나 muted 상태면 스트림 해제
+    if (!shouldShowVideo) {
+      clearVideoElement(video)
       if (IS_DEV) {
-        console.log("[VideoTile] Video track attached for:", track.participantName, {
-          trackId: activeVideoTrack.id,
-          enabled: activeVideoTrack.enabled,
-          readyState: activeVideoTrack.readyState,
-          isScreenShare,
+        console.log("[VideoTile] Clearing video for:", track.participantName, {
+          hasTrack: !!activeVideoTrack,
+          isTrackMuted,
+          shouldShowVideo,
+          revision: track.revision,
         })
       }
-
-      return () => {
-        activeVideoTrack.removeEventListener("ended", handleTrackEnded)
-        video.srcObject = null
-      }
-    } else {
-      video.srcObject = null
+      return
     }
-  }, [activeVideoTrack, track.participantName, isScreenShare, videoEnded])
+
+    // 새 스트림 설정 (cleanup에서 이미 clearVideoElement 호출했으므로 srcObject=null 불필요)
+    const stream = new MediaStream([activeVideoTrack])
+    video.srcObject = stream
+
+    // 🔧 명시적 play() 호출 - 같은 MediaStreamTrack이 재사용될 때 autoPlay가 동작하지 않는 문제 해결
+    video.play().catch((err) => {
+      // NotAllowedError: autoplay 정책에 의해 차단 (사용자 인터랙션 필요)
+      // AbortError: useEffect 재실행으로 인한 중단 (정상 동작)
+      if (err.name !== "NotAllowedError" && err.name !== "AbortError") {
+        console.error("[VideoTile] Video play error:", err)
+      }
+    })
+
+    if (IS_DEV) {
+      console.log("[VideoTile] Video track attached for:", track.participantName, {
+        trackId: activeVideoTrack.id,
+        enabled: activeVideoTrack.enabled,
+        readyState: activeVideoTrack.readyState,
+        isScreenShare,
+        isTrackMuted,
+        revision: track.revision,
+      })
+    }
+
+    // Handle track ended event (when remote user turns off camera)
+    const handleTrackEnded = () => {
+      if (IS_DEV) {
+        console.log("[VideoTile] Video track ended for:", track.participantName)
+      }
+      // 🔧 srcObject만 null하면 브라우저가 마지막 프레임을 유지할 수 있음
+      clearVideoElement(video)
+    }
+
+    activeVideoTrack.addEventListener("ended", handleTrackEnded)
+
+    return () => {
+      activeVideoTrack.removeEventListener("ended", handleTrackEnded)
+      clearVideoElement(video)
+    }
+  }, [activeVideoTrack, shouldShowVideo, isTrackMuted, track.participantName, track.revision, isScreenShare, clearVideoElement, isLocal])
 
   // Attach audio track to audio element (for remote participants only)
   useEffect(() => {
@@ -187,7 +209,7 @@ export function VideoTile({ track, isLocal = false, isScreenShare = false, class
     }
   }, [track.audioTrack, track.participantName, isLocal, tryPlayAudio])
 
-  // 전역 클릭 이벤트로 차단된 오디오 재생 시도
+  // 🔧 개선된 오디오 재생 시도 - once:true 제거, 지속적 재시도
   useEffect(() => {
     if (!audioBlocked) return
 
@@ -195,15 +217,21 @@ export function VideoTile({ track, isLocal = false, isScreenShare = false, class
       tryPlayAudio()
     }
 
-    // 사용자 인터랙션 시 오디오 재생 시도
-    document.addEventListener("click", handleUserInteraction, { once: true })
-    document.addEventListener("keydown", handleUserInteraction, { once: true })
+    // 사용자 인터랙션 시 오디오 재생 시도 (once 제거 - 성공할 때까지 반복 시도)
+    document.addEventListener("click", handleUserInteraction)
+    document.addEventListener("keydown", handleUserInteraction)
 
     return () => {
       document.removeEventListener("click", handleUserInteraction)
       document.removeEventListener("keydown", handleUserInteraction)
     }
   }, [audioBlocked, tryPlayAudio])
+
+  // 🔧 명시적 오디오 활성화 버튼 핸들러
+  const handleEnableAudio = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation()
+    tryPlayAudio()
+  }, [tryPlayAudio])
 
   // Fullscreen change detection
   useEffect(() => {
@@ -274,9 +302,10 @@ export function VideoTile({ track, isLocal = false, isScreenShare = false, class
     }
   }, [])
 
-  const hasVideo = !!activeVideoTrack && !videoEnded
+  // hasAudio, isAudioMuted, canPip는 렌더링에서만 사용
   const hasAudio = !!track.audioTrack
-  const canPip = hasVideo && document.pictureInPictureEnabled && !isLocal
+  const isAudioMuted = track.isAudioMuted ?? !hasAudio
+  const canPip = shouldShowVideo && document.pictureInPictureEnabled && !isLocal
 
   return (
     <div
@@ -290,16 +319,21 @@ export function VideoTile({ track, isLocal = false, isScreenShare = false, class
       onMouseEnter={() => setShowControls(true)}
       onMouseLeave={() => setShowControls(false)}
     >
-      {/* Video element */}
-      {hasVideo ? (
-        <video
-          ref={videoRef}
-          autoPlay
-          playsInline
-          muted={isLocal} // Mute local video to prevent feedback
-          className="size-full object-cover"
-        />
-      ) : (
+      {/* Video element - 🔑 항상 렌더링하여 adaptiveStream이 트랙을 활성화할 수 있게 함 */}
+      {/* hidden(display:none) 대신 opacity-0 + absolute로 숨김 - IntersectionObserver가 감지할 수 있도록 */}
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        muted={isLocal} // Mute local video to prevent feedback
+        className={cn(
+          "size-full object-cover",
+          !shouldShowVideo && "absolute inset-0 opacity-0 pointer-events-none"
+        )}
+      />
+
+      {/* Placeholder - 비디오가 없을 때만 표시 */}
+      {!shouldShowVideo && (
         <div className="flex size-full items-center justify-center bg-muted">
           <div className="flex size-12 items-center justify-center rounded-full bg-muted-foreground/20">
             <Text size="lg" weight="semibold" className="text-muted-foreground">
@@ -315,7 +349,7 @@ export function VideoTile({ track, isLocal = false, isScreenShare = false, class
       )}
 
       {/* Video controls overlay (top-right) - visible on hover */}
-      {hasVideo && (
+      {shouldShowVideo && (
         <div
           className={cn(
             "absolute right-2 top-2 flex items-center gap-1 transition-opacity duration-200",
@@ -365,16 +399,22 @@ export function VideoTile({ track, isLocal = false, isScreenShare = false, class
           </div>
           <div className="flex items-center gap-1">
             {audioBlocked && (
-              <div className="rounded bg-warning/80 p-0.5 text-white" title="클릭하여 오디오 활성화">
+              <button
+                onClick={handleEnableAudio}
+                className="flex items-center gap-1 rounded bg-warning/90 px-1.5 py-0.5 text-xs font-medium text-white transition-colors hover:bg-warning"
+                title="클릭하여 오디오 활성화"
+                aria-label="오디오 활성화"
+              >
                 <AudioBlockedIcon />
-              </div>
+                <span>소리 켜기</span>
+              </button>
             )}
-            {!hasAudio && (
+            {isAudioMuted && (
               <div className="rounded bg-destructive/80 p-0.5 text-white">
                 <MicOffIcon />
               </div>
             )}
-            {!hasVideo && (
+            {!shouldShowVideo && (
               <div className="rounded bg-muted-foreground/80 p-0.5 text-white">
                 <CameraOffIcon />
               </div>

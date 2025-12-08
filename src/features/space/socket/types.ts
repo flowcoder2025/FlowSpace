@@ -38,6 +38,7 @@ export interface ChatMessageData {
 export interface RoomData {
   spaceId: string
   players: PlayerPosition[]
+  yourPlayerId: string // 🔒 서버에서 파생된 실제 플레이어 ID
 }
 
 // Client to Server events

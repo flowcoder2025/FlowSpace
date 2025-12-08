@@ -126,9 +126,9 @@ export async function POST(request: NextRequest) {
       const isDevSessionToken = IS_DEV && sessionToken.startsWith("dev-")
 
       if (isDevSessionToken) {
-        // 개발 모드에서도 서버에서 participantId 생성
-        serverParticipantId = `dev-${Date.now()}`
-        console.log("[LiveKit Token] Dev mode session token → participantId:", serverParticipantId)
+        // dev 세션에서는 클라이언트에서 전달한 participantId를 그대로 사용해 Socket과 ID 동기화
+        serverParticipantId = participantId
+        console.log("[LiveKit Token] Dev mode session token → participantId (client provided):", serverParticipantId)
       } else {
         // 게스트 세션 토큰 검증
         const guestSession = await prisma.guestSession.findUnique({

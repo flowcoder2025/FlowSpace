@@ -7,10 +7,8 @@ import {
   Track,
   LocalParticipant,
   RemoteParticipant,
-  LocalTrackPublication,
   RemoteTrackPublication,
   ConnectionState,
-  createLocalTracks,
 } from "livekit-client"
 import type { LiveKitConfig, MediaState, ParticipantTrack } from "./types"
 
@@ -53,6 +51,16 @@ interface UseLiveKitReturn {
   disconnect: (allowReconnect?: boolean) => void
 }
 
+/**
+ * @deprecated useLiveKitMedia를 사용하세요. 이 훅은 다음 버전에서 제거됩니다.
+ *
+ * 마이그레이션 가이드:
+ * - useLiveKit() → useLiveKitMedia()
+ * - LiveKitRoomProvider 내부에서만 사용 가능
+ * - 동일 화면에서 useLiveKit과 useLiveKitMedia 혼용 금지
+ *
+ * @see useLiveKitMedia
+ */
 export function useLiveKit({
   spaceId,
   participantId,
@@ -64,6 +72,12 @@ export function useLiveKit({
   const connectionAttemptedRef = useRef(false)
   const isConnectingRef = useRef(false)
   const mountedRef = useRef(false)
+
+  // 🔧 Stale closure 방지를 위한 ref들
+  // 이벤트 핸들러에서 항상 최신 함수를 참조하기 위해 사용
+  const updateParticipantTracksRef = useRef<(room: Room) => void>(() => {})
+  const updateMediaStateRef = useRef<(participant: LocalParticipant | null) => void>(() => {})
+
   const [connectionState, setConnectionState] = useState<ConnectionState>(ConnectionState.Disconnected)
   const [connectionError, setConnectionError] = useState<string | null>(null)
   const [isAvailable, setIsAvailable] = useState(true)
@@ -128,6 +142,8 @@ export function useLiveKit({
   }, [spaceId, participantId, participantName, sessionToken])
 
   // Update participant tracks
+  // 🔧 개선: muted 트랙을 제외하지 않고, mute 상태를 플래그로 전달
+  // VideoTile에서 mute 상태에 따라 placeholder/video 전환 처리
   const updateParticipantTracks = useCallback((room: Room) => {
     const tracks = new Map<string, ParticipantTrack>()
 
@@ -138,18 +154,39 @@ export function useLiveKit({
         participantId: local.identity,
         participantName: local.name || local.identity,
         isSpeaking: local.isSpeaking,
+        isVideoMuted: false,
+        isAudioMuted: false,
+        isScreenMuted: false,
       }
 
       local.trackPublications.forEach((pub) => {
         if (pub.track) {
+          const mediaTrack = pub.track.mediaStreamTrack
+          // 🔧 ended 상태의 트랙은 제외 (카메라 off→on 반복 시 stale 트랙 방지)
+          if (mediaTrack.readyState === "ended") {
+            if (IS_DEV) {
+              console.log("[LiveKit] Skipping ended local track:", pub.trackSid)
+            }
+            return
+          }
+
           if (pub.track.kind === Track.Kind.Video) {
             if (pub.source === Track.Source.ScreenShare) {
-              trackInfo.screenTrack = pub.track.mediaStreamTrack
+              // 🔧 화면공유: muted면 트랙 제외, 플래그 설정
+              if (!pub.isMuted) {
+                trackInfo.screenTrack = mediaTrack
+              }
+              trackInfo.isScreenMuted = pub.isMuted
             } else {
-              trackInfo.videoTrack = pub.track.mediaStreamTrack
+              // 🔧 로컬 비디오: 항상 트랙 설정 (자신의 카메라는 마지막 프레임 문제 없음)
+              // muted 체크 없이 트랙 설정 - 카메라 끄면 unpublish됨
+              trackInfo.videoTrack = mediaTrack
+              trackInfo.isVideoMuted = pub.isMuted
             }
           } else if (pub.track.kind === Track.Kind.Audio) {
-            trackInfo.audioTrack = pub.track.mediaStreamTrack
+            // 🔧 오디오: muted여도 트랙 유지 (음소거 상태 표시용)
+            trackInfo.audioTrack = mediaTrack
+            trackInfo.isAudioMuted = pub.isMuted
           }
         }
       })
@@ -160,6 +197,8 @@ export function useLiveKit({
           identity: local.identity,
           hasVideo: !!trackInfo.videoTrack,
           hasAudio: !!trackInfo.audioTrack,
+          isVideoMuted: trackInfo.isVideoMuted,
+          isAudioMuted: trackInfo.isAudioMuted,
         })
       }
     }
@@ -170,6 +209,9 @@ export function useLiveKit({
         participantId: remote.identity,
         participantName: remote.name || remote.identity,
         isSpeaking: remote.isSpeaking,
+        isVideoMuted: false,
+        isAudioMuted: false,
+        isScreenMuted: false,
       }
 
       remote.trackPublications.forEach((pub) => {
@@ -185,19 +227,36 @@ export function useLiveKit({
             source: pub.source,
             isSubscribed,
             hasTrack: !!pub.track,
+            isMuted: remotePub.isMuted,
           })
         }
 
         // 구독된 트랙만 처리
         if (pub.track && isSubscribed) {
+          const mediaTrack = pub.track.mediaStreamTrack
+          // 🔧 ended 상태의 트랙은 제외
+          if (mediaTrack.readyState === "ended") {
+            if (IS_DEV) {
+              console.log("[LiveKit] Skipping ended remote track:", pub.trackSid)
+            }
+            return
+          }
+
           if (pub.track.kind === Track.Kind.Video) {
             if (pub.source === Track.Source.ScreenShare) {
-              trackInfo.screenTrack = pub.track.mediaStreamTrack
+              // 🔧 화면공유: 항상 트랙 설정, 플래그로 표시 제어
+              trackInfo.screenTrack = mediaTrack
+              trackInfo.isScreenMuted = remotePub.isMuted
             } else {
-              trackInfo.videoTrack = pub.track.mediaStreamTrack
+              // 🔧 원격 비디오: 항상 트랙 설정, 플래그로 표시 제어
+              // (코덱스 피드백: 트랙 참조 유지해야 mute/unmute 시 즉시 반영)
+              trackInfo.videoTrack = mediaTrack
+              trackInfo.isVideoMuted = remotePub.isMuted
             }
           } else if (pub.track.kind === Track.Kind.Audio) {
-            trackInfo.audioTrack = pub.track.mediaStreamTrack
+            // 🔧 오디오: 항상 트랙 유지 (원격 재생은 LiveKit이 처리)
+            trackInfo.audioTrack = mediaTrack
+            trackInfo.isAudioMuted = remotePub.isMuted
           }
         }
       })
@@ -209,12 +268,17 @@ export function useLiveKit({
           hasVideo: !!trackInfo.videoTrack,
           hasAudio: !!trackInfo.audioTrack,
           hasScreen: !!trackInfo.screenTrack,
+          isVideoMuted: trackInfo.isVideoMuted,
+          isAudioMuted: trackInfo.isAudioMuted,
         })
       }
     })
 
     setParticipantTracks(tracks)
   }, [])
+
+  // 🔧 ref 동기화: 함수가 변경될 때마다 ref 업데이트
+  updateParticipantTracksRef.current = updateParticipantTracks
 
   // Connect to room
   const connect = useCallback(async () => {
@@ -295,14 +359,21 @@ export function useLiveKit({
         setConnectionState(state)
       })
 
+      // 🔧 이벤트 핸들러에서 ref.current를 통해 최신 함수 호출 (stale closure 방지)
       room.on(RoomEvent.ParticipantConnected, (participant) => {
+        if (IS_DEV) {
+          console.log("[LiveKit] Participant connected:", participant.identity)
+        }
         setRemoteParticipants(Array.from(room.remoteParticipants.values()))
-        updateParticipantTracks(room)
+        updateParticipantTracksRef.current(room)
       })
 
       room.on(RoomEvent.ParticipantDisconnected, (participant) => {
+        if (IS_DEV) {
+          console.log("[LiveKit] Participant disconnected:", participant.identity)
+        }
         setRemoteParticipants(Array.from(room.remoteParticipants.values()))
-        updateParticipantTracks(room)
+        updateParticipantTracksRef.current(room)
       })
 
       room.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
@@ -314,7 +385,8 @@ export function useLiveKit({
             source: publication.source,
           })
         }
-        updateParticipantTracks(room)
+        // 🔧 ref를 통해 최신 함수 호출
+        updateParticipantTracksRef.current(room)
       })
 
       room.on(RoomEvent.TrackUnsubscribed, (track, publication, participant) => {
@@ -324,7 +396,7 @@ export function useLiveKit({
             trackSid: track.sid,
           })
         }
-        updateParticipantTracks(room)
+        updateParticipantTracksRef.current(room)
       })
 
       // 원격 참가자의 트랙이 퍼블리시되었을 때
@@ -337,7 +409,7 @@ export function useLiveKit({
             source: publication.source,
           })
         }
-        updateParticipantTracks(room)
+        updateParticipantTracksRef.current(room)
       })
 
       room.on(RoomEvent.TrackUnpublished, (publication, participant) => {
@@ -347,7 +419,7 @@ export function useLiveKit({
             trackSid: publication.trackSid,
           })
         }
-        updateParticipantTracks(room)
+        updateParticipantTracksRef.current(room)
       })
 
       room.on(RoomEvent.LocalTrackPublished, (publication, participant) => {
@@ -358,8 +430,8 @@ export function useLiveKit({
             source: publication.source,
           })
         }
-        updateParticipantTracks(room)
-        updateMediaState(room.localParticipant)
+        updateParticipantTracksRef.current(room)
+        updateMediaStateRef.current(room.localParticipant)
       })
 
       room.on(RoomEvent.LocalTrackUnpublished, (publication, participant) => {
@@ -368,12 +440,47 @@ export function useLiveKit({
             trackSid: publication.trackSid,
           })
         }
-        updateParticipantTracks(room)
-        updateMediaState(room.localParticipant)
+        updateParticipantTracksRef.current(room)
+        updateMediaStateRef.current(room.localParticipant)
       })
 
       room.on(RoomEvent.ActiveSpeakersChanged, (speakers) => {
-        updateParticipantTracks(room)
+        updateParticipantTracksRef.current(room)
+      })
+
+      // 🔧 TrackMuted/TrackUnmuted 이벤트 핸들러 추가
+      // LiveKit은 카메라/마이크 토글 시 퍼블리시 유지 + mute 방식을 사용
+      // 이 이벤트를 잡지 않으면 원격 참가자의 비디오가 업데이트되지 않음
+      room.on(RoomEvent.TrackMuted, (publication, participant) => {
+        if (IS_DEV) {
+          console.log("[LiveKit] Track muted:", {
+            participant: participant.identity,
+            trackSid: publication.trackSid,
+            kind: publication.kind,
+            source: publication.source,
+          })
+        }
+        updateParticipantTracksRef.current(room)
+        // 로컬 참가자의 경우 mediaState도 업데이트
+        if (participant === room.localParticipant) {
+          updateMediaStateRef.current(room.localParticipant)
+        }
+      })
+
+      room.on(RoomEvent.TrackUnmuted, (publication, participant) => {
+        if (IS_DEV) {
+          console.log("[LiveKit] Track unmuted:", {
+            participant: participant.identity,
+            trackSid: publication.trackSid,
+            kind: publication.kind,
+            source: publication.source,
+          })
+        }
+        updateParticipantTracksRef.current(room)
+        // 로컬 참가자의 경우 mediaState도 업데이트
+        if (participant === room.localParticipant) {
+          updateMediaStateRef.current(room.localParticipant)
+        }
       })
 
       // 미디어 디바이스 에러 핸들링
@@ -415,7 +522,8 @@ export function useLiveKit({
 
       setLocalParticipant(room.localParticipant)
       setRemoteParticipants(Array.from(room.remoteParticipants.values()))
-      updateParticipantTracks(room)
+      // 🔧 ref를 통해 최신 함수 호출
+      updateParticipantTracksRef.current(room)
       setConnectionError(null)
       setIsAvailable(true)
       isConnectingRef.current = false
@@ -436,7 +544,8 @@ export function useLiveKit({
         console.error("[LiveKit] Connection error:", error)
       }
     }
-  }, [getToken, updateParticipantTracks])
+    // 🔧 ref를 사용하므로 updateParticipantTracks 의존성 제거
+  }, [getToken])
 
   // Disconnect from room
   const disconnect = useCallback((allowReconnect = false) => {
@@ -474,7 +583,12 @@ export function useLiveKit({
     })
   }, [])
 
+  // 🔧 ref 동기화: 함수가 변경될 때마다 ref 업데이트
+  updateMediaStateRef.current = updateMediaState
+
   // Toggle camera
+  // 🔧 React 상태(mediaState) 대신 LiveKit participant의 실시간 상태 직접 참조
+  // 빠른 연속 토글 시 stale closure 문제 방지
   const toggleCamera = useCallback(async (): Promise<boolean> => {
     const room = roomRef.current
     if (!room?.localParticipant) {
@@ -491,12 +605,17 @@ export function useLiveKit({
         // AudioContext가 이미 실행 중이거나 실패 - 무시해도 됨
       })
 
-      const newState = !mediaState.isCameraEnabled
+      // 🔧 LiveKit participant의 실시간 상태 직접 참조 (React 상태 대신)
+      const currentState = room.localParticipant.isCameraEnabled
+      const newState = !currentState
       if (IS_DEV) {
-        console.log("[LiveKit] Toggling camera:", newState ? "ON" : "OFF")
+        console.log("[LiveKit] Toggling camera:", newState ? "ON" : "OFF", {
+          currentLiveKitState: currentState,
+        })
       }
       await room.localParticipant.setCameraEnabled(newState)
-      updateMediaState(room.localParticipant)
+      // 🔧 ref를 통해 최신 함수 호출
+      updateMediaStateRef.current(room.localParticipant)
       return true
     } catch (error) {
       console.error("[LiveKit] Camera toggle error:", error)
@@ -504,9 +623,11 @@ export function useLiveKit({
       setMediaError(parsedError)
       return false
     }
-  }, [mediaState.isCameraEnabled, updateMediaState, parseMediaError])
+    // 🔧 의존성에서 mediaState 제거 (LiveKit 실시간 상태 사용)
+  }, [parseMediaError])
 
   // Toggle microphone
+  // 🔧 React 상태(mediaState) 대신 LiveKit participant의 실시간 상태 직접 참조
   const toggleMicrophone = useCallback(async (): Promise<boolean> => {
     const room = roomRef.current
     if (!room?.localParticipant) {
@@ -523,12 +644,17 @@ export function useLiveKit({
         // AudioContext가 이미 실행 중이거나 실패 - 무시해도 됨
       })
 
-      const newState = !mediaState.isMicrophoneEnabled
+      // 🔧 LiveKit participant의 실시간 상태 직접 참조 (React 상태 대신)
+      const currentState = room.localParticipant.isMicrophoneEnabled
+      const newState = !currentState
       if (IS_DEV) {
-        console.log("[LiveKit] Toggling microphone:", newState ? "ON" : "OFF")
+        console.log("[LiveKit] Toggling microphone:", newState ? "ON" : "OFF", {
+          currentLiveKitState: currentState,
+        })
       }
       await room.localParticipant.setMicrophoneEnabled(newState)
-      updateMediaState(room.localParticipant)
+      // 🔧 ref를 통해 최신 함수 호출
+      updateMediaStateRef.current(room.localParticipant)
       return true
     } catch (error) {
       console.error("[LiveKit] Microphone toggle error:", error)
@@ -536,9 +662,11 @@ export function useLiveKit({
       setMediaError(parsedError)
       return false
     }
-  }, [mediaState.isMicrophoneEnabled, updateMediaState, parseMediaError])
+    // 🔧 의존성에서 mediaState 제거 (LiveKit 실시간 상태 사용)
+  }, [parseMediaError])
 
   // Toggle screen share
+  // 🔧 React 상태(mediaState) 대신 LiveKit participant의 실시간 상태 직접 참조
   const toggleScreenShare = useCallback(async (): Promise<boolean> => {
     const room = roomRef.current
     if (!room?.localParticipant) {
@@ -549,12 +677,17 @@ export function useLiveKit({
 
     try {
       setMediaError(null)
-      const newState = !mediaState.isScreenShareEnabled
+      // 🔧 LiveKit participant의 실시간 상태 직접 참조 (React 상태 대신)
+      const currentState = room.localParticipant.isScreenShareEnabled
+      const newState = !currentState
       if (IS_DEV) {
-        console.log("[LiveKit] Toggling screen share:", newState ? "ON" : "OFF")
+        console.log("[LiveKit] Toggling screen share:", newState ? "ON" : "OFF", {
+          currentLiveKitState: currentState,
+        })
       }
       await room.localParticipant.setScreenShareEnabled(newState)
-      updateMediaState(room.localParticipant)
+      // 🔧 ref를 통해 최신 함수 호출
+      updateMediaStateRef.current(room.localParticipant)
       return true
     } catch (error) {
       // User cancelled screen share picker - not an error, just silently return
@@ -583,7 +716,8 @@ export function useLiveKit({
       setMediaError(parsedError)
       return false
     }
-  }, [mediaState.isScreenShareEnabled, updateMediaState, parseMediaError])
+    // 🔧 의존성에서 mediaState 제거 (LiveKit 실시간 상태 사용)
+  }, [parseMediaError])
 
   // 브라우저/탭 종료 시 즉시 disconnect 호출 (beforeunload)
   useEffect(() => {

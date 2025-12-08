@@ -23,4 +23,12 @@ export interface ParticipantTrack {
   audioTrack?: MediaStreamTrack
   screenTrack?: MediaStreamTrack
   isSpeaking: boolean
+  /** 🔧 비디오 트랙 mute 상태 (VideoTile에서 placeholder 표시용) */
+  isVideoMuted?: boolean
+  /** 🔧 오디오 트랙 mute 상태 */
+  isAudioMuted?: boolean
+  /** 🔧 화면공유 트랙 mute 상태 */
+  isScreenMuted?: boolean
+  /** 🔧 트랙 상태 변경 시 React 재렌더링 트리거용 revision 카운터 */
+  revision?: number
 }

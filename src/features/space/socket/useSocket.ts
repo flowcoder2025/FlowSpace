@@ -38,6 +38,7 @@ interface UseSocketReturn {
   isConnected: boolean
   players: Map<string, PlayerPosition>
   socketError: SocketError | null // 🔒 세션 검증 실패 시 에러
+  effectivePlayerId: string | null // 🔒 서버에서 파생된 실제 플레이어 ID
   sendMessage: (content: string) => void
   disconnect: () => void
 }
@@ -58,6 +59,8 @@ export function useSocket({
   const [players, setPlayers] = useState<Map<string, PlayerPosition>>(new Map())
   // 🔒 세션 검증 실패 등 서버 에러 상태
   const [socketError, setSocketError] = useState<SocketError | null>(null)
+  // 🔒 서버에서 파생된 실제 플레이어 ID (room:joined에서 수신)
+  const [effectivePlayerId, setEffectivePlayerId] = useState<string | null>(null)
 
   // Use refs to persist state across useEffect re-runs (fixes timing race condition)
   const pendingPlayersRef = useRef<PlayerPosition[]>([])
@@ -130,12 +133,15 @@ export function useSocket({
 
     // Room events - handles existing players when joining
     socket.on("room:joined", (data: RoomData) => {
-      console.log("[Socket] Joined room:", data.spaceId, "Players:", data.players.length, "GameReady:", gameReadyRef.current)
+      // 🔒 서버에서 파생된 실제 플레이어 ID 저장
+      const serverPlayerId = data.yourPlayerId
+      setEffectivePlayerId(serverPlayerId)
+      console.log("[Socket] Joined room:", data.spaceId, "Players:", data.players.length, "YourPlayerId:", serverPlayerId, "GameReady:", gameReadyRef.current)
 
-      // Initialize players map
+      // Initialize players map (🔒 서버 파생 ID로 자신 필터링)
       const playersMap = new Map<string, PlayerPosition>()
       data.players.forEach((player) => {
-        if (player.id !== playerId) {
+        if (player.id !== serverPlayerId) {
           playersMap.set(player.id, player)
 
           // If game is ready, emit immediately; otherwise queue for later
@@ -312,6 +318,7 @@ export function useSocket({
     isConnected,
     players,
     socketError, // 🔒 세션 검증 실패 시 에러
+    effectivePlayerId, // 🔒 서버에서 파생된 실제 플레이어 ID
     sendMessage,
     disconnect,
   }

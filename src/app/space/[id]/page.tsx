@@ -108,8 +108,15 @@ export default function SpacePage() {
         if (parsed.spaceId === spaceId) {
           setSession(parsed)
         } else {
-          // Session is for different space
-          setError("다른 공간의 세션입니다. 다시 입장해주세요.")
+          // Session is for different space - 기존 세션 클리어하고 새 입장 유도
+          console.log("[SpacePage] Different space session detected, clearing old session")
+          try {
+            localStorage.removeItem("guestSession")
+          } catch {
+            // localStorage 접근 불가 시 무시
+          }
+          // 이 공간의 초대 링크를 찾아서 리다이렉트 (또는 에러 표시)
+          setError("이전 공간의 세션이 초기화되었습니다. 초대 링크를 통해 다시 입장해주세요.")
           setLoading(false)
         }
       } catch {

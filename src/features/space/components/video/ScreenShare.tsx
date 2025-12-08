@@ -38,16 +38,22 @@ export function ScreenShare({ track, onClose, className }: ScreenShareProps) {
 
   // Attach screen track to video element
   useEffect(() => {
-    if (videoRef.current && track.screenTrack) {
+    const video = videoRef.current
+    if (!video) return
+
+    if (track.screenTrack) {
       const stream = new MediaStream([track.screenTrack])
-      videoRef.current.srcObject = stream
-    } else if (videoRef.current) {
-      videoRef.current.srcObject = null
+      video.srcObject = stream
+    } else {
+      // 🔧 srcObject만 null하면 브라우저가 마지막 프레임을 유지할 수 있음
+      video.srcObject = null
+      video.load()
     }
 
     return () => {
-      if (videoRef.current) {
-        videoRef.current.srcObject = null
+      if (video) {
+        video.srcObject = null
+        video.load()
       }
     }
   }, [track.screenTrack])

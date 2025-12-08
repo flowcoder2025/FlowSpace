@@ -15,7 +15,7 @@ import { ScreenShareOverlay } from "./video/ScreenShare"
 import { ControlBar } from "./controls/ControlBar"
 import { GameCanvas } from "./game/GameCanvas"
 import { useSocket } from "../socket"
-import { useLiveKit } from "../livekit"
+import { LiveKitRoomProvider, useLiveKitMedia } from "../livekit"
 import type { ChatMessageData, AvatarColor } from "../socket/types"
 import type { ChatMessage } from "../types/space.types"
 
@@ -66,7 +66,29 @@ function socketToChatMessage(data: ChatMessageData): ChatMessage {
   }
 }
 
-export function SpaceLayout({
+/**
+ * SpaceLayout - LiveKitRoomProvider로 SpaceLayoutContent를 래핑
+ *
+ * @livekit/components-react 공식 훅 사용을 위해 LiveKitRoom 컨텍스트 제공
+ */
+export function SpaceLayout(props: SpaceLayoutProps) {
+  return (
+    <LiveKitRoomProvider
+      spaceId={props.spaceId}
+      participantId={props.userId}
+      participantName={props.userNickname}
+      sessionToken={props.sessionToken}
+    >
+      <SpaceLayoutContent {...props} />
+    </LiveKitRoomProvider>
+  )
+}
+
+/**
+ * SpaceLayoutContent - 실제 UI 로직
+ * LiveKitRoom 컨텍스트 내부에서 useLiveKitMedia 훅 사용
+ */
+function SpaceLayoutContent({
   spaceId,
   spaceName,
   spaceLogoUrl,
@@ -94,7 +116,7 @@ export function SpaceLayout({
   }, [])
 
   // Socket connection for game position sync (🔒 sessionToken으로 서버 검증)
-  const { isConnected, players, socketError, sendMessage } = useSocket({
+  const { isConnected, players, socketError, effectivePlayerId, sendMessage } = useSocket({
     spaceId,
     playerId: userId,
     nickname: userNickname,
@@ -104,7 +126,7 @@ export function SpaceLayout({
     onSystemMessage: handleSystemMessage,
   })
 
-  // LiveKit for audio/video
+  // LiveKit for audio/video (@livekit/components-react 공식 훅 기반)
   const {
     mediaState,
     mediaError,
@@ -112,13 +134,12 @@ export function SpaceLayout({
     toggleMicrophone,
     toggleScreenShare,
     participantTracks,
-  } = useLiveKit({
-    spaceId,
-    participantId: userId,
-    participantName: userNickname,
-    sessionToken, // 게스트 세션 인증용
-    enabled: true,
-  })
+    localParticipantId,
+  } = useLiveKitMedia()
+
+  // 🔒 서버 파생 ID 통합: Socket → LiveKit → 원본 userId 순서로 우선순위
+  // Socket과 LiveKit 모두 서버에서 검증된 ID를 반환하므로 둘 중 하나를 사용
+  const resolvedUserId = effectivePlayerId ?? localParticipantId ?? userId
 
   // Dismiss media error state
   const [dismissedError, setDismissedError] = useState(false)
@@ -139,13 +160,14 @@ export function SpaceLayout({
   }, [mediaError])
 
   // Ensure local participant is in tracks (fallback if LiveKit not connected)
+  // 🔒 resolvedUserId 사용 (서버 파생 ID)
   const allParticipantTracks = useMemo(() => {
     const tracks = new Map(participantTracks)
 
     // Add local participant if not in tracks yet
-    if (!tracks.has(userId)) {
-      tracks.set(userId, {
-        participantId: userId,
+    if (!tracks.has(resolvedUserId)) {
+      tracks.set(resolvedUserId, {
+        participantId: resolvedUserId,
         participantName: userNickname,
         isSpeaking: false,
       })
@@ -163,7 +185,7 @@ export function SpaceLayout({
     })
 
     return tracks
-  }, [participantTracks, players, userId, userNickname])
+  }, [participantTracks, players, resolvedUserId, userNickname])
 
   // Find active screen share (first participant with screenTrack)
   const activeScreenShare = useMemo(() => {
@@ -177,6 +199,20 @@ export function SpaceLayout({
 
   // Screen share overlay visibility (show remote screen shares, hide own)
   const [showScreenShareOverlay, setShowScreenShareOverlay] = useState(true)
+  // 🔧 마지막으로 닫은 화면공유 트랙 ID (새 화면공유 감지용)
+  const [closedScreenTrackId, setClosedScreenTrackId] = useState<string | null>(null)
+
+  // 🔧 새 화면공유가 시작되면 오버레이 재활성화
+  // activeScreenShare가 바뀌거나 screenTrack?.id가 달라지면 overlay 재활성화
+  useEffect(() => {
+    if (activeScreenShare?.screenTrack) {
+      const currentTrackId = activeScreenShare.screenTrack.id
+      // 닫았던 트랙이 아닌 새 트랙이면 오버레이 재활성화
+      if (currentTrackId !== closedScreenTrackId) {
+        setShowScreenShareOverlay(true)
+      }
+    }
+  }, [activeScreenShare?.screenTrack?.id, closedScreenTrackId])
 
   // Handlers
   const handleSendMessage = useCallback((content: string) => {
@@ -203,9 +239,13 @@ export function SpaceLayout({
     setIsParticipantsOpen((prev) => !prev)
   }, [])
 
+  // 🔧 오버레이 닫을 때 현재 트랙 ID 저장 (같은 트랙 재표시 방지)
   const handleCloseScreenShareOverlay = useCallback(() => {
+    if (activeScreenShare?.screenTrack) {
+      setClosedScreenTrackId(activeScreenShare.screenTrack.id)
+    }
     setShowScreenShareOverlay(false)
-  }, [])
+  }, [activeScreenShare?.screenTrack])
 
   return (
     <div className="flex h-screen flex-col bg-background">
@@ -247,7 +287,7 @@ export function SpaceLayout({
                 <ChatPanel
                   messages={messages}
                   onSendMessage={handleSendMessage}
-                  currentUserId={userId}
+                  currentUserId={resolvedUserId}
                 />
               </Panel>
               <ResizeHandle />
@@ -257,7 +297,7 @@ export function SpaceLayout({
           {/* Center Panel - Game Canvas */}
           <Panel defaultSize={isChatOpen && isParticipantsOpen ? 60 : isChatOpen || isParticipantsOpen ? 80 : 100}>
             <GameCanvas
-              playerId={userId}
+              playerId={resolvedUserId}
               playerNickname={userNickname}
               avatarColor={userAvatarColor}
             />
@@ -276,7 +316,7 @@ export function SpaceLayout({
               >
                 <ParticipantPanel
                   participantTracks={allParticipantTracks}
-                  localParticipantId={userId}
+                  localParticipantId={resolvedUserId}
                 />
               </Panel>
             </>
@@ -302,7 +342,7 @@ export function SpaceLayout({
 
       {/* Screen Share Overlay - Show when someone is sharing (except self) */}
       {activeScreenShare &&
-       activeScreenShare.participantId !== userId &&
+       activeScreenShare.participantId !== resolvedUserId &&
        showScreenShareOverlay && (
         <ScreenShareOverlay
           track={activeScreenShare}
