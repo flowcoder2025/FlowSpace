@@ -1,5 +1,4 @@
 import Link from "next/link"
-import { auth } from "@/lib/auth"
 import {
   Container,
   Section,
@@ -20,6 +19,7 @@ import {
   IconBox,
 } from "@/components/ui"
 import { getText } from "@/lib/text-config"
+import { UserNav } from "@/components/UserNav"
 
 // ============================================
 // Feature Card Component
@@ -162,9 +162,7 @@ const AnalyticsIcon = () => (
 // ============================================
 // Landing Page
 // ============================================
-export default async function LandingPage() {
-  const session = await auth()
-
+export default function LandingPage() {
   return (
     <main>
       {/* Navigation */}
@@ -177,31 +175,7 @@ export default async function LandingPage() {
                 FlowSpace
               </Text>
             </Link>
-            <HStack gap="md">
-              {session?.user ? (
-                <>
-                  <Button variant="outline" asChild>
-                    <Link href="/admin">{getText("BTN.NAV.DASHBOARD")}</Link>
-                  </Button>
-                  <Button asChild>
-                    <Link href="/spaces/new">
-                      {getText("BTN.LANDING.CREATE_SPACE")}
-                    </Link>
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <Button variant="outline" asChild>
-                    <Link href="/login">{getText("BTN.AUTH.LOGIN")}</Link>
-                  </Button>
-                  <Button asChild>
-                    <Link href="/spaces/new">
-                      {getText("BTN.LANDING.CREATE_SPACE")}
-                    </Link>
-                  </Button>
-                </>
-              )}
-            </HStack>
+            <UserNav />
           </HStack>
         </Container>
       </nav>

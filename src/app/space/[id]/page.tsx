@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react"
 import { useParams, useRouter, useSearchParams } from "next/navigation"
+import { useSession } from "next-auth/react"
 import Link from "next/link"
 import {
   Container,
@@ -66,18 +67,26 @@ export default function SpacePage() {
   const searchParams = useSearchParams()
   const spaceId = params.id as string
 
+  // NextAuth 세션 확인
+  const { data: authSession, status: authStatus } = useSession()
+
   // Dev mode: ?dev=true 쿼리 파라미터로 세션 체크 우회
   const devMode = IS_DEV && searchParams.get("dev") === "true"
 
   const [space, setSpace] = useState<SpaceData | null>(null)
   const [session, setSession] = useState<GuestSession | null>(null)
+  // 🔐 로그인 사용자 여부 추적
+  const [isAuthUser, setIsAuthUser] = useState(false)
   // 🔒 서버 검증된 사용자 정보 (participantId는 서버에서 파생)
   const [verifiedUser, setVerifiedUser] = useState<VerifiedUser | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // Load session from localStorage (or use dev session)
+  // Load session from NextAuth or localStorage
   useEffect(() => {
+    // NextAuth 세션 로딩 중이면 대기
+    if (authStatus === "loading") return
+
     // Dev mode: 테스트용 가상 세션 생성
     if (devMode) {
       const devSession: GuestSession = {
@@ -90,12 +99,32 @@ export default function SpacePage() {
       return
     }
 
-    // Safari 프라이빗 모드 등 localStorage 접근이 차단된 환경 대응
+    // 🔐 NextAuth 로그인 사용자인 경우
+    if (authSession?.user) {
+      console.log("[SpacePage] NextAuth session detected, using auth user")
+      setIsAuthUser(true)
+      // 로그인 사용자용 가상 세션 생성 (기존 로직 호환)
+      const authUserSession: GuestSession = {
+        sessionToken: `auth-${authSession.user.id || Date.now()}`,
+        nickname: authSession.user.name || authSession.user.email?.split("@")[0] || "User",
+        avatar: authSession.user.image || "default",
+        spaceId,
+      }
+      setSession(authUserSession)
+      // 로그인 사용자는 서버 검증 대신 바로 verifiedUser 설정
+      setVerifiedUser({
+        participantId: `user-${authSession.user.id}`,
+        nickname: authUserSession.nickname,
+        avatar: authUserSession.avatar,
+      })
+      return
+    }
+
+    // 🎫 게스트 사용자: localStorage에서 세션 확인
     let storedSession: string | null = null
     try {
       storedSession = localStorage.getItem("guestSession")
     } catch (storageError) {
-      // localStorage 접근 불가 (Safari 프라이빗 모드, 제3자 쿠키 차단 등)
       console.warn("[SpacePage] localStorage access denied:", storageError)
       setError("브라우저 저장소에 접근할 수 없습니다. 프라이빗 모드를 해제하거나 다른 브라우저를 사용해주세요.")
       setLoading(false)
@@ -108,14 +137,12 @@ export default function SpacePage() {
         if (parsed.spaceId === spaceId) {
           setSession(parsed)
         } else {
-          // Session is for different space - 기존 세션 클리어하고 새 입장 유도
           console.log("[SpacePage] Different space session detected, clearing old session")
           try {
             localStorage.removeItem("guestSession")
           } catch {
             // localStorage 접근 불가 시 무시
           }
-          // 이 공간의 초대 링크를 찾아서 리다이렉트 (또는 에러 표시)
           setError("이전 공간의 세션이 초기화되었습니다. 초대 링크를 통해 다시 입장해주세요.")
           setLoading(false)
         }
@@ -127,7 +154,7 @@ export default function SpacePage() {
       setError("입장 세션이 없습니다. 초대 링크를 통해 다시 입장해주세요.")
       setLoading(false)
     }
-  }, [spaceId, devMode])
+  }, [spaceId, devMode, authSession, authStatus])
 
   // 🔒 서버에서 세션 검증 및 서버 파생 participantId 조회
   useEffect(() => {
