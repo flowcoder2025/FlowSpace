@@ -363,3 +363,73 @@ export function getAnimationKey(
   const action = isMoving ? "walk" : "idle"
   return `${pre}${action}-${direction}`
 }
+
+/**
+ * Create animations for a character from a loaded spritesheet
+ * Uses frame indices (0-15) from the spritesheet loaded via this.load.spritesheet()
+ *
+ * Spritesheet layout (96x128, 4x4 frames):
+ * Row 0 (frames 0-3): down
+ * Row 1 (frames 4-7): left
+ * Row 2 (frames 8-11): right
+ * Row 3 (frames 12-15): up
+ */
+export function createCharacterAnimationsFromSpritesheet(
+  scene: Phaser.Scene,
+  textureKey: string,
+  animPrefix: string = ""
+): boolean {
+  const { FRAME_COUNT } = CHARACTER_CONFIG
+  const prefix = animPrefix ? `${animPrefix}-` : ""
+
+  // Verify texture exists
+  if (!scene.textures.exists(textureKey)) {
+    console.error(`[CharacterSprite] Cannot create animations - texture not found: ${textureKey}`)
+    return false
+  }
+
+  const directions = [
+    { key: "down", startFrame: 0 },
+    { key: "left", startFrame: 4 },
+    { key: "right", startFrame: 8 },
+    { key: "up", startFrame: 12 },
+  ]
+
+  let animationsCreated = 0
+
+  directions.forEach(({ key, startFrame }) => {
+    // Idle animation (single frame)
+    const idleKey = `${prefix}idle-${key}`
+    if (!scene.anims.exists(idleKey)) {
+      const idleAnim = scene.anims.create({
+        key: idleKey,
+        frames: [{ key: textureKey, frame: startFrame }],
+        frameRate: 1,
+        repeat: -1,
+      })
+      if (idleAnim) animationsCreated++
+    }
+
+    // Walk animation (4 frames)
+    const walkKey = `${prefix}walk-${key}`
+    if (!scene.anims.exists(walkKey)) {
+      const frames = []
+      for (let i = 0; i < FRAME_COUNT; i++) {
+        frames.push({ key: textureKey, frame: startFrame + i })
+      }
+
+      const walkAnim = scene.anims.create({
+        key: walkKey,
+        frames,
+        frameRate: 8,
+        repeat: -1,
+      })
+      if (walkAnim) animationsCreated++
+    }
+  })
+
+  if (IS_DEV) {
+    console.log(`[CharacterSprite] Created ${animationsCreated} animations for: ${textureKey}`)
+  }
+  return true
+}

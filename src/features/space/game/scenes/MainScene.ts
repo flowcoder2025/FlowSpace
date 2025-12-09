@@ -6,8 +6,7 @@ import * as Phaser from "phaser"
 import { MAP_CONFIG } from "../config"
 import { eventBridge, GameEvents, type PlayerPosition } from "../events"
 import {
-  generateCharacterTexture,
-  createCharacterAnimations,
+  createCharacterAnimationsFromSpritesheet,
   getAnimationKey,
   CHARACTER_CONFIG,
 } from "../sprites"
@@ -27,8 +26,8 @@ import {
 // Development mode flag for debug logs
 const IS_DEV = process.env.NODE_ENV === "development"
 
-// Avatar color type
-type AvatarColor = "default" | "red" | "green" | "purple" | "orange" | "pink"
+// Avatar color type - must match CHARACTER_CONFIG.COLORS keys
+type AvatarColor = "default" | "red" | "green" | "purple" | "orange" | "pink" | "yellow" | "blue"
 
 export class MainScene extends Phaser.Scene {
   private playerContainer!: Phaser.GameObjects.Container
@@ -95,33 +94,37 @@ export class MainScene extends Phaser.Scene {
     // Generate tile textures (procedural, can be done in preload)
     generateAllTileTextures(this)
 
-    // Note: Character textures are now generated in create() for better timing
-    // as graphics.generateTexture() works better after scene is fully initialized
-  }
-
-  create() {
-    // Generate character textures and animations in create() for reliable WebGL context
-    const colors: AvatarColor[] = ["default", "red", "green", "purple", "orange", "pink"]
-
-    // First, generate all textures (this also adds frames)
+    // Load character sprite sheets from static PNG files
+    // This ensures consistent behavior across development and production environments
+    const colors: AvatarColor[] = ["default", "red", "green", "purple", "orange", "pink", "yellow", "blue"]
     colors.forEach((color) => {
       const textureKey = `character-${color}`
       if (!this.textures.exists(textureKey)) {
-        const success = generateCharacterTexture(this, textureKey, color)
-        if (!success) {
-          console.error(`[MainScene] Failed to generate character texture: ${textureKey}`)
-        }
-      } else {
-        if (IS_DEV) {
-          console.log(`[MainScene] Texture already exists: ${textureKey}`)
-        }
+        this.load.spritesheet(textureKey, `/assets/game/sprites/character-${color}.png`, {
+          frameWidth: CHARACTER_CONFIG.WIDTH,
+          frameHeight: CHARACTER_CONFIG.HEIGHT,
+        })
       }
     })
+  }
 
-    // Then create animations (textures must exist first)
+  create() {
+    // Character textures are loaded from static PNG files in preload()
+    // Now create animations for all loaded sprite sheets
+    const colors: AvatarColor[] = ["default", "red", "green", "purple", "orange", "pink", "yellow", "blue"]
+
     colors.forEach((color) => {
       const textureKey = `character-${color}`
-      createCharacterAnimations(this, textureKey, color)
+
+      // Verify texture was loaded successfully
+      if (!this.textures.exists(textureKey)) {
+        console.error(`[MainScene] Character texture not loaded: ${textureKey}`)
+        return
+      }
+
+      // Create animations using spritesheet frame indices
+      // Spritesheet layout: 4 frames per row, 4 rows (down, left, right, up)
+      createCharacterAnimationsFromSpritesheet(this, textureKey, color)
     })
 
     // Create procedural tilemap
