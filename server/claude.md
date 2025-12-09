@@ -59,7 +59,7 @@ npm run dev:all
 | 이벤트 | 페이로드 | 설명 |
 |-------|---------|------|
 | `join:space` | `{ spaceId, playerId, nickname, avatarColor, sessionToken }` | 공간 입장 |
-| `leave:space` | - | 공간 퇴장 |
+| `leave:space` | - | 공간 퇴장 + 📊 EXIT 로그 기록 |
 | `player:move` | `PlayerPosition` | 위치 업데이트 |
 | `player:jump` | `PlayerJumpData` | 점프 이벤트 |
 | `chat:message` | `{ content }` | 채팅 전송 |
@@ -174,8 +174,38 @@ io.use(async (socket, next) => {
 
 ---
 
+## 10. 📊 이벤트 로깅
+
+### 10.1 로깅 흐름
+
+```
+leave:space / disconnect 이벤트
+           ↓
+   logGuestEvent() 호출
+           ↓
+   POST /api/guest/event
+           ↓
+   SpaceEventLog 테이블에 EXIT 기록
+```
+
+### 10.2 로깅 대상
+
+| 이벤트 | 로깅 여부 | 비고 |
+|-------|----------|------|
+| ENTER | ✅ | Guest API에서 세션 생성 시 로깅 |
+| EXIT | ✅ | Socket 서버에서 퇴장/연결 종료 시 로깅 |
+| CHAT | ⏳ | 향후 구현 예정 |
+
+### 10.3 로깅 조건
+
+- 게스트 세션만 로깅 (dev-, auth- 세션 제외)
+- 비동기 처리 (로깅 실패해도 퇴장 처리는 계속)
+
+---
+
 ## 변경 이력
 
 | 날짜 | 변경 |
 |-----|------|
+| 2025-12-09 | EXIT 이벤트 로깅 추가 - 체류시간 통계 지원 |
 | 2025-12-08 | 초기 생성 - 보안 강화 내용 반영 |

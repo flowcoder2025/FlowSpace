@@ -25,6 +25,44 @@ const NEXT_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000"
 const IS_DEV = process.env.NODE_ENV === "development"
 
 // ============================================
+// 📊 이벤트 로깅 함수
+// ============================================
+async function logGuestEvent(
+  sessionToken: string,
+  spaceId: string,
+  eventType: "EXIT" | "CHAT",
+  payload?: Record<string, unknown>
+): Promise<boolean> {
+  try {
+    // dev- 세션과 auth- 세션은 로깅 스킵 (게스트 세션만 로깅)
+    if (!sessionToken || sessionToken.startsWith("dev-") || sessionToken.startsWith("auth-")) {
+      return false
+    }
+
+    const response = await fetch(`${NEXT_API_URL}/api/guest/event`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionToken, spaceId, eventType, payload }),
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      console.warn(`[Socket] Event logging failed:`, errorData.error || "Unknown error")
+      return false
+    }
+
+    const data = await response.json()
+    if (IS_DEV) {
+      console.log(`[Socket] Event logged: ${eventType} for space ${spaceId}`)
+    }
+    return data.logged === true
+  } catch (error) {
+    console.error("[Socket] Event logging error:", error)
+    return false
+  }
+}
+
+// ============================================
 // 🔒 세션 검증 함수
 // ============================================
 interface VerifySessionResult {
@@ -221,12 +259,17 @@ io.on("connection", (socket) => {
   })
 
   // Leave space
-  socket.on("leave:space", () => {
-    const { spaceId, playerId, nickname } = socket.data
+  socket.on("leave:space", async () => {
+    const { spaceId, playerId, nickname, sessionToken } = socket.data
 
     if (spaceId && playerId) {
       socket.leave(spaceId)
       removePlayerFromRoom(spaceId, playerId)
+
+      // 📊 EXIT 이벤트 로깅 (비동기, 실패해도 퇴장 처리는 계속)
+      if (sessionToken) {
+        logGuestEvent(sessionToken, spaceId, "EXIT", { reason: "leave" }).catch(() => {})
+      }
 
       // Notify other players
       socket.to(spaceId).emit("player:left", { id: playerId })
@@ -312,10 +355,15 @@ io.on("connection", (socket) => {
 
   // Disconnect
   socket.on("disconnect", (reason) => {
-    const { spaceId, playerId, nickname } = socket.data
+    const { spaceId, playerId, nickname, sessionToken } = socket.data
 
     if (spaceId && playerId) {
       removePlayerFromRoom(spaceId, playerId)
+
+      // 📊 EXIT 이벤트 로깅 (비동기, 실패해도 disconnect 처리는 계속)
+      if (sessionToken) {
+        logGuestEvent(sessionToken, spaceId, "EXIT", { reason: `disconnect:${reason}` }).catch(() => {})
+      }
 
       // Notify other players
       socket.to(spaceId).emit("player:left", { id: playerId })
