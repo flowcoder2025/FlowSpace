@@ -94,6 +94,11 @@ export class MainScene extends Phaser.Scene {
     // Generate tile textures (procedural, can be done in preload)
     generateAllTileTextures(this)
 
+    // Add load error handler for debugging
+    this.load.on("loaderror", (fileObj: Phaser.Loader.File) => {
+      console.error(`[MainScene] Failed to load: ${fileObj.key} from ${fileObj.url}`)
+    })
+
     // Load character sprite sheets from static PNG files
     // This ensures consistent behavior across development and production environments
     const colors: AvatarColor[] = ["default", "red", "green", "purple", "orange", "pink", "yellow", "blue"]
@@ -105,6 +110,15 @@ export class MainScene extends Phaser.Scene {
           frameHeight: CHARACTER_CONFIG.HEIGHT,
         })
       }
+    })
+
+    // Log when loading completes
+    this.load.on("complete", () => {
+      console.log("[MainScene] All assets loaded successfully")
+      colors.forEach((color) => {
+        const textureKey = `character-${color}`
+        console.log(`[MainScene] Texture ${textureKey} exists: ${this.textures.exists(textureKey)}`)
+      })
     })
   }
 
