@@ -101,23 +101,29 @@ export class MainScene extends Phaser.Scene {
 
     // Load character sprite sheets from static PNG files
     // This ensures consistent behavior across development and production environments
+    // IMPORTANT: Always load fresh - remove existing textures to prevent stale cache issues in production
     const colors: AvatarColor[] = ["default", "red", "green", "purple", "orange", "pink", "yellow", "blue"]
     colors.forEach((color) => {
       const textureKey = `character-${color}`
-      if (!this.textures.exists(textureKey)) {
-        this.load.spritesheet(textureKey, `/assets/game/sprites/character-${color}.png`, {
-          frameWidth: CHARACTER_CONFIG.WIDTH,
-          frameHeight: CHARACTER_CONFIG.HEIGHT,
-        })
+      // Remove any existing texture to ensure fresh load (fixes production caching issues)
+      if (this.textures.exists(textureKey)) {
+        this.textures.remove(textureKey)
       }
+      this.load.spritesheet(textureKey, `/assets/game/sprites/character-${color}.png`, {
+        frameWidth: CHARACTER_CONFIG.WIDTH,
+        frameHeight: CHARACTER_CONFIG.HEIGHT,
+      })
     })
 
-    // Log when loading completes
+    // Log when loading completes with detailed frame info
     this.load.on("complete", () => {
       console.log("[MainScene] All assets loaded successfully")
       colors.forEach((color) => {
         const textureKey = `character-${color}`
-        console.log(`[MainScene] Texture ${textureKey} exists: ${this.textures.exists(textureKey)}`)
+        const exists = this.textures.exists(textureKey)
+        const texture = this.textures.get(textureKey)
+        const frameCount = texture ? texture.frameTotal : 0
+        console.log(`[MainScene] Texture ${textureKey}: exists=${exists}, frames=${frameCount}`)
       })
     })
   }
