@@ -101,14 +101,12 @@ export class MainScene extends Phaser.Scene {
 
     // Load character sprite sheets from static PNG files
     // This ensures consistent behavior across development and production environments
-    // IMPORTANT: Always load fresh - remove existing textures to prevent stale cache issues in production
+    // NOTE: Phaser's loader automatically handles duplicate keys - no need to manually remove textures
+    // Manual texture removal can cause issues with Phaser's global texture cache, especially in React Strict Mode
     const colors: AvatarColor[] = ["default", "red", "green", "purple", "orange", "pink", "yellow", "blue"]
     colors.forEach((color) => {
       const textureKey = `character-${color}`
-      // Remove any existing texture to ensure fresh load (fixes production caching issues)
-      if (this.textures.exists(textureKey)) {
-        this.textures.remove(textureKey)
-      }
+      // Always add to load queue - Phaser handles duplicates internally
       this.load.spritesheet(textureKey, `/assets/game/sprites/character-${color}.png`, {
         frameWidth: CHARACTER_CONFIG.WIDTH,
         frameHeight: CHARACTER_CONFIG.HEIGHT,
@@ -427,6 +425,13 @@ export class MainScene extends Phaser.Scene {
 
     // Create player sprite (local coords 0,0 inside container)
     const textureKey = `character-${this.playerAvatarColor}`
+
+    // Debug: Log sprite creation details
+    const textureExists = this.textures.exists(textureKey)
+    const texture = this.textures.get(textureKey)
+    const frameCount = texture ? texture.frameTotal : 0
+    console.log(`[MainScene] Creating player sprite: key=${textureKey}, avatarColor=${this.playerAvatarColor}, exists=${textureExists}, frames=${frameCount}`)
+
     this.playerSprite = this.add.sprite(0, 0, textureKey)
     this.playerSprite.setOrigin(0.5, 0.5)
 
