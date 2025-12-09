@@ -4,6 +4,9 @@
  */
 import * as Phaser from "phaser"
 
+// Development mode flag for debug logs
+const IS_DEV = process.env.NODE_ENV === "development"
+
 // Character sprite configuration
 export const CHARACTER_CONFIG = {
   WIDTH: 24,
@@ -34,36 +37,74 @@ export const ANIM_KEYS = {
 }
 
 /**
- * Generate character sprite sheet texture
+ * Generate character sprite sheet texture and add frames immediately
+ * This function both creates the texture AND adds the frame data
  */
 export function generateCharacterTexture(
   scene: Phaser.Scene,
   textureKey: string,
   colorKey: string = "default"
-): void {
+): boolean {
   const { WIDTH, HEIGHT, FRAME_COUNT, COLORS } = CHARACTER_CONFIG
   const color = COLORS[colorKey] || COLORS.default
-
-  // Create graphics for drawing
-  const graphics = scene.make.graphics({ x: 0, y: 0 }, false)
 
   // Total sheet size: 4 directions x 4 frames = 16 frames
   const sheetWidth = WIDTH * FRAME_COUNT
   const sheetHeight = HEIGHT * 4 // 4 directions
 
-  // Draw frames for each direction
-  const directions = ["down", "left", "right", "up"]
-  directions.forEach((direction, dirIndex) => {
-    for (let frame = 0; frame < FRAME_COUNT; frame++) {
-      const x = frame * WIDTH
-      const y = dirIndex * HEIGHT
-      drawCharacterFrame(graphics, x, y, color, direction, frame)
-    }
-  })
+  try {
+    // Create graphics for drawing
+    const graphics = scene.make.graphics({ x: 0, y: 0 }, false)
 
-  // Generate texture from graphics
-  graphics.generateTexture(textureKey, sheetWidth, sheetHeight)
-  graphics.destroy()
+    // Draw frames for each direction
+    const directions = ["down", "left", "right", "up"]
+    directions.forEach((direction, dirIndex) => {
+      for (let frame = 0; frame < FRAME_COUNT; frame++) {
+        const x = frame * WIDTH
+        const y = dirIndex * HEIGHT
+        drawCharacterFrame(graphics, x, y, color, direction, frame)
+      }
+    })
+
+    // Generate texture from graphics
+    graphics.generateTexture(textureKey, sheetWidth, sheetHeight)
+    graphics.destroy()
+
+    // Verify texture was created
+    if (!scene.textures.exists(textureKey)) {
+      console.error(`[CharacterSprite] Failed to generate texture: ${textureKey}`)
+      return false
+    }
+
+    // Get the texture and add frame data immediately
+    const texture = scene.textures.get(textureKey)
+
+    // Add frames to the texture for sprite sheet slicing
+    for (let dir = 0; dir < 4; dir++) {
+      for (let frame = 0; frame < FRAME_COUNT; frame++) {
+        const frameName = `${textureKey}_${dir}_${frame}`
+        // Only add if not already exists
+        if (!texture.has(frameName)) {
+          texture.add(
+            frameName,
+            0, // sourceIndex - 0 for single-image textures
+            frame * WIDTH,
+            dir * HEIGHT,
+            WIDTH,
+            HEIGHT
+          )
+        }
+      }
+    }
+
+    if (IS_DEV) {
+      console.log(`[CharacterSprite] Generated texture with frames: ${textureKey}`)
+    }
+    return true
+  } catch (error) {
+    console.error(`[CharacterSprite] Error generating texture ${textureKey}:`, error)
+    return false
+  }
 }
 
 /**
@@ -165,43 +206,29 @@ function drawCharacterFrame(
 
 /**
  * Create animations for a character sprite
+ * Assumes frames were already added via generateCharacterTexture()
  */
 export function createCharacterAnimations(
   scene: Phaser.Scene,
   textureKey: string,
   animPrefix: string = ""
-): void {
-  const { WIDTH, HEIGHT, FRAME_COUNT } = CHARACTER_CONFIG
+): boolean {
+  const { FRAME_COUNT } = CHARACTER_CONFIG
   const prefix = animPrefix ? `${animPrefix}-` : ""
 
-  // Check if frames are already added (防止重复添加)
-  const texture = scene.textures.get(textureKey)
-  if (!texture) {
-    console.warn(`[CharacterSprite] Texture not found: ${textureKey}`)
-    return
+  // Verify texture exists using the correct method
+  if (!scene.textures.exists(textureKey)) {
+    console.error(`[CharacterSprite] Cannot create animations - texture not found: ${textureKey}`)
+    return false
   }
 
-  // Add frames to texture if not already added
+  // Get texture and verify frames exist
+  const texture = scene.textures.get(textureKey)
   const firstFrameName = `${textureKey}_0_0`
   if (!texture.has(firstFrameName)) {
-    const frameWidth = WIDTH
-    const frameHeight = HEIGHT
-
-    // Manually add frames using Phaser's frame system
-    for (let dir = 0; dir < 4; dir++) {
-      for (let frame = 0; frame < FRAME_COUNT; frame++) {
-        const frameName = `${textureKey}_${dir}_${frame}`
-        // Add frame with correct source index (0 for single-image textures)
-        texture.add(
-          frameName,
-          0, // sourceIndex - 0 for the base image
-          frame * frameWidth,
-          dir * frameHeight,
-          frameWidth,
-          frameHeight
-        )
-      }
-    }
+    console.error(`[CharacterSprite] Cannot create animations - frames not found for: ${textureKey}`)
+    console.error(`[CharacterSprite] Expected frame: ${firstFrameName}`)
+    return false
   }
 
   const directions = [
@@ -211,16 +238,19 @@ export function createCharacterAnimations(
     { key: "up", row: 3 },
   ]
 
+  let animationsCreated = 0
+
   directions.forEach(({ key, row }) => {
     // Idle animation (single frame)
     const idleKey = `${prefix}idle-${key}`
     if (!scene.anims.exists(idleKey)) {
-      scene.anims.create({
+      const idleAnim = scene.anims.create({
         key: idleKey,
         frames: [{ key: textureKey, frame: `${textureKey}_${row}_0` }],
         frameRate: 1,
         repeat: -1,
       })
+      if (idleAnim) animationsCreated++
     }
 
     // Walk animation (4 frames)
@@ -231,14 +261,20 @@ export function createCharacterAnimations(
         frames.push({ key: textureKey, frame: `${textureKey}_${row}_${i}` })
       }
 
-      scene.anims.create({
+      const walkAnim = scene.anims.create({
         key: walkKey,
         frames,
         frameRate: 8,
         repeat: -1,
       })
+      if (walkAnim) animationsCreated++
     }
   })
+
+  if (IS_DEV) {
+    console.log(`[CharacterSprite] Created ${animationsCreated} animations for: ${textureKey}`)
+  }
+  return true
 }
 
 /**

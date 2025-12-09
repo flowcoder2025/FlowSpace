@@ -92,22 +92,33 @@ export class MainScene extends Phaser.Scene {
   }
 
   preload() {
-    // Generate tile textures
+    // Generate tile textures (procedural, can be done in preload)
     generateAllTileTextures(this)
 
-    // Generate character textures for all colors
-    const colors: AvatarColor[] = ["default", "red", "green", "purple", "orange", "pink"]
-    colors.forEach((color) => {
-      const textureKey = `character-${color}`
-      if (!this.textures.exists(textureKey)) {
-        generateCharacterTexture(this, textureKey, color)
-      }
-    })
+    // Note: Character textures are now generated in create() for better timing
+    // as graphics.generateTexture() works better after scene is fully initialized
   }
 
   create() {
-    // Create animations for all character colors
+    // Generate character textures and animations in create() for reliable WebGL context
     const colors: AvatarColor[] = ["default", "red", "green", "purple", "orange", "pink"]
+
+    // First, generate all textures (this also adds frames)
+    colors.forEach((color) => {
+      const textureKey = `character-${color}`
+      if (!this.textures.exists(textureKey)) {
+        const success = generateCharacterTexture(this, textureKey, color)
+        if (!success) {
+          console.error(`[MainScene] Failed to generate character texture: ${textureKey}`)
+        }
+      } else {
+        if (IS_DEV) {
+          console.log(`[MainScene] Texture already exists: ${textureKey}`)
+        }
+      }
+    })
+
+    // Then create animations (textures must exist first)
     colors.forEach((color) => {
       const textureKey = `character-${color}`
       createCharacterAnimations(this, textureKey, color)
