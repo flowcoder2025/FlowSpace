@@ -81,6 +81,8 @@ export default function SpacePage() {
   const [verifiedUser, setVerifiedUser] = useState<VerifiedUser | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // 🔑 로그인 필요 상태 (게스트 세션 없고 로그인도 안 된 경우)
+  const [needsLogin, setNeedsLogin] = useState(false)
 
   // Load session from NextAuth or localStorage
   useEffect(() => {
@@ -151,7 +153,9 @@ export default function SpacePage() {
         setLoading(false)
       }
     } else {
-      setError("입장 세션이 없습니다. 초대 링크를 통해 다시 입장해주세요.")
+      // 🔑 게스트 세션도 없고 로그인도 안 된 경우 → 로그인 유도
+      console.log("[SpacePage] No session found, prompting login")
+      setNeedsLogin(true)
       setLoading(false)
     }
   }, [spaceId, devMode, authSession, authStatus])
@@ -309,6 +313,47 @@ export default function SpacePage() {
           </Text>
           <div className="mt-4 size-8 animate-spin rounded-full border-4 border-primary/30 border-t-primary" />
         </VStack>
+      </main>
+    )
+  }
+
+  // 🔑 로그인 필요 상태 - 로그인 유도 화면
+  if (needsLogin) {
+    return (
+      <main className="min-h-screen bg-muted/30">
+        <Container>
+          <VStack gap="lg" align="center" className="py-24">
+            <div className="rounded-full bg-primary/10 p-4">
+              <svg
+                className="size-12 text-primary"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                />
+              </svg>
+            </div>
+            <VStack gap="sm" align="center">
+              <Text size="lg" weight="semibold">공간에 입장하려면 로그인이 필요합니다</Text>
+              <Text tone="muted" className="text-center">
+                로그인하거나 초대 링크를 통해 게스트로 입장해주세요
+              </Text>
+            </VStack>
+            <VStack gap="sm" className="w-full max-w-xs">
+              <Button asChild className="w-full">
+                <Link href={`/login?callbackUrl=/space/${spaceId}`}>로그인</Link>
+              </Button>
+              <Button variant="outline" asChild className="w-full">
+                <Link href="/">홈으로 돌아가기</Link>
+              </Button>
+            </VStack>
+          </VStack>
+        </Container>
       </main>
     )
   }

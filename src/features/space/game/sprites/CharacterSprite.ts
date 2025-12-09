@@ -174,27 +174,32 @@ export function createCharacterAnimations(
   const { WIDTH, HEIGHT, FRAME_COUNT } = CHARACTER_CONFIG
   const prefix = animPrefix ? `${animPrefix}-` : ""
 
-  // Add texture to scene if not already added as spritesheet
-  if (!scene.textures.exists(textureKey + "_sheet")) {
-    const texture = scene.textures.get(textureKey)
-    if (texture) {
-      // Create frame data
-      const frameWidth = WIDTH
-      const frameHeight = HEIGHT
+  // Check if frames are already added (防止重复添加)
+  const texture = scene.textures.get(textureKey)
+  if (!texture) {
+    console.warn(`[CharacterSprite] Texture not found: ${textureKey}`)
+    return
+  }
 
-      // Manually add frames
-      for (let dir = 0; dir < 4; dir++) {
-        for (let frame = 0; frame < FRAME_COUNT; frame++) {
-          const frameName = `${textureKey}_${dir}_${frame}`
-          texture.add(
-            frameName,
-            0,
-            frame * frameWidth,
-            dir * frameHeight,
-            frameWidth,
-            frameHeight
-          )
-        }
+  // Add frames to texture if not already added
+  const firstFrameName = `${textureKey}_0_0`
+  if (!texture.has(firstFrameName)) {
+    const frameWidth = WIDTH
+    const frameHeight = HEIGHT
+
+    // Manually add frames using Phaser's frame system
+    for (let dir = 0; dir < 4; dir++) {
+      for (let frame = 0; frame < FRAME_COUNT; frame++) {
+        const frameName = `${textureKey}_${dir}_${frame}`
+        // Add frame with correct source index (0 for single-image textures)
+        texture.add(
+          frameName,
+          0, // sourceIndex - 0 for the base image
+          frame * frameWidth,
+          dir * frameHeight,
+          frameWidth,
+          frameHeight
+        )
       }
     }
   }
