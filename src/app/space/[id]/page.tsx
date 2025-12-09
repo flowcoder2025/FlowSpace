@@ -42,6 +42,20 @@ interface VerifiedUser {
   avatar: string
 }
 
+// 유효한 아바타 색상 목록 (socket/types.ts의 AvatarColor와 일치)
+const VALID_AVATAR_COLORS = ["default", "red", "green", "purple", "orange", "pink"] as const
+type LocalAvatarColor = typeof VALID_AVATAR_COLORS[number]
+
+// 아바타 색상 유효성 검사 헬퍼 함수
+function isValidAvatarColor(value: unknown): value is LocalAvatarColor {
+  return typeof value === "string" && VALID_AVATAR_COLORS.includes(value as LocalAvatarColor)
+}
+
+// 안전한 아바타 색상 반환 (유효하지 않으면 "default")
+function getSafeAvatarColor(value: unknown): LocalAvatarColor {
+  return isValidAvatarColor(value) ? value : "default"
+}
+
 // /api/guest/verify 응답 타입
 interface VerifyResponse {
   valid: boolean
@@ -106,10 +120,12 @@ export default function SpacePage() {
       console.log("[SpacePage] NextAuth session detected, using auth user")
       setIsAuthUser(true)
       // 로그인 사용자용 가상 세션 생성 (기존 로직 호환)
+      // ⚠️ avatar는 유효한 색상만 허용 (Google 프로필 URL이 아님!)
+      const safeAvatar = getSafeAvatarColor(authSession.user.image)
       const authUserSession: GuestSession = {
         sessionToken: `auth-${authSession.user.id || Date.now()}`,
         nickname: authSession.user.name || authSession.user.email?.split("@")[0] || "User",
-        avatar: authSession.user.image || "default",
+        avatar: safeAvatar,
         spaceId,
       }
       setSession(authUserSession)
@@ -117,8 +133,9 @@ export default function SpacePage() {
       setVerifiedUser({
         participantId: `user-${authSession.user.id}`,
         nickname: authUserSession.nickname,
-        avatar: authUserSession.avatar,
+        avatar: safeAvatar,
       })
+      console.log(`[SpacePage] Auth user avatar set to: ${safeAvatar}`)
       return
     }
 
@@ -201,14 +218,15 @@ export default function SpacePage() {
 
         const data: VerifyResponse = await res.json()
 
-        // 🔒 서버에서 파생된 participantId 저장
+        // 🔒 서버에서 파생된 participantId 저장 (avatar도 유효성 검사)
+        const safeAvatar = getSafeAvatarColor(data.avatar)
         setVerifiedUser({
           participantId: data.participantId,
           nickname: data.nickname,
-          avatar: data.avatar,
+          avatar: safeAvatar,
         })
 
-        console.log("[SpacePage] Session verified, participantId:", data.participantId)
+        console.log("[SpacePage] Session verified, participantId:", data.participantId, "avatar:", safeAvatar)
       } catch (err) {
         console.error("[SpacePage] Failed to verify session:", err)
         setError("세션 검증에 실패했습니다.")
@@ -376,6 +394,7 @@ export default function SpacePage() {
 
   // Main space view with ZEP-style layout
   // 🔒 userId는 서버 파생 participantId 사용 (session.sessionToken 대신)
+  // 🔒 avatar는 이미 getSafeAvatarColor로 검증됨
   return (
     <SpaceLayout
       spaceId={space.id}
@@ -384,7 +403,7 @@ export default function SpacePage() {
       spacePrimaryColor={space.primaryColor}
       userNickname={verifiedUser.nickname}
       userId={verifiedUser.participantId}
-      userAvatarColor={verifiedUser.avatar as "default" | "red" | "green" | "purple" | "orange" | "pink"}
+      userAvatarColor={verifiedUser.avatar as LocalAvatarColor}
       sessionToken={session.sessionToken}
       onExit={handleExit}
     />
