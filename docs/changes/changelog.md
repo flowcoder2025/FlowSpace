@@ -4,6 +4,31 @@
 
 ---
 
+## [2025-12-09] 캐릭터 스프라이트 Missing Texture 버그 수정
+
+### 수정
+
+**근본 원인 해결**:
+- Google 로그인 사용자의 `avatarColor`가 프로필 이미지 URL로 설정되는 버그 수정
+- Phaser에서 `character-https://...` 텍스처 키를 찾지 못해 "Missing Texture" 발생
+
+**변경 파일**:
+- `/src/app/space/[id]/page.tsx`
+  - 아바타 색상 유효성 검사 헬퍼 함수 추가 (`isValidAvatarColor`, `getSafeAvatarColor`)
+  - `VALID_AVATAR_COLORS` 상수 정의 (`socket/types.ts`의 `AvatarColor`와 일치)
+  - 로그인 사용자 및 게스트 세션 모두에 색상 검증 적용
+
+**패턴**:
+```tsx
+const VALID_AVATAR_COLORS = ["default", "red", "green", "purple", "orange", "pink"] as const
+
+function getSafeAvatarColor(value: unknown): LocalAvatarColor {
+  return isValidAvatarColor(value) ? value : "default"
+}
+```
+
+---
+
 ## [2025-12-08] PRD 재정립 및 문서 구조 개선
 
 ### 변경

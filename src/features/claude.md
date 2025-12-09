@@ -242,3 +242,4 @@ import { LoginForm } from "./components/LoginForm"
 | 2025-12-07 | FlowSpace 프로젝트 반영: space 모듈 중심으로 구조 업데이트 |
 | 2025-12-07 | LiveKit/Spaces API 보안 강화, 게스트 세션 검증 API 추가 |
 | 2025-12-07 | 🔒 보안 강화: participantId/playerId 서버 파생, Socket.io 세션 검증 추가 |
+| 2025-12-09 | 아바타 색상 검증 패턴 추가 (space/claude.md 7.2절 참조) |

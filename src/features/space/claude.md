@@ -266,6 +266,40 @@ eventBridge.on(GameEvents.PLAYER_MOVED, callback)
 - **영향 범위**: LiveKit 연동, VideoTile
 - **상태**: 분석 예정
 
+### 7.2 아바타 색상 검증 (✅ 해결됨 - 2025-12-09)
+
+**문제**:
+- Google 로그인 사용자의 `avatarColor`가 프로필 이미지 URL로 설정됨
+- Phaser에서 `character-https://...` 텍스처 키를 찾지 못해 "Missing Texture" 발생
+
+**근본 원인**:
+```tsx
+// ❌ 잘못된 코드 - authSession.user.image는 Google 프로필 URL
+avatar: authSession.user.image || "default"
+```
+
+**해결책 (page.tsx)**:
+```tsx
+// ✅ 아바타 색상 유효성 검사 헬퍼
+const VALID_AVATAR_COLORS = ["default", "red", "green", "purple", "orange", "pink"] as const
+type LocalAvatarColor = typeof VALID_AVATAR_COLORS[number]
+
+function isValidAvatarColor(value: unknown): value is LocalAvatarColor {
+  return typeof value === "string" && VALID_AVATAR_COLORS.includes(value as LocalAvatarColor)
+}
+
+function getSafeAvatarColor(value: unknown): LocalAvatarColor {
+  return isValidAvatarColor(value) ? value : "default"
+}
+
+// ✅ 사용 예시
+const safeAvatar = getSafeAvatarColor(authSession.user.image)  // "default" 반환
+```
+
+**영향 범위**:
+- `/src/app/space/[id]/page.tsx` - 진입점 수정
+- 로그인 사용자 및 게스트 모두 적용
+
 ---
 
 ## 8. 개발 가이드
@@ -315,3 +349,4 @@ DEBUG=socket.io* npm run socket:dev
 | 날짜 | 변경 |
 |-----|------|
 | 2025-12-08 | 초기 생성 - 현재 구현 상태 반영 |
+| 2025-12-09 | 아바타 색상 검증 이슈 해결 문서화 (7.2절 추가) |
