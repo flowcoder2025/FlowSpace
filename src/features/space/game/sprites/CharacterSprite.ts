@@ -1,6 +1,10 @@
 /**
  * Procedural Character Sprite Generator
- * Creates pixel-art style character sprites programmatically
+ * Creates pixel-art style character sprites using CanvasTexture
+ *
+ * NOTE: Uses CanvasTexture (HTML5 Canvas 2D) instead of graphics.generateTexture()
+ * for consistent behavior across development and production environments.
+ * WebGL-based graphics.generateTexture() is unstable in production builds.
  */
 import * as Phaser from "phaser"
 
@@ -13,15 +17,15 @@ export const CHARACTER_CONFIG = {
   HEIGHT: 32,
   FRAME_COUNT: 4, // Frames per animation
   COLORS: {
-    default: { body: 0x00cec9, outline: 0x00a8a8 },
-    red: { body: 0xe74c3c, outline: 0xc0392b },
-    green: { body: 0x2ecc71, outline: 0x27ae60 },
-    purple: { body: 0x9b59b6, outline: 0x8e44ad },
-    orange: { body: 0xe67e22, outline: 0xd35400 },
-    pink: { body: 0xfd79a8, outline: 0xe84393 },
-    yellow: { body: 0xfdcb6e, outline: 0xf39c12 },
-    blue: { body: 0x3498db, outline: 0x2980b9 },
-  } as Record<string, { body: number; outline: number }>,
+    default: { body: "#00cec9", outline: "#00a8a8" },
+    red: { body: "#e74c3c", outline: "#c0392b" },
+    green: { body: "#2ecc71", outline: "#27ae60" },
+    purple: { body: "#9b59b6", outline: "#8e44ad" },
+    orange: { body: "#e67e22", outline: "#d35400" },
+    pink: { body: "#fd79a8", outline: "#e84393" },
+    yellow: { body: "#fdcb6e", outline: "#f39c12" },
+    blue: { body: "#3498db", outline: "#2980b9" },
+  } as Record<string, { body: string; outline: string }>,
 }
 
 // Animation keys
@@ -37,8 +41,8 @@ export const ANIM_KEYS = {
 }
 
 /**
- * Generate character sprite sheet texture and add frames immediately
- * This function both creates the texture AND adds the frame data
+ * Generate character sprite sheet texture using CanvasTexture
+ * Uses HTML5 Canvas 2D API directly for environment-independent rendering
  */
 export function generateCharacterTexture(
   scene: Phaser.Scene,
@@ -53,8 +57,30 @@ export function generateCharacterTexture(
   const sheetHeight = HEIGHT * 4 // 4 directions
 
   try {
-    // Create graphics for drawing
-    const graphics = scene.make.graphics({ x: 0, y: 0 }, false)
+    // Remove existing texture if present
+    if (scene.textures.exists(textureKey)) {
+      scene.textures.remove(textureKey)
+    }
+
+    // Create CanvasTexture - this uses HTML5 Canvas directly, not WebGL
+    const canvasTexture = scene.textures.createCanvas(textureKey, sheetWidth, sheetHeight)
+
+    if (!canvasTexture) {
+      console.error(`[CharacterSprite] Failed to create canvas texture: ${textureKey}`)
+      return false
+    }
+
+    // Get the canvas context for drawing
+    const canvas = canvasTexture.getCanvas()
+    const ctx = canvas.getContext("2d")
+
+    if (!ctx) {
+      console.error(`[CharacterSprite] Failed to get canvas context: ${textureKey}`)
+      return false
+    }
+
+    // Clear canvas with transparent background
+    ctx.clearRect(0, 0, sheetWidth, sheetHeight)
 
     // Draw frames for each direction
     const directions = ["down", "left", "right", "up"]
@@ -62,22 +88,20 @@ export function generateCharacterTexture(
       for (let frame = 0; frame < FRAME_COUNT; frame++) {
         const x = frame * WIDTH
         const y = dirIndex * HEIGHT
-        drawCharacterFrame(graphics, x, y, color, direction, frame)
+        drawCharacterFrameCanvas(ctx, x, y, color, direction, frame)
       }
     })
 
-    // Generate texture from graphics
-    graphics.generateTexture(textureKey, sheetWidth, sheetHeight)
-    graphics.destroy()
+    // Refresh the texture to apply changes
+    canvasTexture.refresh()
 
-    // Verify texture was created
-    if (!scene.textures.exists(textureKey)) {
-      console.error(`[CharacterSprite] Failed to generate texture: ${textureKey}`)
+    // Get the texture and add frame data
+    const texture = scene.textures.get(textureKey)
+
+    if (!texture) {
+      console.error(`[CharacterSprite] Texture not found after creation: ${textureKey}`)
       return false
     }
-
-    // Get the texture and add frame data immediately
-    const texture = scene.textures.get(textureKey)
 
     // Add frames to the texture for sprite sheet slicing
     for (let dir = 0; dir < 4; dir++) {
@@ -98,7 +122,7 @@ export function generateCharacterTexture(
     }
 
     if (IS_DEV) {
-      console.log(`[CharacterSprite] Generated texture with frames: ${textureKey}`)
+      console.log(`[CharacterSprite] Generated CanvasTexture with frames: ${textureKey}`)
     }
     return true
   } catch (error) {
@@ -108,13 +132,13 @@ export function generateCharacterTexture(
 }
 
 /**
- * Draw a single character frame
+ * Draw a single character frame using Canvas 2D API
  */
-function drawCharacterFrame(
-  graphics: Phaser.GameObjects.Graphics,
+function drawCharacterFrameCanvas(
+  ctx: CanvasRenderingContext2D,
   x: number,
   y: number,
-  color: { body: number; outline: number },
+  color: { body: string; outline: string },
   direction: string,
   frame: number
 ): void {
@@ -124,11 +148,7 @@ function drawCharacterFrame(
   const walkOffset = frame % 2 === 1 ? 1 : 0
   const altWalk = frame === 1 || frame === 3
 
-  // Clear area
-  graphics.fillStyle(0x000000, 0)
-  graphics.fillRect(x, y, WIDTH, HEIGHT)
-
-  // Head (circle)
+  // Head position
   const headX = x + WIDTH / 2
   const headY = y + 8
   const headRadius = 6
@@ -137,71 +157,125 @@ function drawCharacterFrame(
   const bodyY = y + 14 + walkOffset
 
   // Draw outline/shadow first
-  graphics.fillStyle(color.outline)
+  ctx.fillStyle = color.outline
 
   // Head shadow
-  graphics.fillCircle(headX, headY + 1, headRadius)
+  ctx.beginPath()
+  ctx.arc(headX, headY + 1, headRadius, 0, Math.PI * 2)
+  ctx.fill()
 
-  // Body shadow (torso)
-  graphics.fillRoundedRect(x + 4, bodyY + 1, WIDTH - 8, 12, 3)
+  // Body shadow (torso) - rounded rect
+  drawRoundedRect(ctx, x + 4, bodyY + 1, WIDTH - 8, 12, 3)
+  ctx.fill()
 
   // Draw main body
-  graphics.fillStyle(color.body)
+  ctx.fillStyle = color.body
 
   // Head
-  graphics.fillCircle(headX, headY, headRadius)
+  ctx.beginPath()
+  ctx.arc(headX, headY, headRadius, 0, Math.PI * 2)
+  ctx.fill()
 
-  // Body (torso)
-  graphics.fillRoundedRect(x + 5, bodyY, WIDTH - 10, 11, 2)
+  // Body (torso) - rounded rect
+  drawRoundedRect(ctx, x + 5, bodyY, WIDTH - 10, 11, 2)
+  ctx.fill()
 
   // Legs with walk animation
   const legWidth = 5
   const legHeight = 8
   const legY = y + HEIGHT - legHeight - 2
 
+  ctx.fillStyle = color.outline
+
   if (direction === "left" || direction === "right") {
     // Side view - legs animate differently
     const legOffset = altWalk ? 2 : -2
-    graphics.fillStyle(color.outline)
-    graphics.fillRoundedRect(x + 7, legY + legOffset, legWidth, legHeight, 1)
-    graphics.fillRoundedRect(x + 12, legY - legOffset, legWidth, legHeight, 1)
+    drawRoundedRect(ctx, x + 7, legY + legOffset, legWidth, legHeight, 1)
+    ctx.fill()
+    drawRoundedRect(ctx, x + 12, legY - legOffset, legWidth, legHeight, 1)
+    ctx.fill()
   } else {
     // Front/back view
     const leftLegOffset = altWalk ? 1 : -1
     const rightLegOffset = altWalk ? -1 : 1
 
-    graphics.fillStyle(color.outline)
-    graphics.fillRoundedRect(x + 6, legY + leftLegOffset, legWidth, legHeight, 1)
-    graphics.fillRoundedRect(x + 13, legY + rightLegOffset, legWidth, legHeight, 1)
+    drawRoundedRect(ctx, x + 6, legY + leftLegOffset, legWidth, legHeight, 1)
+    ctx.fill()
+    drawRoundedRect(ctx, x + 13, legY + rightLegOffset, legWidth, legHeight, 1)
+    ctx.fill()
   }
 
   // Eyes based on direction
-  graphics.fillStyle(0xffffff)
   const eyeY = headY - 1
 
   if (direction === "down") {
     // Front facing - two eyes
-    graphics.fillCircle(headX - 2, eyeY, 1.5)
-    graphics.fillCircle(headX + 2, eyeY, 1.5)
+    ctx.fillStyle = "#ffffff"
+    ctx.beginPath()
+    ctx.arc(headX - 2, eyeY, 1.5, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.beginPath()
+    ctx.arc(headX + 2, eyeY, 1.5, 0, Math.PI * 2)
+    ctx.fill()
     // Pupils
-    graphics.fillStyle(0x2d3436)
-    graphics.fillCircle(headX - 2, eyeY + 0.5, 0.8)
-    graphics.fillCircle(headX + 2, eyeY + 0.5, 0.8)
+    ctx.fillStyle = "#2d3436"
+    ctx.beginPath()
+    ctx.arc(headX - 2, eyeY + 0.5, 0.8, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.beginPath()
+    ctx.arc(headX + 2, eyeY + 0.5, 0.8, 0, Math.PI * 2)
+    ctx.fill()
   } else if (direction === "up") {
     // Back facing - no eyes, maybe hair/back detail
-    graphics.fillStyle(color.outline)
-    graphics.fillCircle(headX, headY - 2, 2)
+    ctx.fillStyle = color.outline
+    ctx.beginPath()
+    ctx.arc(headX, headY - 2, 2, 0, Math.PI * 2)
+    ctx.fill()
   } else if (direction === "left") {
     // Left facing - one eye on left
-    graphics.fillCircle(headX - 3, eyeY, 1.5)
-    graphics.fillStyle(0x2d3436)
-    graphics.fillCircle(headX - 3.5, eyeY + 0.5, 0.8)
+    ctx.fillStyle = "#ffffff"
+    ctx.beginPath()
+    ctx.arc(headX - 3, eyeY, 1.5, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.fillStyle = "#2d3436"
+    ctx.beginPath()
+    ctx.arc(headX - 3.5, eyeY + 0.5, 0.8, 0, Math.PI * 2)
+    ctx.fill()
   } else if (direction === "right") {
     // Right facing - one eye on right
-    graphics.fillCircle(headX + 3, eyeY, 1.5)
-    graphics.fillStyle(0x2d3436)
-    graphics.fillCircle(headX + 3.5, eyeY + 0.5, 0.8)
+    ctx.fillStyle = "#ffffff"
+    ctx.beginPath()
+    ctx.arc(headX + 3, eyeY, 1.5, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.fillStyle = "#2d3436"
+    ctx.beginPath()
+    ctx.arc(headX + 3.5, eyeY + 0.5, 0.8, 0, Math.PI * 2)
+    ctx.fill()
   }
+}
+
+/**
+ * Helper function to draw rounded rectangle
+ */
+function drawRoundedRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number
+): void {
+  ctx.beginPath()
+  ctx.moveTo(x + radius, y)
+  ctx.lineTo(x + width - radius, y)
+  ctx.quadraticCurveTo(x + width, y, x + width, y + radius)
+  ctx.lineTo(x + width, y + height - radius)
+  ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height)
+  ctx.lineTo(x + radius, y + height)
+  ctx.quadraticCurveTo(x, y + height, x, y + height - radius)
+  ctx.lineTo(x, y + radius)
+  ctx.quadraticCurveTo(x, y, x + radius, y)
+  ctx.closePath()
 }
 
 /**
