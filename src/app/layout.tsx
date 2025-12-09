@@ -14,12 +14,12 @@ const geistMono = Geist_Mono({
 })
 
 export const metadata: Metadata = {
-  title: "Flow Metaverse | 브라우저에서 즉시 입장하는 2D 메타버스",
+  title: "FlowSpace | 브라우저에서 즉시 입장하는 2D 메타버스",
   description:
     "설치 없이 링크만 클릭하면 팀원들과 함께하는 가상 공간. 오피스, 강의실, 라운지 템플릿으로 10분 내 개설.",
   keywords: ["메타버스", "가상공간", "원격협업", "가상오피스", "화상회의"],
   openGraph: {
-    title: "Flow Metaverse",
+    title: "FlowSpace",
     description: "브라우저에서 즉시 입장하는 2D 메타버스",
     type: "website",
   },

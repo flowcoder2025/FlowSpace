@@ -178,7 +178,7 @@ export default function SpaceEntryPage() {
       // Show loading screen
       setShowLoading(true)
 
-      // Redirect to space page with WorkAdventure iframe
+      // Redirect to space page with Phaser game
       setTimeout(() => {
         router.push(`/space/${space?.id}`)
       }, 1500)

@@ -3,6 +3,10 @@
  *
  * GET /api/admin/stats
  * Returns aggregated statistics for admin dashboard
+ *
+ * ⚡ Performance Optimized (2025-12-09):
+ * - Promise.all()로 독립 쿼리 병렬 실행
+ * - 재방문율 계산 DB 집계 사용 (메모리 로드 최소화)
  */
 
 import { NextResponse } from "next/server"
@@ -45,26 +49,80 @@ export async function GET() {
     const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
     const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000)
 
-    // 1. Total visitors (unique guest sessions)
-    const totalVisitors = await prisma.guestSession.count({
-      where: { spaceId: { in: spaceIds } },
-    })
+    // ⚡ 병렬 실행: 독립적인 쿼리들을 Promise.all()로 동시 실행
+    const [
+      totalVisitors,
+      thisWeekVisitors,
+      lastWeekVisitors,
+      enterEvents,
+      enterLogs,
+      exitLogs,
+      returnRateData,
+    ] = await Promise.all([
+      // 1. Total visitors (unique guest sessions)
+      prisma.guestSession.count({
+        where: { spaceId: { in: spaceIds } },
+      }),
 
-    // This week's visitors
-    const thisWeekVisitors = await prisma.guestSession.count({
-      where: {
-        spaceId: { in: spaceIds },
-        createdAt: { gte: oneWeekAgo },
-      },
-    })
+      // 2. This week's visitors
+      prisma.guestSession.count({
+        where: {
+          spaceId: { in: spaceIds },
+          createdAt: { gte: oneWeekAgo },
+        },
+      }),
 
-    // Last week's visitors
-    const lastWeekVisitors = await prisma.guestSession.count({
-      where: {
-        spaceId: { in: spaceIds },
-        createdAt: { gte: twoWeeksAgo, lt: oneWeekAgo },
-      },
-    })
+      // 3. Last week's visitors
+      prisma.guestSession.count({
+        where: {
+          spaceId: { in: spaceIds },
+          createdAt: { gte: twoWeeksAgo, lt: oneWeekAgo },
+        },
+      }),
+
+      // 4. Peak concurrent (ENTER events grouped by date)
+      prisma.spaceEventLog.groupBy({
+        by: ["createdAt"],
+        where: {
+          spaceId: { in: spaceIds },
+          eventType: "ENTER",
+          createdAt: { gte: oneWeekAgo },
+        },
+        _count: true,
+      }),
+
+      // 5. Enter logs for duration calculation
+      prisma.spaceEventLog.findMany({
+        where: {
+          spaceId: { in: spaceIds },
+          eventType: "ENTER",
+          guestSessionId: { not: null },
+          createdAt: { gte: oneWeekAgo },
+        },
+        select: { guestSessionId: true, createdAt: true },
+        orderBy: { createdAt: "asc" },
+      }),
+
+      // 6. Exit logs for duration calculation
+      prisma.spaceEventLog.findMany({
+        where: {
+          spaceId: { in: spaceIds },
+          eventType: "EXIT",
+          guestSessionId: { not: null },
+          createdAt: { gte: oneWeekAgo },
+        },
+        select: { guestSessionId: true, createdAt: true },
+        orderBy: { createdAt: "asc" },
+      }),
+
+      // 7. ⚡ 재방문율 계산: DB 집계 사용 (전체 레코드 로드 대신)
+      // spaceId + nickname 조합으로 그룹화하여 2회 이상 방문한 조합 카운트
+      prisma.guestSession.groupBy({
+        by: ["spaceId", "nickname"],
+        where: { spaceId: { in: spaceIds } },
+        _count: true,
+      }),
+    ])
 
     // Calculate weekly change for visitors
     const visitorChange =
@@ -74,19 +132,7 @@ export async function GET() {
           ? 100
           : 0
 
-    // 2. Peak concurrent (estimate from ENTER events in hourly buckets)
-    // For now, use max daily ENTER events as a proxy
-    const enterEvents = await prisma.spaceEventLog.groupBy({
-      by: ["createdAt"],
-      where: {
-        spaceId: { in: spaceIds },
-        eventType: "ENTER",
-        createdAt: { gte: oneWeekAgo },
-      },
-      _count: true,
-    })
-
-    // Group by date and find max
+    // Group by date and find max for peak concurrent
     const dailyEnters = new Map<string, number>()
     enterEvents.forEach((e) => {
       const dateKey = e.createdAt.toISOString().split("T")[0]
@@ -94,31 +140,7 @@ export async function GET() {
     })
     const peakConcurrent = Math.max(...Array.from(dailyEnters.values()), 0)
 
-    // 3. Average duration (from ENTER to EXIT events)
-    // Get matching ENTER/EXIT pairs
-    const enterLogs = await prisma.spaceEventLog.findMany({
-      where: {
-        spaceId: { in: spaceIds },
-        eventType: "ENTER",
-        guestSessionId: { not: null },
-        createdAt: { gte: oneWeekAgo },
-      },
-      select: { guestSessionId: true, createdAt: true },
-      orderBy: { createdAt: "asc" },
-    })
-
-    const exitLogs = await prisma.spaceEventLog.findMany({
-      where: {
-        spaceId: { in: spaceIds },
-        eventType: "EXIT",
-        guestSessionId: { not: null },
-        createdAt: { gte: oneWeekAgo },
-      },
-      select: { guestSessionId: true, createdAt: true },
-      orderBy: { createdAt: "asc" },
-    })
-
-    // Calculate durations
+    // Calculate durations from ENTER/EXIT pairs
     const durations: number[] = []
     const exitMap = new Map<string, Date>()
     exitLogs.forEach((log) => {
@@ -146,28 +168,13 @@ export async function GET() {
         ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length / 60000)
         : 0
 
-    // 4. Return rate (sessions with same nickname in same space)
-    const guestSessions = await prisma.guestSession.findMany({
-      where: { spaceId: { in: spaceIds } },
-      select: { spaceId: true, nickname: true },
-    })
-
-    // Count unique visitors and returning visitors
-    const visitorKey = new Set<string>()
-    const returningVisitors = new Set<string>()
-
-    guestSessions.forEach((session) => {
-      const key = `${session.spaceId}-${session.nickname}`
-      if (visitorKey.has(key)) {
-        returningVisitors.add(key)
-      } else {
-        visitorKey.add(key)
-      }
-    })
-
+    // ⚡ 재방문율 계산 (DB 집계 결과 사용)
+    // returnRateData: { spaceId, nickname, _count }[]
+    const totalUniqueVisitors = returnRateData.length
+    const returningVisitors = returnRateData.filter((r) => r._count > 1).length
     const returnRate =
-      visitorKey.size > 0
-        ? Math.round((returningVisitors.size / visitorKey.size) * 100)
+      totalUniqueVisitors > 0
+        ? Math.round((returningVisitors / totalUniqueVisitors) * 100)
         : 0
 
     return NextResponse.json({

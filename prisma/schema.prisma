@@ -377,6 +377,8 @@ model SpaceEventLog {
   @@index([guestSessionId])
   @@index([eventType])
   @@index([createdAt(sort: Desc)])
+  // ⚡ 복합 인덱스: 통계 쿼리 최적화 (2025-12-09)
+  @@index([spaceId, eventType, createdAt])
 }
 
 enum SpaceEventType {

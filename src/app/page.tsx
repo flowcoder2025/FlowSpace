@@ -185,7 +185,7 @@ export default function LandingPage() {
         <Container>
           <VStack gap="xl" align="center" className="text-center">
             <Badge variant="secondary" className="px-4 py-1.5">
-              WorkAdventure 기반 오픈소스
+              Phaser 3 + LiveKit 자체 개발
             </Badge>
             <VStack gap="md" align="center">
               <Heading as="h1" size="3xl" className="max-w-4xl md:text-5xl">
@@ -337,11 +337,11 @@ export default function LandingPage() {
                 <Text weight="semibold">FlowSpace</Text>
               </HStack>
               <Text tone="muted" size="sm">
-                WorkAdventure 기반 오픈소스 메타버스 플랫폼
+                Phaser 3 기반 자체 개발 2D 메타버스 플랫폼
               </Text>
             </VStack>
             <Text tone="muted" size="sm">
-              &copy; 2025 Flow Metaverse. All rights reserved.
+              &copy; 2025 FlowSpace. All rights reserved.
             </Text>
           </HStack>
         </Container>

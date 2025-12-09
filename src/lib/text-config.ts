@@ -183,7 +183,7 @@ export const ID_TEXT: Record<string, string> = {
   "BTN.LANDING.TRY_DEMO": isAppsInToss ? "데모 체험하기" : "데모 체험",
 
   // Landing - Features
-  "LID.LANDING.FEATURES.TITLE": "왜 Flow Metaverse인가요?",
+  "LID.LANDING.FEATURES.TITLE": "왜 FlowSpace인가요?",
   "LID.LANDING.FEATURE.BRANDING.TITLE": "브랜딩",
   "LID.LANDING.FEATURE.BRANDING.DESC": "로고, 테마 컬러, 로딩 화면까지 우리 브랜드에 맞게",
   "LID.LANDING.FEATURE.TEMPLATE.TITLE": "템플릿",

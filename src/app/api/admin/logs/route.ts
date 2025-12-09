@@ -10,6 +10,9 @@
  * - startDate: filter logs from this date (ISO string)
  * - endDate: filter logs until this date (ISO string)
  * - format: "json" (default) or "csv" for export
+ *
+ * ⚡ Performance Optimized (2025-12-09):
+ * - count와 findMany를 Promise.all()로 병렬 실행
  */
 
 import { NextRequest, NextResponse } from "next/server"
@@ -76,23 +79,26 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Get total count
-    const total = await prisma.spaceEventLog.count({ where: whereClause })
+    // ⚡ 병렬 실행: count와 findMany를 동시에 실행
+    const [total, logs] = await Promise.all([
+      // Get total count
+      prisma.spaceEventLog.count({ where: whereClause }),
 
-    // Get logs with related data
-    const logs = await prisma.spaceEventLog.findMany({
-      where: whereClause,
-      include: {
-        user: {
-          select: { id: true, name: true, image: true },
+      // Get logs with related data
+      prisma.spaceEventLog.findMany({
+        where: whereClause,
+        include: {
+          user: {
+            select: { id: true, name: true, image: true },
+          },
+          guestSession: {
+            select: { id: true, nickname: true, avatar: true },
+          },
         },
-        guestSession: {
-          select: { id: true, nickname: true, avatar: true },
-        },
-      },
-      orderBy: { createdAt: "desc" },
-      take: limit,
-    })
+        orderBy: { createdAt: "desc" },
+        take: limit,
+      }),
+    ])
 
     // Transform logs
     const transformedLogs = logs.map((log) => ({
