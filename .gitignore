@@ -17,7 +17,8 @@ dist/
 .env.*.local
 # 운영 환경 시크릿 (LiveKit Cloud 등)
 .env.production
-# 참고: .env.development는 커밋 가능 (로컬 개발 설정, 민감 정보 없음)
+# 개발 환경 설정
+.env.development
 
 # Debug
 npm-debug.log*
