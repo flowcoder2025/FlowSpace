@@ -111,8 +111,17 @@ io.on("connection", (socket) => {
 
     // 개발 모드에서 dev- 세션은 검증 스킵 (테스트 편의)
     const isDevSession = IS_DEV && sessionToken?.startsWith("dev-")
+    // 🔐 인증 사용자 세션 (NextAuth 로그인 사용자)
+    const isAuthSession = sessionToken?.startsWith("auth-")
 
-    if (sessionToken && !isDevSession) {
+    if (isAuthSession) {
+      // 🔐 NextAuth 인증 사용자는 게스트 세션 검증 스킵
+      // playerId는 이미 page.tsx에서 `user-{userId}` 형태로 설정됨
+      verifiedPlayerId = playerId // user-{userId}
+      verifiedNickname = nickname
+      verifiedAvatarColor = avatarColor || "default"
+      console.log(`[Socket] Auth session detected, using auth user ID: ${verifiedPlayerId}`)
+    } else if (sessionToken && !isDevSession) {
       const verification = await verifyGuestSession(sessionToken, spaceId)
 
       if (!verification.valid) {
