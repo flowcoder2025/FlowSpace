@@ -160,6 +160,12 @@ export default function SpacePage() {
   useEffect(() => {
     if (!session) return
 
+    // 🔐 로그인 사용자는 이미 verifiedUser가 설정되어 있음, 스킵
+    if (isAuthUser) {
+      console.log("[SpacePage] Auth user detected, skipping guest verification")
+      return
+    }
+
     // Dev mode: 검증 API 호출 없이 가상 ID 생성
     if (devMode) {
       setVerifiedUser({
@@ -207,7 +213,7 @@ export default function SpacePage() {
     }
 
     verifySession()
-  }, [session, devMode])
+  }, [session, devMode, isAuthUser])
 
   // Fetch space data
   useEffect(() => {
