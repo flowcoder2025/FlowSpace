@@ -6,6 +6,7 @@
  *    or: npm run socket:dev
  */
 
+import { createServer } from "http"
 import { Server } from "socket.io"
 import type {
   ClientToServerEvents,
@@ -121,13 +122,24 @@ async function verifyGuestSession(
   }
 }
 
-// Create Socket.io server
+// Create HTTP server for health checks (Railway requirement)
+const httpServer = createServer((req, res) => {
+  if (req.url === "/health" || req.url === "/") {
+    res.writeHead(200, { "Content-Type": "application/json" })
+    res.end(JSON.stringify({ status: "ok", timestamp: Date.now() }))
+  } else {
+    res.writeHead(404)
+    res.end()
+  }
+})
+
+// Create Socket.io server attached to HTTP server
 const io = new Server<
   ClientToServerEvents,
   ServerToClientEvents,
   InterServerEvents,
   SocketData
->(PORT, {
+>(httpServer, {
   cors: {
     origin: CORS_ORIGINS,
     methods: ["GET", "POST"],
@@ -440,5 +452,9 @@ io.on("connection", (socket) => {
   })
 })
 
-console.log(`[Socket] Server running on port ${PORT}`)
-console.log(`[Socket] CORS enabled for: ${CORS_ORIGINS.join(", ")}`)
+// Start HTTP server (Socket.io attaches automatically)
+httpServer.listen(PORT, () => {
+  console.log(`[Socket] Server running on port ${PORT}`)
+  console.log(`[Socket] Health check: http://localhost:${PORT}/health`)
+  console.log(`[Socket] CORS enabled for: ${CORS_ORIGINS.join(", ")}`)
+})
