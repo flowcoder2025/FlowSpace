@@ -11,6 +11,11 @@ import {
   Button,
 } from "@/components/ui"
 import { SpaceLayout } from "@/features/space"
+import {
+  ParticipantEntryModal,
+  getSpaceParticipant,
+  saveSpaceParticipant,
+} from "@/features/space/components/ParticipantEntryModal"
 
 // ============================================
 // Types
@@ -97,6 +102,8 @@ export default function SpacePage() {
   const [error, setError] = useState<string | null>(null)
   // 🔑 로그인 필요 상태 (게스트 세션 없고 로그인도 안 된 경우)
   const [needsLogin, setNeedsLogin] = useState(false)
+  // 🎫 참가자명 입력 모달 상태 (로그인 사용자용)
+  const [showParticipantModal, setShowParticipantModal] = useState(false)
 
   // Load session from NextAuth or localStorage
   useEffect(() => {
@@ -117,25 +124,36 @@ export default function SpacePage() {
 
     // 🔐 NextAuth 로그인 사용자인 경우
     if (authSession?.user) {
-      console.log("[SpacePage] NextAuth session detected, using auth user")
+      console.log("[SpacePage] NextAuth session detected, checking saved participant info")
       setIsAuthUser(true)
-      // 로그인 사용자용 가상 세션 생성 (기존 로직 호환)
-      // ⚠️ avatar는 유효한 색상만 허용 (Google 프로필 URL이 아님!)
-      const safeAvatar = getSafeAvatarColor(authSession.user.image)
-      const authUserSession: GuestSession = {
-        sessionToken: `auth-${authSession.user.id || Date.now()}`,
-        nickname: authSession.user.name || authSession.user.email?.split("@")[0] || "User",
-        avatar: safeAvatar,
-        spaceId,
+
+      // 🎫 저장된 참가자 정보 확인 (공간별)
+      const savedParticipant = getSpaceParticipant(spaceId)
+
+      if (savedParticipant) {
+        // 저장된 참가자 정보가 있으면 사용
+        console.log("[SpacePage] Using saved participant:", savedParticipant.nickname)
+        const safeAvatar = getSafeAvatarColor(savedParticipant.avatar)
+        const authUserSession: GuestSession = {
+          sessionToken: `auth-${authSession.user.id || Date.now()}`,
+          nickname: savedParticipant.nickname,
+          avatar: safeAvatar,
+          spaceId,
+        }
+        setSession(authUserSession)
+        setVerifiedUser({
+          participantId: `user-${authSession.user.id}`,
+          nickname: savedParticipant.nickname,
+          avatar: safeAvatar,
+        })
+        // 마지막 방문 시간 업데이트
+        saveSpaceParticipant({ ...savedParticipant, lastVisit: Date.now() })
+      } else {
+        // 저장된 정보 없음 → 참가자명 입력 모달 표시
+        console.log("[SpacePage] No saved participant info, showing modal")
+        setShowParticipantModal(true)
+        setLoading(false)
       }
-      setSession(authUserSession)
-      // 로그인 사용자는 서버 검증 대신 바로 verifiedUser 설정
-      setVerifiedUser({
-        participantId: `user-${authSession.user.id}`,
-        nickname: authUserSession.nickname,
-        avatar: safeAvatar,
-      })
-      console.log(`[SpacePage] Auth user avatar set to: ${safeAvatar}`)
       return
     }
 
@@ -283,6 +301,42 @@ export default function SpacePage() {
     fetchSpace()
   }, [spaceId, session, devMode])
 
+  // 🎫 참가자명 입력 완료 핸들러 (로그인 사용자용)
+  const handleParticipantComplete = useCallback(
+    ({ nickname, avatar }: { nickname: string; avatar: string }) => {
+      if (!authSession?.user) return
+
+      console.log("[SpacePage] Participant entry completed:", nickname)
+      setShowParticipantModal(false)
+      setLoading(true)
+
+      const safeAvatar = getSafeAvatarColor(avatar)
+      const authUserSession: GuestSession = {
+        sessionToken: `auth-${authSession.user.id || Date.now()}`,
+        nickname,
+        avatar: safeAvatar,
+        spaceId,
+      }
+      setSession(authUserSession)
+      setVerifiedUser({
+        participantId: `user-${authSession.user.id}`,
+        nickname,
+        avatar: safeAvatar,
+      })
+    },
+    [authSession, spaceId]
+  )
+
+  // 🎫 닉네임 변경 핸들러 (설정에서 변경 시)
+  const handleNicknameChange = useCallback(
+    (nickname: string, avatar: string) => {
+      console.log("[SpacePage] Nickname changed:", nickname)
+      // 페이지 새로고침하여 새 세션으로 재연결
+      window.location.reload()
+    },
+    []
+  )
+
   // Handle exit
   const handleExit = useCallback(async () => {
     if (session) {
@@ -310,6 +364,28 @@ export default function SpacePage() {
 
     router.push("/")
   }, [session, router])
+
+  // 🎫 참가자명 입력 모달 (로그인 사용자 첫 입장)
+  if (showParticipantModal && authSession?.user) {
+    return (
+      <>
+        <main className="flex min-h-screen items-center justify-center bg-muted/30">
+          <VStack gap="lg" align="center" className="text-center">
+            <Text size="lg" className="text-muted-foreground">
+              공간 입장 준비 중...
+            </Text>
+          </VStack>
+        </main>
+        <ParticipantEntryModal
+          open={showParticipantModal}
+          spaceId={spaceId}
+          spaceName={space?.name || "공간"}
+          defaultNickname={authSession.user.name || authSession.user.email?.split("@")[0] || ""}
+          onComplete={handleParticipantComplete}
+        />
+      </>
+    )
+  }
 
   // Loading state
   if (loading) {
@@ -406,6 +482,7 @@ export default function SpacePage() {
       userAvatarColor={verifiedUser.avatar as LocalAvatarColor}
       sessionToken={session.sessionToken}
       onExit={handleExit}
+      onNicknameChange={handleNicknameChange}
     />
   )
 }

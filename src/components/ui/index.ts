@@ -33,6 +33,19 @@ export { Heading, headingVariants } from "./heading"
 export { Text, textVariants } from "./text"
 
 // ============================================
+// Feedback Components
+// ============================================
+export {
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalHeader,
+  ModalTitle,
+  ModalDescription,
+  ModalFooter,
+} from "./modal"
+
+// ============================================
 // Visual Components
 // ============================================
 export {

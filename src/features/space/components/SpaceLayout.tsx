@@ -14,6 +14,7 @@ import { ParticipantPanel } from "./video/ParticipantPanel"
 import { ScreenShareOverlay } from "./video/ScreenShare"
 import { ControlBar } from "./controls/ControlBar"
 import { GameCanvas } from "./game/GameCanvas"
+import { SpaceSettingsModal } from "./SpaceSettingsModal"
 import { useSocket } from "../socket"
 import { LiveKitRoomProvider, useLiveKitMedia } from "../livekit"
 import type { ChatMessageData, AvatarColor } from "../socket/types"
@@ -48,6 +49,7 @@ interface SpaceLayoutProps {
   userAvatarColor?: AvatarColor
   sessionToken?: string // 게스트 세션 토큰 (LiveKit 인증용)
   onExit: () => void
+  onNicknameChange?: (nickname: string, avatar: string) => void // 닉네임 변경 콜백
 }
 
 // ============================================
@@ -98,10 +100,14 @@ function SpaceLayoutContent({
   userAvatarColor = "default",
   sessionToken,
   onExit,
+  onNicknameChange,
 }: SpaceLayoutProps) {
   // Panel visibility
   const [isChatOpen, setIsChatOpen] = useState(true)
   const [isParticipantsOpen, setIsParticipantsOpen] = useState(true)
+
+  // Settings modal
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
 
   // Chat messages
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -239,6 +245,17 @@ function SpaceLayoutContent({
     setIsParticipantsOpen((prev) => !prev)
   }, [])
 
+  const handleOpenSettings = useCallback(() => {
+    setIsSettingsOpen(true)
+  }, [])
+
+  const handleSaveSettings = useCallback((nickname: string, avatar: string) => {
+    // 부모에게 닉네임 변경 알림 (재연결 필요)
+    if (onNicknameChange) {
+      onNicknameChange(nickname, avatar)
+    }
+  }, [onNicknameChange])
+
   // 🔧 오버레이 닫을 때 현재 트랙 ID 저장 (같은 트랙 재표시 방지)
   const handleCloseScreenShareOverlay = useCallback(() => {
     if (activeScreenShare?.screenTrack) {
@@ -337,7 +354,18 @@ function SpaceLayoutContent({
         onToggleScreenShare={handleToggleScreenShare}
         onToggleChat={handleToggleChat}
         onToggleParticipants={handleToggleParticipants}
+        onOpenSettings={handleOpenSettings}
         onDismissError={handleDismissError}
+      />
+
+      {/* Settings Modal */}
+      <SpaceSettingsModal
+        open={isSettingsOpen}
+        onOpenChange={setIsSettingsOpen}
+        spaceId={spaceId}
+        currentNickname={userNickname}
+        currentAvatar={userAvatarColor}
+        onSave={handleSaveSettings}
       />
 
       {/* Screen Share Overlay - Show when someone is sharing (except self) */}
