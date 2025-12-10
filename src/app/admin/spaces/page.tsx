@@ -13,7 +13,6 @@ import {
   Text,
   Button,
   Card,
-  CardHeader,
   CardContent,
   CardTitle,
   CardDescription,
@@ -374,7 +373,7 @@ export default function AdminSpacesPage() {
                   <CardContent className="py-12">
                     <VStack gap="lg" align="center">
                       <Text tone="muted">
-                        "{searchQuery}"에 대한 검색 결과가 없습니다
+                        &quot;{searchQuery}&quot;에 대한 검색 결과가 없습니다
                       </Text>
                       <Button
                         variant="outline"

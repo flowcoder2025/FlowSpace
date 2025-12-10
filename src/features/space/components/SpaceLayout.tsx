@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useMemo, useEffect } from "react"
+import { useState, useCallback, useMemo } from "react"
 import {
   Panel,
   PanelGroup,
@@ -27,11 +27,11 @@ function ResizeHandle({ className }: { className?: string }) {
   return (
     <PanelResizeHandle
       className={cn(
-        "group relative flex w-1 items-center justify-center bg-border transition-colors hover:bg-primary/50 data-[resize-handle-active]:bg-primary",
+        "group relative flex w-1 items-center justify-center bg-border transition-colors hover:bg-primary/50 data-resize-handle-active:bg-primary",
         className
       )}
     >
-      <div className="absolute h-8 w-1 rounded-full bg-muted-foreground/20 opacity-0 transition-opacity group-hover:opacity-100 group-data-[resize-handle-active]:opacity-100" />
+      <div className="absolute h-8 w-1 rounded-full bg-muted-foreground/20 opacity-0 transition-opacity group-hover:opacity-100 group-data-resize-handle-active:opacity-100" />
     </PanelResizeHandle>
   )
 }
@@ -126,7 +126,7 @@ function SpaceLayoutContent({
   const [currentAvatarColor, setCurrentAvatarColor] = useState<AvatarColor>(userAvatarColor)
 
   // Socket connection for game position sync (🔒 sessionToken으로 서버 검증)
-  const { isConnected, players, socketError, effectivePlayerId, sendMessage, updateProfile } = useSocket({
+  const { players, socketError, effectivePlayerId, sendMessage, updateProfile } = useSocket({
     spaceId,
     playerId: userId,
     nickname: currentNickname,
@@ -151,23 +151,17 @@ function SpaceLayoutContent({
   // Socket과 LiveKit 모두 서버에서 검증된 ID를 반환하므로 둘 중 하나를 사용
   const resolvedUserId = effectivePlayerId ?? localParticipantId ?? userId
 
-  // Dismiss media error state
-  const [dismissedError, setDismissedError] = useState(false)
+  // Dismiss media error state - track which error was dismissed
+  // (using error reference comparison instead of boolean flag to avoid effect setState)
+  const [dismissedErrorRef, setDismissedErrorRef] = useState<typeof mediaError>(null)
 
-  // Reset dismissed state when error changes
+  // Reset dismissed state when error changes by comparing references
   const handleDismissError = useCallback(() => {
-    setDismissedError(true)
-  }, [])
-
-  // Show error only if not dismissed
-  const displayError = mediaError && !dismissedError ? mediaError : null
-
-  // Reset dismissed state when new error occurs
-  useEffect(() => {
-    if (mediaError) {
-      setDismissedError(false)
-    }
+    setDismissedErrorRef(mediaError)
   }, [mediaError])
+
+  // Show error only if not dismissed (new error auto-shows by reference comparison)
+  const displayError = mediaError && mediaError !== dismissedErrorRef ? mediaError : null
 
   // Ensure local participant is in tracks (fallback if LiveKit not connected)
   // 🔒 resolvedUserId 사용 (서버 파생 ID)
@@ -207,22 +201,17 @@ function SpaceLayoutContent({
     return null
   }, [allParticipantTracks])
 
-  // Screen share overlay visibility (show remote screen shares, hide own)
-  const [showScreenShareOverlay, setShowScreenShareOverlay] = useState(true)
   // 🔧 마지막으로 닫은 화면공유 트랙 ID (새 화면공유 감지용)
+  // 파생 상태 패턴: closedScreenTrackId와 현재 트랙 ID 비교로 표시 여부 결정
   const [closedScreenTrackId, setClosedScreenTrackId] = useState<string | null>(null)
 
-  // 🔧 새 화면공유가 시작되면 오버레이 재활성화
-  // activeScreenShare가 바뀌거나 screenTrack?.id가 달라지면 overlay 재활성화
-  useEffect(() => {
-    if (activeScreenShare?.screenTrack) {
-      const currentTrackId = activeScreenShare.screenTrack.id
-      // 닫았던 트랙이 아닌 새 트랙이면 오버레이 재활성화
-      if (currentTrackId !== closedScreenTrackId) {
-        setShowScreenShareOverlay(true)
-      }
-    }
-  }, [activeScreenShare?.screenTrack?.id, closedScreenTrackId])
+  // Screen share overlay visibility - derived from track ID comparison
+  // 새 화면공유가 시작되면 (트랙 ID가 달라지면) 자동으로 오버레이 재활성화
+  const showScreenShareOverlay = useMemo(() => {
+    const screenTrack = activeScreenShare?.screenTrack
+    if (!screenTrack) return false
+    return screenTrack.id !== closedScreenTrackId
+  }, [activeScreenShare, closedScreenTrackId])
 
   // Handlers
   const handleSendMessage = useCallback((content: string) => {
@@ -269,12 +258,13 @@ function SpaceLayoutContent({
   }, [onNicknameChange, updateProfile])
 
   // 🔧 오버레이 닫을 때 현재 트랙 ID 저장 (같은 트랙 재표시 방지)
+  // setClosedScreenTrackId로 닫힌 트랙 ID를 저장하면 showScreenShareOverlay가 자동으로 false로 계산됨
   const handleCloseScreenShareOverlay = useCallback(() => {
-    if (activeScreenShare?.screenTrack) {
-      setClosedScreenTrackId(activeScreenShare.screenTrack.id)
+    const screenTrack = activeScreenShare?.screenTrack
+    if (screenTrack) {
+      setClosedScreenTrackId(screenTrack.id)
     }
-    setShowScreenShareOverlay(false)
-  }, [activeScreenShare?.screenTrack])
+  }, [activeScreenShare])
 
   return (
     <div className="flex h-screen flex-col bg-background">

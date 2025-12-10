@@ -17,9 +17,9 @@ import {
   useTracks,
   useLocalParticipant,
   useParticipants,
-  useRoomContext,
+  useMaybeRoomContext,
 } from "@livekit/components-react"
-import { Track, RoomEvent } from "livekit-client"
+import { Track } from "livekit-client"
 import type { ParticipantTrack, MediaState } from "./types"
 
 const IS_DEV = process.env.NODE_ENV === "development"
@@ -44,14 +44,9 @@ interface UseLiveKitMediaReturn {
 export function useLiveKitMedia(): UseLiveKitMediaReturn {
   const [mediaError, setMediaError] = useState<MediaError | null>(null)
 
-  // Room context - may be undefined if not inside LiveKitRoom
-  let room = null
-  let isInContext = true
-  try {
-    room = useRoomContext()
-  } catch {
-    isInContext = false
-  }
+  // Room context - returns undefined if not inside LiveKitRoom (no error thrown)
+  const room = useMaybeRoomContext()
+  const isInContext = !!room
 
   // Local participant
   const { localParticipant } = useLocalParticipant()

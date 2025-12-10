@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import {
   Button,
   Input,
@@ -30,6 +30,13 @@ interface ParticipantEntryModalProps {
   spaceId: string
   spaceName: string
   defaultNickname?: string
+  onComplete: (participant: { nickname: string; avatar: string }) => void
+}
+
+interface ParticipantFormProps {
+  spaceId: string
+  spaceName: string
+  defaultNickname: string
   onComplete: (participant: { nickname: string; avatar: string }) => void
 }
 
@@ -74,27 +81,17 @@ export function saveSpaceParticipant(participant: SpaceParticipant): void {
 }
 
 // ============================================
-// Component
+// Form Component (separated for key-based reset)
 // ============================================
-export function ParticipantEntryModal({
-  open,
+function ParticipantForm({
   spaceId,
   spaceName,
-  defaultNickname = "",
+  defaultNickname,
   onComplete,
-}: ParticipantEntryModalProps) {
+}: ParticipantFormProps) {
   const [nickname, setNickname] = useState(defaultNickname)
   const [avatar, setAvatar] = useState("default")
   const [error, setError] = useState<string | null>(null)
-
-  // Reset form when modal opens
-  useEffect(() => {
-    if (open) {
-      setNickname(defaultNickname)
-      setAvatar("default")
-      setError(null)
-    }
-  }, [open, defaultNickname])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -126,69 +123,95 @@ export function ParticipantEntryModal({
   }
 
   return (
+    <>
+      <ModalHeader>
+        <ModalTitle>공간 입장</ModalTitle>
+        <ModalDescription>
+          <span className="font-medium text-foreground">{spaceName}</span>
+          에서 사용할 참가자명을 입력해주세요
+        </ModalDescription>
+      </ModalHeader>
+
+      <form onSubmit={handleSubmit}>
+        <VStack gap="lg" className="pt-4">
+          {/* Nickname Input */}
+          <VStack gap="sm">
+            <Label htmlFor="participant-nickname">참가자명</Label>
+            <Input
+              id="participant-nickname"
+              value={nickname}
+              onChange={(e) => setNickname(e.target.value)}
+              placeholder="공간에서 사용할 이름"
+              maxLength={20}
+              autoFocus
+            />
+            <Text size="xs" tone="muted">
+              이 공간에서 다른 참가자에게 표시되는 이름입니다
+            </Text>
+          </VStack>
+
+          {/* Avatar Selection */}
+          <VStack gap="sm">
+            <Label>아바타 색상</Label>
+            <HStack gap="sm" className="flex-wrap">
+              {AVATAR_OPTIONS.map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => setAvatar(opt.id)}
+                  className={`size-12 rounded-full transition-all ${opt.color} ${
+                    avatar === opt.id
+                      ? "ring-2 ring-primary ring-offset-2"
+                      : "opacity-60 hover:opacity-100"
+                  }`}
+                  title={opt.name}
+                  aria-label={`${opt.name} 색상 선택`}
+                  aria-pressed={avatar === opt.id}
+                />
+              ))}
+            </HStack>
+          </VStack>
+
+          {/* Error Message */}
+          {error && (
+            <Text size="sm" className="text-destructive">
+              {error}
+            </Text>
+          )}
+
+          {/* Submit Button */}
+          <Button type="submit" className="w-full">
+            입장하기
+          </Button>
+        </VStack>
+      </form>
+    </>
+  )
+}
+
+// ============================================
+// Modal Component
+// ============================================
+export function ParticipantEntryModal({
+  open,
+  spaceId,
+  spaceName,
+  defaultNickname = "",
+  onComplete,
+}: ParticipantEntryModalProps) {
+  return (
     <Modal open={open} onOpenChange={() => {}}>
       <ModalContent className="sm:max-w-md" preventClose>
-        <ModalHeader>
-          <ModalTitle>공간 입장</ModalTitle>
-          <ModalDescription>
-            <span className="font-medium text-foreground">{spaceName}</span>
-            에서 사용할 참가자명을 입력해주세요
-          </ModalDescription>
-        </ModalHeader>
-
-        <form onSubmit={handleSubmit}>
-          <VStack gap="lg" className="pt-4">
-            {/* Nickname Input */}
-            <VStack gap="sm">
-              <Label htmlFor="participant-nickname">참가자명</Label>
-              <Input
-                id="participant-nickname"
-                value={nickname}
-                onChange={(e) => setNickname(e.target.value)}
-                placeholder="공간에서 사용할 이름"
-                maxLength={20}
-                autoFocus
-              />
-              <Text size="xs" tone="muted">
-                이 공간에서 다른 참가자에게 표시되는 이름입니다
-              </Text>
-            </VStack>
-
-            {/* Avatar Selection */}
-            <VStack gap="sm">
-              <Label>아바타 색상</Label>
-              <HStack gap="sm" className="flex-wrap">
-                {AVATAR_OPTIONS.map((opt) => (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    onClick={() => setAvatar(opt.id)}
-                    className={`size-12 rounded-full transition-all ${opt.color} ${
-                      avatar === opt.id
-                        ? "ring-2 ring-primary ring-offset-2"
-                        : "opacity-60 hover:opacity-100"
-                    }`}
-                    title={opt.name}
-                    aria-label={`${opt.name} 색상 선택`}
-                    aria-pressed={avatar === opt.id}
-                  />
-                ))}
-              </HStack>
-            </VStack>
-
-            {/* Error Message */}
-            {error && (
-              <Text size="sm" className="text-destructive">
-                {error}
-              </Text>
-            )}
-
-            {/* Submit Button */}
-            <Button type="submit" className="w-full">
-              입장하기
-            </Button>
-          </VStack>
-        </form>
+        {/* Key를 사용하여 모달이 열릴 때마다 폼 상태 리셋 */}
+        {open && (
+          <ParticipantForm
+            key={`${spaceId}-${open}`}
+            spaceId={spaceId}
+            spaceName={spaceName}
+            defaultNickname={defaultNickname}
+            onComplete={onComplete}
+          />
+        )}
       </ModalContent>
     </Modal>
   )

@@ -135,33 +135,6 @@ export default function ProfilePage() {
   useEffect(() => {
     if (status !== "authenticated") return
 
-    async function fetchData() {
-      try {
-        const [spacesRes, statsRes] = await Promise.all([
-          fetch("/api/admin/spaces"),
-          fetch("/api/admin/stats"),
-        ])
-
-        if (spacesRes.ok) {
-          const spacesData = await spacesRes.json()
-          setSpaces(spacesData.spaces || [])
-        }
-
-        if (statsRes.ok) {
-          const statsData = await statsRes.json()
-          setStats({
-            totalSpaces: spacesData?.spaces?.length || 0,
-            totalVisitors: statsData.totalVisitors || 0,
-            totalEvents: statsData.peakConcurrent || 0,
-          })
-        }
-      } catch (err) {
-        console.error("Error fetching profile data:", err)
-      } finally {
-        setLoading(false)
-      }
-    }
-
     // Declare spacesData outside to use in stats
     let spacesData: { spaces?: SpaceData[] } | null = null
 

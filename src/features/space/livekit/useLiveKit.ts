@@ -10,7 +10,7 @@ import {
   RemoteTrackPublication,
   ConnectionState,
 } from "livekit-client"
-import type { LiveKitConfig, MediaState, ParticipantTrack } from "./types"
+import type { MediaState, ParticipantTrack } from "./types"
 
 const LIVEKIT_URL = process.env.NEXT_PUBLIC_LIVEKIT_URL || "ws://localhost:7880"
 const IS_DEV = process.env.NODE_ENV === "development"
@@ -97,6 +97,8 @@ export function useLiveKit({
   const [mediaError, setMediaError] = useState<MediaError | null>(null)
   // 🔒 서버에서 파생된 실제 participantId (클라이언트 props와 다를 수 있음)
   const [effectiveParticipantId, setEffectiveParticipantId] = useState<string | null>(null)
+  // Room 인스턴스 상태 (ref와 별도로 관리하여 render 시점에 안전하게 접근)
+  const [room, setRoom] = useState<Room | null>(null)
 
   // 미디어 에러 파싱 헬퍼
   const parseMediaError = useCallback((error: unknown): MediaError => {
@@ -282,8 +284,10 @@ export function useLiveKit({
     setParticipantTracks(tracks)
   }, [])
 
-  // 🔧 ref 동기화: 함수가 변경될 때마다 ref 업데이트
-  updateParticipantTracksRef.current = updateParticipantTracks
+  // 🔧 ref 동기화: 함수가 변경될 때마다 ref 업데이트 (useEffect 내에서)
+  useEffect(() => {
+    updateParticipantTracksRef.current = updateParticipantTracks
+  }, [updateParticipantTracks])
 
   // Connect to room
   const connect = useCallback(async () => {
@@ -358,6 +362,7 @@ export function useLiveKit({
 
       const room = new Room()
       roomRef.current = room
+      setRoom(room)
 
       // Setup event listeners
       room.on(RoomEvent.ConnectionStateChanged, (state) => {
@@ -427,7 +432,7 @@ export function useLiveKit({
         updateParticipantTracksRef.current(room)
       })
 
-      room.on(RoomEvent.LocalTrackPublished, (publication, participant) => {
+      room.on(RoomEvent.LocalTrackPublished, (publication) => {
         if (IS_DEV) {
           console.log("[LiveKit] Local track published:", {
             trackSid: publication.trackSid,
@@ -439,7 +444,7 @@ export function useLiveKit({
         updateMediaStateRef.current(room.localParticipant)
       })
 
-      room.on(RoomEvent.LocalTrackUnpublished, (publication, participant) => {
+      room.on(RoomEvent.LocalTrackUnpublished, (publication) => {
         if (IS_DEV) {
           console.log("[LiveKit] Local track unpublished:", {
             trackSid: publication.trackSid,
@@ -449,7 +454,7 @@ export function useLiveKit({
         updateMediaStateRef.current(room.localParticipant)
       })
 
-      room.on(RoomEvent.ActiveSpeakersChanged, (speakers) => {
+      room.on(RoomEvent.ActiveSpeakersChanged, () => {
         updateParticipantTracksRef.current(room)
       })
 
@@ -520,6 +525,7 @@ export function useLiveKit({
         }
         room.disconnect()
         roomRef.current = null
+        setRoom(null)
         isConnectingRef.current = false
         connectionAttemptedRef.current = false
         return
@@ -540,6 +546,7 @@ export function useLiveKit({
       setConnectionError(errorMessage)
       setIsAvailable(false)
       roomRef.current = null
+      setRoom(null)
       isConnectingRef.current = false
 
       // 개발 환경에서는 경고만 출력 (에러 스팸 방지)
@@ -550,7 +557,7 @@ export function useLiveKit({
       }
     }
     // 🔧 ref를 사용하므로 updateParticipantTracks 의존성 제거
-  }, [getToken])
+  }, [getToken, parseMediaError])
 
   // Disconnect from room
   const disconnect = useCallback((allowReconnect = false) => {
@@ -561,6 +568,7 @@ export function useLiveKit({
     if (roomRef.current) {
       roomRef.current.disconnect()
       roomRef.current = null
+      setRoom(null)
     }
 
     // 명시적인 재연결 허용 시에만 상태 리셋
@@ -588,8 +596,10 @@ export function useLiveKit({
     })
   }, [])
 
-  // 🔧 ref 동기화: 함수가 변경될 때마다 ref 업데이트
-  updateMediaStateRef.current = updateMediaState
+  // 🔧 ref 동기화: 함수가 변경될 때마다 ref 업데이트 (useEffect 내에서)
+  useEffect(() => {
+    updateMediaStateRef.current = updateMediaState
+  }, [updateMediaState])
 
   // Toggle camera
   // 🔧 React 상태(mediaState) 대신 LiveKit participant의 실시간 상태 직접 참조
@@ -757,6 +767,7 @@ export function useLiveKit({
   }, [])
 
   // Auto-connect when enabled
+  // Note: connect()는 async로 defer하여 effect 내 동기적 setState 방지
   useEffect(() => {
     // 마운트 상태 추적
     mountedRef.current = true
@@ -766,7 +777,13 @@ export function useLiveKit({
     }
 
     if (enabled) {
-      connect()
+      // Defer connection to avoid synchronous setState in effect
+      // connect() 내부의 setState 호출이 effect body에서 직접 실행되지 않도록 함
+      void Promise.resolve().then(() => {
+        if (mountedRef.current) {
+          connect()
+        }
+      })
     }
 
     return () => {
@@ -781,7 +798,7 @@ export function useLiveKit({
   }, [enabled, connect, disconnect])
 
   return {
-    room: roomRef.current,
+    room,
     connectionState,
     connectionError,
     isAvailable,

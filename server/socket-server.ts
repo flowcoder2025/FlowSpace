@@ -215,7 +215,7 @@ io.on("connection", (socket) => {
     const room = getOrCreateRoom(spaceId)
 
     // 🔒 중복 접속 체크: 같은 playerId가 이미 있으면 기존 세션 제거
-    const existingEntry = Array.from(room.entries()).find(([_, p]) => p.id === verifiedPlayerId)
+    const existingEntry = Array.from(room.entries()).find(([, p]) => p.id === verifiedPlayerId)
     if (existingEntry) {
       console.log(`[Socket] Duplicate session detected for ${verifiedPlayerId}, updating position`)
       // 기존 위치 정보 유지 (재연결 시 위치 보존)

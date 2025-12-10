@@ -104,7 +104,6 @@ function TemplateSelectCard({
 // Access Type Button
 // ============================================
 function AccessTypeButton({
-  type,
   label,
   description,
   selected,

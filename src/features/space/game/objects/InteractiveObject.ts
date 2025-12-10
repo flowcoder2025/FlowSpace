@@ -308,7 +308,6 @@ export class InteractiveObject extends Phaser.GameObjects.Container {
     })
 
     // Flash effect
-    const colors = OBJECT_CONFIG.COLORS[this.interactionType]
     this.scene.tweens.add({
       targets: this.glowSprite,
       alpha: 1,

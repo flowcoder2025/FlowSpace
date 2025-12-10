@@ -190,7 +190,7 @@ export function VideoTile({ track, isLocal = false, isScreenShare = false, class
       activeVideoTrack.removeEventListener("ended", handleTrackEnded)
       clearVideoElement(video)
     }
-  }, [activeVideoTrack, shouldShowVideo, isTrackMuted, track.participantName, track.revision, isScreenShare, clearVideoElement, isLocal])
+  }, [activeVideoTrack, shouldShowVideo, isTrackMuted, track.participantName, track.participantId, track.revision, isScreenShare, isTrackActuallyLive, clearVideoElement, isLocal])
 
   // Attach audio track to audio element (for remote participants only)
   useEffect(() => {
@@ -209,11 +209,16 @@ export function VideoTile({ track, isLocal = false, isScreenShare = false, class
         })
       }
 
-      // 오디오 재생 시도
-      tryPlayAudio()
+      // 오디오 재생 시도 - defer to avoid synchronous setState in effect
+      void Promise.resolve().then(() => {
+        tryPlayAudio()
+      })
     } else {
       audio.srcObject = null
-      setAudioBlocked(false)
+      // Defer setState to avoid synchronous setState in effect
+      void Promise.resolve().then(() => {
+        setAudioBlocked(false)
+      })
     }
 
     return () => {

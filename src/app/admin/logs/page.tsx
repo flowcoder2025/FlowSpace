@@ -16,7 +16,6 @@ import {
   CardTitle,
   Badge,
   Input,
-  Divider,
 } from "@/components/ui"
 import { getText } from "@/lib/text-config"
 

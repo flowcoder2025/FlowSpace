@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useMemo } from "react"
 import {
   Button,
   Input,
@@ -29,6 +29,14 @@ interface SpaceSettingsModalProps {
   onSave: (nickname: string, avatar: string) => void
 }
 
+interface SettingsFormProps {
+  spaceId: string
+  currentNickname: string
+  currentAvatar: string
+  onSave: (nickname: string, avatar: string) => void
+  onCancel: () => void
+}
+
 // ============================================
 // Avatar Options
 // ============================================
@@ -42,35 +50,25 @@ const AVATAR_OPTIONS = [
 ] as const
 
 // ============================================
-// Component
+// Form Component (separated for key-based reset)
 // ============================================
-export function SpaceSettingsModal({
-  open,
-  onOpenChange,
+function SettingsForm({
   spaceId,
   currentNickname,
   currentAvatar,
   onSave,
-}: SpaceSettingsModalProps) {
+  onCancel,
+}: SettingsFormProps) {
+  // Initial values come from props (key change resets component)
   const [nickname, setNickname] = useState(currentNickname)
   const [avatar, setAvatar] = useState(currentAvatar)
   const [error, setError] = useState<string | null>(null)
-  const [hasChanges, setHasChanges] = useState(false)
 
-  // Reset form when modal opens
-  useEffect(() => {
-    if (open) {
-      setNickname(currentNickname)
-      setAvatar(currentAvatar)
-      setError(null)
-      setHasChanges(false)
-    }
-  }, [open, currentNickname, currentAvatar])
-
-  // Track changes
-  useEffect(() => {
-    setHasChanges(nickname !== currentNickname || avatar !== currentAvatar)
-  }, [nickname, avatar, currentNickname, currentAvatar])
+  // Derived state: has changes (no effect needed)
+  const hasChanges = useMemo(
+    () => nickname !== currentNickname || avatar !== currentAvatar,
+    [nickname, avatar, currentNickname, currentAvatar]
+  )
 
   const handleSave = () => {
     setError(null)
@@ -98,77 +96,109 @@ export function SpaceSettingsModal({
 
     // Notify parent and close
     onSave(trimmedNickname, avatar)
+  }
+
+  return (
+    <>
+      <ModalHeader>
+        <ModalTitle>공간 설정</ModalTitle>
+        <ModalDescription>
+          이 공간에서 사용할 참가자 정보를 변경할 수 있습니다
+        </ModalDescription>
+      </ModalHeader>
+
+      <VStack gap="lg" className="py-4">
+        {/* Nickname Input */}
+        <VStack gap="sm">
+          <Label htmlFor="settings-nickname">참가자명</Label>
+          <Input
+            id="settings-nickname"
+            value={nickname}
+            onChange={(e) => setNickname(e.target.value)}
+            placeholder="공간에서 사용할 이름"
+            maxLength={20}
+          />
+        </VStack>
+
+        {/* Avatar Selection */}
+        <VStack gap="sm">
+          <Label>아바타 색상</Label>
+          <HStack gap="sm" className="flex-wrap">
+            {AVATAR_OPTIONS.map((opt) => (
+              <button
+                key={opt.id}
+                type="button"
+                onClick={() => setAvatar(opt.id)}
+                className={`size-10 rounded-full transition-all ${opt.color} ${
+                  avatar === opt.id
+                    ? "ring-2 ring-primary ring-offset-2"
+                    : "opacity-60 hover:opacity-100"
+                }`}
+                title={opt.name}
+                aria-label={`${opt.name} 색상 선택`}
+                aria-pressed={avatar === opt.id}
+              />
+            ))}
+          </HStack>
+        </VStack>
+
+        {/* Error Message */}
+        {error && (
+          <Text size="sm" className="text-destructive">
+            {error}
+          </Text>
+        )}
+
+        {/* Change Notice */}
+        {hasChanges && (
+          <Text size="xs" tone="muted" className="text-center">
+            변경사항을 저장하면 공간에 다시 연결됩니다
+          </Text>
+        )}
+      </VStack>
+
+      <ModalFooter>
+        <Button variant="outline" onClick={onCancel}>
+          취소
+        </Button>
+        <Button onClick={handleSave} disabled={!hasChanges}>
+          저장
+        </Button>
+      </ModalFooter>
+    </>
+  )
+}
+
+// ============================================
+// Modal Component
+// ============================================
+export function SpaceSettingsModal({
+  open,
+  onOpenChange,
+  spaceId,
+  currentNickname,
+  currentAvatar,
+  onSave,
+}: SpaceSettingsModalProps) {
+  const handleSave = (nickname: string, avatar: string) => {
+    onSave(nickname, avatar)
     onOpenChange(false)
   }
 
   return (
     <Modal open={open} onOpenChange={onOpenChange}>
       <ModalContent className="sm:max-w-md">
-        <ModalHeader>
-          <ModalTitle>공간 설정</ModalTitle>
-          <ModalDescription>
-            이 공간에서 사용할 참가자 정보를 변경할 수 있습니다
-          </ModalDescription>
-        </ModalHeader>
-
-        <VStack gap="lg" className="py-4">
-          {/* Nickname Input */}
-          <VStack gap="sm">
-            <Label htmlFor="settings-nickname">참가자명</Label>
-            <Input
-              id="settings-nickname"
-              value={nickname}
-              onChange={(e) => setNickname(e.target.value)}
-              placeholder="공간에서 사용할 이름"
-              maxLength={20}
-            />
-          </VStack>
-
-          {/* Avatar Selection */}
-          <VStack gap="sm">
-            <Label>아바타 색상</Label>
-            <HStack gap="sm" className="flex-wrap">
-              {AVATAR_OPTIONS.map((opt) => (
-                <button
-                  key={opt.id}
-                  type="button"
-                  onClick={() => setAvatar(opt.id)}
-                  className={`size-10 rounded-full transition-all ${opt.color} ${
-                    avatar === opt.id
-                      ? "ring-2 ring-primary ring-offset-2"
-                      : "opacity-60 hover:opacity-100"
-                  }`}
-                  title={opt.name}
-                  aria-label={`${opt.name} 색상 선택`}
-                  aria-pressed={avatar === opt.id}
-                />
-              ))}
-            </HStack>
-          </VStack>
-
-          {/* Error Message */}
-          {error && (
-            <Text size="sm" className="text-destructive">
-              {error}
-            </Text>
-          )}
-
-          {/* Change Notice */}
-          {hasChanges && (
-            <Text size="xs" tone="muted" className="text-center">
-              변경사항을 저장하면 공간에 다시 연결됩니다
-            </Text>
-          )}
-        </VStack>
-
-        <ModalFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            취소
-          </Button>
-          <Button onClick={handleSave} disabled={!hasChanges}>
-            저장
-          </Button>
-        </ModalFooter>
+        {/* Key를 사용하여 모달이 열릴 때마다 폼 상태 리셋 */}
+        {open && (
+          <SettingsForm
+            key={`${spaceId}-${currentNickname}-${currentAvatar}-${open}`}
+            spaceId={spaceId}
+            currentNickname={currentNickname}
+            currentAvatar={currentAvatar}
+            onSave={handleSave}
+            onCancel={() => onOpenChange(false)}
+          />
+        )}
       </ModalContent>
     </Modal>
   )

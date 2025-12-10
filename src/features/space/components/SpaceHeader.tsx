@@ -1,6 +1,5 @@
 "use client"
 
-import { useRouter } from "next/navigation"
 import { HStack, Text, Button } from "@/components/ui"
 
 interface SpaceHeaderProps {

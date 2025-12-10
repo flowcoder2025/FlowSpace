@@ -73,6 +73,7 @@ export default function GlobalError({
               >
                 다시 시도
               </button>
+              {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- global-error는 Router 컨텍스트 외부라서 Link 사용 불가 */}
               <a
                 href="/"
                 className="rounded-lg bg-teal-500 px-4 py-2 text-sm font-medium text-white hover:bg-teal-600"

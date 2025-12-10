@@ -14,7 +14,6 @@ import {
   generateAllTileTextures,
   getRandomFloorKey,
   getRandomWallKey,
-  getRandomAccentKey,
   TILE_CONFIG,
 } from "../tiles"
 import {

@@ -197,7 +197,7 @@ function generateAccentTexture(scene: Phaser.Scene, key: string, variant: number
 
   const size = TILE_CONFIG.SIZE
   const graphics = scene.add.graphics()
-  const { base, light, dark, glow } = TILE_PALETTE.accent
+  const { base, dark, glow } = TILE_PALETTE.accent
   const floor = TILE_PALETTE.floor.base
 
   // Draw floor base first
