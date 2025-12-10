@@ -4,7 +4,7 @@
  */
 import * as Phaser from "phaser"
 import { MAP_CONFIG } from "../config"
-import { eventBridge, GameEvents, type PlayerPosition } from "../events"
+import { eventBridge, GameEvents, type PlayerPosition, type ChatFocusPayload } from "../events"
 import {
   createCharacterAnimationsFromSpritesheet,
   getAnimationKey,
@@ -56,6 +56,7 @@ export class MainScene extends Phaser.Scene {
   private isMoving = false
   private isJumping = false
   private jumpCooldown = false
+  private isChatActive = false // 채팅 활성화 시 게임 입력 차단
   private playerId: string = ""
   private playerNickname: string = ""
   private playerAvatarColor: AvatarColor = "default"
@@ -75,6 +76,7 @@ export class MainScene extends Phaser.Scene {
   private handleRemotePlayerJump!: (data: unknown) => void
   private handleLocalProfileUpdate!: (data: unknown) => void
   private handleRemoteProfileUpdate!: (data: unknown) => void
+  private handleChatFocusChanged!: (data: unknown) => void
 
   // Jump configuration
   private readonly JUMP_HEIGHT = 20
@@ -650,6 +652,15 @@ export class MainScene extends Phaser.Scene {
       this.updateRemoteProfile(id, nickname, avatarColor)
     }
 
+    // 💬 Chat focus handler (채팅 활성화 시 게임 입력 차단)
+    this.handleChatFocusChanged = (data: unknown) => {
+      const { isActive } = data as ChatFocusPayload
+      this.isChatActive = isActive
+      if (IS_DEV) {
+        console.log(`[MainScene] Chat focus changed: ${isActive ? "ACTIVE" : "INACTIVE"}`)
+      }
+    }
+
     // Listen for remote player events
     eventBridge.on(GameEvents.REMOTE_PLAYER_UPDATE, this.handleRemotePlayerUpdate)
     eventBridge.on(GameEvents.REMOTE_PLAYER_JOIN, this.handleRemotePlayerJoin)
@@ -659,6 +670,9 @@ export class MainScene extends Phaser.Scene {
     // 🔄 Listen for profile update events
     eventBridge.on(GameEvents.LOCAL_PROFILE_UPDATE, this.handleLocalProfileUpdate)
     eventBridge.on(GameEvents.REMOTE_PROFILE_UPDATE, this.handleRemoteProfileUpdate)
+
+    // 💬 Listen for chat focus events
+    eventBridge.on(GameEvents.CHAT_FOCUS_CHANGED, this.handleChatFocusChanged)
   }
 
   private processPendingRemotePlayerEvents() {
@@ -1006,6 +1020,30 @@ export class MainScene extends Phaser.Scene {
     const playerBody = this.playerContainer.body as Phaser.Physics.Arcade.Body
     const { PLAYER_SPEED } = MAP_CONFIG
 
+    // 💬 채팅 활성화 시 게임 입력 차단
+    if (this.isChatActive) {
+      // 이동 중이었다면 멈춤 처리
+      if (this.isMoving) {
+        playerBody.setVelocity(0)
+        this.isMoving = false
+        // Idle 애니메이션으로 전환
+        const idleAnim = getAnimationKey(this.playerDirection, false, this.playerAvatarColor)
+        if (this.anims.exists(idleAnim) && this.playerSprite.anims.currentAnim?.key !== idleAnim) {
+          this.playerSprite.play(idleAnim)
+        }
+        // 정지 상태 전파
+        const position: PlayerPosition = {
+          id: this.playerId,
+          x: this.playerContainer.x,
+          y: this.playerContainer.y,
+          direction: this.playerDirection,
+          isMoving: false,
+        }
+        eventBridge.emit(GameEvents.PLAYER_MOVED, position)
+      }
+      return // 나머지 입력 처리 건너뛰기
+    }
+
     // Reset velocity
     playerBody.setVelocity(0)
 
@@ -1109,6 +1147,10 @@ export class MainScene extends Phaser.Scene {
     }
     if (this.handleRemoteProfileUpdate) {
       eventBridge.off(GameEvents.REMOTE_PROFILE_UPDATE, this.handleRemoteProfileUpdate)
+    }
+    // 💬 Clean up chat focus event listener
+    if (this.handleChatFocusChanged) {
+      eventBridge.off(GameEvents.CHAT_FOCUS_CHANGED, this.handleChatFocusChanged)
     }
 
     // Clean up remote players (containers destroy their children including sprites)

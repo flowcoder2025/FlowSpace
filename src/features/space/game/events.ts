@@ -65,6 +65,9 @@ export const GameEvents = {
   // Profile update events (닉네임/아바타 핫 업데이트)
   LOCAL_PROFILE_UPDATE: "local:profile:update",
   REMOTE_PROFILE_UPDATE: "remote:profile:update",
+
+  // Chat events (채팅 모드 전환)
+  CHAT_FOCUS_CHANGED: "chat:focusChanged",
 } as const
 
 // Player position type
@@ -74,4 +77,9 @@ export interface PlayerPosition {
   y: number
   direction: "up" | "down" | "left" | "right"
   isMoving: boolean
+}
+
+// Chat focus payload type
+export interface ChatFocusPayload {
+  isActive: boolean
 }

@@ -9,7 +9,7 @@ import {
 import { cn } from "@/lib/utils"
 
 import { SpaceHeader } from "./SpaceHeader"
-import { ChatPanel } from "./sidebar/ChatPanel"
+import { FloatingChatOverlay } from "./chat"
 import { ParticipantPanel } from "./video/ParticipantPanel"
 import { ScreenShareOverlay } from "./video/ScreenShare"
 import { ControlBar } from "./controls/ControlBar"
@@ -293,33 +293,22 @@ function SpaceLayoutContent({
       {/* Main Content with Resizable Panels */}
       <div className="flex-1 overflow-hidden">
         <PanelGroup direction="horizontal" className="h-full">
-          {/* Left Panel - Chat */}
-          {isChatOpen && (
-            <>
-              <Panel
-                defaultSize={20}
-                minSize={15}
-                maxSize={35}
-                collapsible
-                onCollapse={() => setIsChatOpen(false)}
-              >
-                <ChatPanel
-                  messages={messages}
-                  onSendMessage={handleSendMessage}
-                  currentUserId={resolvedUserId}
-                />
-              </Panel>
-              <ResizeHandle />
-            </>
-          )}
-
-          {/* Center Panel - Game Canvas */}
-          <Panel defaultSize={isChatOpen && isParticipantsOpen ? 60 : isChatOpen || isParticipantsOpen ? 80 : 100}>
-            <GameCanvas
-              playerId={resolvedUserId}
-              playerNickname={currentNickname}
-              avatarColor={currentAvatarColor}
-            />
+          {/* Center Panel - Game Canvas + Floating Chat */}
+          <Panel defaultSize={isParticipantsOpen ? 80 : 100}>
+            <div className="relative h-full">
+              <GameCanvas
+                playerId={resolvedUserId}
+                playerNickname={currentNickname}
+                avatarColor={currentAvatarColor}
+              />
+              {/* 플로팅 채팅 오버레이 */}
+              <FloatingChatOverlay
+                messages={messages}
+                onSendMessage={handleSendMessage}
+                currentUserId={resolvedUserId}
+                isVisible={isChatOpen}
+              />
+            </div>
           </Panel>
 
           {/* Right Panel - Participants */}
