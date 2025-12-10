@@ -41,6 +41,12 @@ export interface RoomData {
   yourPlayerId: string // 🔒 서버에서 파생된 실제 플레이어 ID
 }
 
+// Profile update data (닉네임/아바타 핫 업데이트)
+export interface ProfileUpdateData {
+  nickname: string
+  avatarColor: AvatarColor
+}
+
 // Client to Server events
 export interface ClientToServerEvents {
   // Connection (🔒 sessionToken 추가 - 보안 검증용)
@@ -61,6 +67,9 @@ export interface ClientToServerEvents {
 
   // Chat
   "chat:message": (data: { content: string }) => void
+
+  // Profile update (닉네임/아바타 핫 변경)
+  "player:updateProfile": (data: ProfileUpdateData) => void
 }
 
 // Server to Client events
@@ -75,6 +84,9 @@ export interface ServerToClientEvents {
 
   // Jump
   "player:jumped": (data: PlayerJumpData) => void
+
+  // Profile update (다른 플레이어의 프로필 변경 알림)
+  "player:profileUpdated": (data: { id: string } & ProfileUpdateData) => void
 
   // Chat
   "chat:message": (message: ChatMessageData) => void

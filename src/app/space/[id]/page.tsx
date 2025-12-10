@@ -327,12 +327,16 @@ export default function SpacePage() {
     [authSession, spaceId]
   )
 
-  // 🎫 닉네임 변경 핸들러 (설정에서 변경 시)
+  // 🎫 닉네임 변경 핸들러 (설정에서 변경 시) - 🔄 핫 리로드로 페이지 리로드 불필요
   const handleNicknameChange = useCallback(
     (nickname: string, avatar: string) => {
-      console.log("[SpacePage] Nickname changed:", nickname)
-      // 페이지 새로고침하여 새 세션으로 재연결
-      window.location.reload()
+      console.log("[SpacePage] Nickname changed (hot reload):", nickname, avatar)
+      // 🔄 SpaceLayout 내부에서 updateProfile()로 핫 리로드 처리되므로
+      // page.tsx에서는 verifiedUser 상태만 동기화
+      const safeAvatar = getSafeAvatarColor(avatar)
+      setVerifiedUser((prev) =>
+        prev ? { ...prev, nickname, avatar: safeAvatar } : prev
+      )
     },
     []
   )

@@ -74,6 +74,8 @@ export class MainScene extends Phaser.Scene {
   private handleRemotePlayerJoin!: (data: unknown) => void
   private handleRemotePlayerLeave!: (data: unknown) => void
   private handleRemotePlayerJump!: (data: unknown) => void
+  private handleLocalProfileUpdate!: (data: unknown) => void
+  private handleRemoteProfileUpdate!: (data: unknown) => void
 
   // Jump configuration
   private readonly JUMP_HEIGHT = 20
@@ -635,11 +637,29 @@ export class MainScene extends Phaser.Scene {
       this.playRemotePlayerJump(id)
     }
 
+    // 🔄 Local profile update handler (nickname/avatar hot reload)
+    this.handleLocalProfileUpdate = (data: unknown) => {
+      const { nickname, avatarColor } = data as { nickname: string; avatarColor: AvatarColor }
+      if (!this.isSceneTrulyActive()) return
+      this.updateLocalProfile(nickname, avatarColor)
+    }
+
+    // 🔄 Remote profile update handler (other player's nickname/avatar changed)
+    this.handleRemoteProfileUpdate = (data: unknown) => {
+      const { id, nickname, avatarColor } = data as { id: string; nickname: string; avatarColor: AvatarColor }
+      if (!this.isSceneTrulyActive()) return
+      this.updateRemoteProfile(id, nickname, avatarColor)
+    }
+
     // Listen for remote player events
     eventBridge.on(GameEvents.REMOTE_PLAYER_UPDATE, this.handleRemotePlayerUpdate)
     eventBridge.on(GameEvents.REMOTE_PLAYER_JOIN, this.handleRemotePlayerJoin)
     eventBridge.on(GameEvents.REMOTE_PLAYER_LEAVE, this.handleRemotePlayerLeave)
     eventBridge.on(GameEvents.REMOTE_PLAYER_JUMPED, this.handleRemotePlayerJump)
+
+    // 🔄 Listen for profile update events
+    eventBridge.on(GameEvents.LOCAL_PROFILE_UPDATE, this.handleLocalProfileUpdate)
+    eventBridge.on(GameEvents.REMOTE_PROFILE_UPDATE, this.handleRemoteProfileUpdate)
   }
 
   private processPendingRemotePlayerEvents() {
@@ -923,6 +943,66 @@ export class MainScene extends Phaser.Scene {
     this.failedRemotePlayers.delete(id)
   }
 
+  // 🔄 Update local player's nickname and avatar (hot reload)
+  private updateLocalProfile(nickname: string, avatarColor: AvatarColor) {
+    if (IS_DEV) {
+      console.log(`[MainScene] Updating local profile: ${nickname} (${avatarColor})`)
+    }
+
+    // Update stored values
+    this.playerNickname = nickname
+    this.playerAvatarColor = avatarColor
+
+    // Update nickname text
+    if (this.nicknameText) {
+      this.nicknameText.setText(nickname)
+    }
+
+    // Update sprite texture and animation
+    const textureKey = `character-${avatarColor}`
+    if (this.textures.exists(textureKey) && this.playerSprite) {
+      this.playerSprite.setTexture(textureKey)
+      const animKey = getAnimationKey(this.playerDirection, this.isMoving, avatarColor)
+      if (this.anims.exists(animKey)) {
+        this.playerSprite.play(animKey)
+      }
+    }
+  }
+
+  // 🔄 Update remote player's nickname and avatar (hot reload)
+  private updateRemoteProfile(id: string, nickname: string, avatarColor: AvatarColor) {
+    if (IS_DEV) {
+      console.log(`[MainScene] Updating remote profile: ${id} → ${nickname} (${avatarColor})`)
+    }
+
+    // Update nickname text
+    const nameText = this.remotePlayerNames.get(id)
+    if (nameText) {
+      nameText.setText(nickname)
+    }
+
+    // Update sprite texture and animation
+    const sprite = this.remotePlayerSprites.get(id)
+    if (sprite) {
+      const textureKey = `character-${avatarColor}`
+      if (this.textures.exists(textureKey)) {
+        sprite.setTexture(textureKey)
+        // Re-apply current animation with new color
+        const currentAnim = sprite.anims.currentAnim
+        if (currentAnim) {
+          // Parse direction and isMoving from current animation key (e.g., "walk-down-default")
+          const parts = currentAnim.key.split("-")
+          const isWalk = parts[0] === "walk"
+          const direction = parts[1] as "up" | "down" | "left" | "right"
+          const animKey = getAnimationKey(direction, isWalk, avatarColor)
+          if (this.anims.exists(animKey)) {
+            sprite.play(animKey)
+          }
+        }
+      }
+    }
+  }
+
   update() {
     const playerBody = this.playerContainer.body as Phaser.Physics.Arcade.Body
     const { PLAYER_SPEED } = MAP_CONFIG
@@ -1023,6 +1103,13 @@ export class MainScene extends Phaser.Scene {
     }
     if (this.handleRemotePlayerJump) {
       eventBridge.off(GameEvents.REMOTE_PLAYER_JUMPED, this.handleRemotePlayerJump)
+    }
+    // 🔄 Clean up profile update event listeners
+    if (this.handleLocalProfileUpdate) {
+      eventBridge.off(GameEvents.LOCAL_PROFILE_UPDATE, this.handleLocalProfileUpdate)
+    }
+    if (this.handleRemoteProfileUpdate) {
+      eventBridge.off(GameEvents.REMOTE_PROFILE_UPDATE, this.handleRemoteProfileUpdate)
     }
 
     // Clean up remote players (containers destroy their children including sprites)

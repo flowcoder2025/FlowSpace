@@ -10,6 +10,7 @@ import type {
   RoomData,
   PlayerJumpData,
   AvatarColor,
+  ProfileUpdateData,
 } from "./types"
 import { eventBridge, GameEvents } from "../game/events"
 
@@ -40,6 +41,7 @@ interface UseSocketReturn {
   socketError: SocketError | null // 🔒 세션 검증 실패 시 에러
   effectivePlayerId: string | null // 🔒 서버에서 파생된 실제 플레이어 ID
   sendMessage: (content: string) => void
+  updateProfile: (data: ProfileUpdateData) => void // 🔄 프로필 핫 업데이트
   disconnect: () => void
 }
 
@@ -73,12 +75,19 @@ export function useSocket({
   const onPlayerJoinedRef = useRef(onPlayerJoined)
   const onPlayerLeftRef = useRef(onPlayerLeft)
 
+  // 🔄 Store nickname and avatarColor in refs to enable hot update without reconnection
+  const nicknameRef = useRef(nickname)
+  const avatarColorRef = useRef(avatarColor)
+
   // Keep callback refs up to date
   useEffect(() => {
     onChatMessageRef.current = onChatMessage
     onSystemMessageRef.current = onSystemMessage
     onPlayerJoinedRef.current = onPlayerJoined
     onPlayerLeftRef.current = onPlayerLeft
+    // 🔄 Update profile refs (used for movement events)
+    nicknameRef.current = nickname
+    avatarColorRef.current = avatarColor
   })
 
   // Initialize socket connection
@@ -237,6 +246,32 @@ export function useSocket({
       onSystemMessageRef.current?.(message)
     })
 
+    // 🔄 Profile update events (다른 플레이어의 닉네임/아바타 변경)
+    socket.on("player:profileUpdated", (data) => {
+      if (IS_DEV) {
+        console.log("[Socket] Player profile updated:", data.id, data.nickname)
+      }
+
+      // Update players map with new profile
+      setPlayers((prev) => {
+        const next = new Map(prev)
+        const player = next.get(data.id)
+        if (player) {
+          next.set(data.id, {
+            ...player,
+            nickname: data.nickname,
+            avatarColor: data.avatarColor,
+          })
+        }
+        return next
+      })
+
+      // Notify game if ready
+      if (gameReadyRef.current) {
+        eventBridge.emit(GameEvents.REMOTE_PROFILE_UPDATE, data)
+      }
+    })
+
     // 🔒 Error events (세션 검증 실패 등)
     socket.on("error", (data: { message: string }) => {
       console.error("[Socket] Server error:", data.message)
@@ -272,7 +307,7 @@ export function useSocket({
         y: pos.y,
         direction: pos.direction,
         isMoving: pos.isMoving,
-        avatarColor,
+        avatarColor: avatarColorRef.current, // 🔄 ref 사용으로 재연결 없이 업데이트 반영
       })
     }
 
@@ -295,9 +330,10 @@ export function useSocket({
       socket.disconnect()
       socketRef.current = null
     }
-  // Only reconnect when essential connection params change (not on callback changes)
+  // 🔄 nickname/avatarColor는 ref로 관리하여 재연결 없이 업데이트 가능
+  // Only reconnect when essential connection params change (not on callback/profile changes)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [spaceId, playerId, nickname, avatarColor, sessionToken])
+  }, [spaceId, playerId, sessionToken])
 
   // Send chat message
   const sendMessage = useCallback((content: string) => {
@@ -314,12 +350,32 @@ export function useSocket({
     }
   }, [])
 
+  // 🔄 Update profile (nickname/avatar) without reconnection
+  const updateProfile = useCallback((data: ProfileUpdateData) => {
+    if (socketRef.current && isConnected) {
+      // Update refs
+      nicknameRef.current = data.nickname
+      avatarColorRef.current = data.avatarColor
+
+      // Send to server
+      socketRef.current.emit("player:updateProfile", data)
+
+      // Notify local game for immediate update
+      eventBridge.emit(GameEvents.LOCAL_PROFILE_UPDATE, data)
+
+      if (IS_DEV) {
+        console.log("[Socket] Profile updated:", data.nickname, data.avatarColor)
+      }
+    }
+  }, [isConnected])
+
   return {
     isConnected,
     players,
     socketError, // 🔒 세션 검증 실패 시 에러
     effectivePlayerId, // 🔒 서버에서 파생된 실제 플레이어 ID
     sendMessage,
+    updateProfile, // 🔄 프로필 핫 업데이트
     disconnect,
   }
 }

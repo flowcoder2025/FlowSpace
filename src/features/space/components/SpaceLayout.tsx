@@ -121,12 +121,16 @@ function SpaceLayoutContent({
     setMessages((prev) => [...prev, socketToChatMessage(data)])
   }, [])
 
+  // 🔄 Local state for nickname/avatar (enables hot reload without socket reconnection)
+  const [currentNickname, setCurrentNickname] = useState(userNickname)
+  const [currentAvatarColor, setCurrentAvatarColor] = useState<AvatarColor>(userAvatarColor)
+
   // Socket connection for game position sync (🔒 sessionToken으로 서버 검증)
-  const { isConnected, players, socketError, effectivePlayerId, sendMessage } = useSocket({
+  const { isConnected, players, socketError, effectivePlayerId, sendMessage, updateProfile } = useSocket({
     spaceId,
     playerId: userId,
-    nickname: userNickname,
-    avatarColor: userAvatarColor,
+    nickname: currentNickname,
+    avatarColor: currentAvatarColor,
     sessionToken, // 게스트 세션 인증용
     onChatMessage: handleChatMessage,
     onSystemMessage: handleSystemMessage,
@@ -174,7 +178,7 @@ function SpaceLayoutContent({
     if (!tracks.has(resolvedUserId)) {
       tracks.set(resolvedUserId, {
         participantId: resolvedUserId,
-        participantName: userNickname,
+        participantName: currentNickname, // 🔄 로컬 상태 사용
         isSpeaking: false,
       })
     }
@@ -191,7 +195,7 @@ function SpaceLayoutContent({
     })
 
     return tracks
-  }, [participantTracks, players, resolvedUserId, userNickname])
+  }, [participantTracks, players, resolvedUserId, currentNickname])
 
   // Find active screen share (first participant with screenTrack)
   const activeScreenShare = useMemo(() => {
@@ -250,11 +254,19 @@ function SpaceLayoutContent({
   }, [])
 
   const handleSaveSettings = useCallback((nickname: string, avatar: string) => {
-    // 부모에게 닉네임 변경 알림 (재연결 필요)
+    // 🔄 Hot reload: 로컬 상태 업데이트 + 소켓으로 프로필 전송
+    const typedAvatar = avatar as AvatarColor
+    setCurrentNickname(nickname)
+    setCurrentAvatarColor(typedAvatar)
+
+    // Socket으로 프로필 업데이트 (게임엔진 리렌더링 없이)
+    updateProfile({ nickname, avatarColor: typedAvatar })
+
+    // 부모에게도 알림 (옵션, localStorage 동기화용)
     if (onNicknameChange) {
       onNicknameChange(nickname, avatar)
     }
-  }, [onNicknameChange])
+  }, [onNicknameChange, updateProfile])
 
   // 🔧 오버레이 닫을 때 현재 트랙 ID 저장 (같은 트랙 재표시 방지)
   const handleCloseScreenShareOverlay = useCallback(() => {
@@ -271,7 +283,7 @@ function SpaceLayoutContent({
         spaceName={spaceName}
         spaceLogoUrl={spaceLogoUrl}
         spacePrimaryColor={spacePrimaryColor}
-        userNickname={userNickname}
+        userNickname={currentNickname}
         onExit={onExit}
       />
 
@@ -315,8 +327,8 @@ function SpaceLayoutContent({
           <Panel defaultSize={isChatOpen && isParticipantsOpen ? 60 : isChatOpen || isParticipantsOpen ? 80 : 100}>
             <GameCanvas
               playerId={resolvedUserId}
-              playerNickname={userNickname}
-              avatarColor={userAvatarColor}
+              playerNickname={currentNickname}
+              avatarColor={currentAvatarColor}
             />
           </Panel>
 
@@ -363,8 +375,8 @@ function SpaceLayoutContent({
         open={isSettingsOpen}
         onOpenChange={setIsSettingsOpen}
         spaceId={spaceId}
-        currentNickname={userNickname}
-        currentAvatar={userAvatarColor}
+        currentNickname={currentNickname}
+        currentAvatar={currentAvatarColor}
         onSave={handleSaveSettings}
       />
 

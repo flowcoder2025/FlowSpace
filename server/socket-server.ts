@@ -16,6 +16,7 @@ import type {
   ChatMessageData,
   PlayerJumpData,
   AvatarColor,
+  ProfileUpdateData,
 } from "../src/features/space/socket/types"
 
 const PORT = parseInt(process.env.SOCKET_PORT || "3001", 10)
@@ -350,6 +351,41 @@ io.on("connection", (socket) => {
 
       // Broadcast to all players in room (including sender)
       io.to(spaceId).emit("chat:message", message)
+    }
+  })
+
+  // 🔄 Profile update (닉네임/아바타 핫 업데이트)
+  socket.on("player:updateProfile", (data: ProfileUpdateData) => {
+    const { spaceId, playerId } = socket.data
+
+    if (!spaceId || !playerId) return
+
+    // Update socket data
+    socket.data.nickname = data.nickname
+    socket.data.avatarColor = data.avatarColor
+
+    // Update room state
+    const room = rooms.get(spaceId)
+    if (room) {
+      const player = room.get(playerId)
+      if (player) {
+        room.set(playerId, {
+          ...player,
+          nickname: data.nickname,
+          avatarColor: data.avatarColor,
+        })
+      }
+    }
+
+    // Broadcast to other players in room
+    socket.to(spaceId).emit("player:profileUpdated", {
+      id: playerId,
+      nickname: data.nickname,
+      avatarColor: data.avatarColor,
+    })
+
+    if (IS_DEV) {
+      console.log(`[Socket] Profile updated for ${playerId}: ${data.nickname} (${data.avatarColor})`)
     }
   })
 

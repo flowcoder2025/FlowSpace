@@ -61,6 +61,10 @@ export const GameEvents = {
   REMOTE_PLAYER_JOIN: "remote:player:join",
   REMOTE_PLAYER_LEAVE: "remote:player:leave",
   REMOTE_PLAYER_JUMPED: "remote:player:jumped",
+
+  // Profile update events (닉네임/아바타 핫 업데이트)
+  LOCAL_PROFILE_UPDATE: "local:profile:update",
+  REMOTE_PROFILE_UPDATE: "remote:profile:update",
 } as const
 
 // Player position type
