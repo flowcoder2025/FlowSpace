@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "socket:dev": "NODE_ENV=development tsx server/socket-server.ts",
+    "socket:start": "NODE_ENV=production tsx server/socket-server.ts",
     "livekit:dev": "livekit-server --dev --config ./livekit.yaml",
     "dev:all": "concurrently \"npm run dev\" \"npm run socket:dev\" \"npm run livekit:dev\"",
     "db:generate": "prisma generate",
@@ -37,7 +38,8 @@
     "react-resizable-panels": "^3.0.6",
     "socket.io": "^4.8.1",
     "socket.io-client": "^4.8.1",
-    "tailwind-merge": "^2.5.0"
+    "tailwind-merge": "^2.5.0",
+    "tsx": "^4.0.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.17",
@@ -51,7 +53,6 @@
     "eslint-config-next": "^15.0.0",
     "prisma": "^6.0.0",
     "tailwindcss": "^4.0.0",
-    "tsx": "^4.0.0",
     "typescript": "^5.0.0"
   }
 }
