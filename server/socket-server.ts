@@ -452,9 +452,35 @@ io.on("connection", (socket) => {
   })
 })
 
+// Immediate startup log (before listen completes)
+console.log(`[Socket] Starting server on port ${PORT}...`)
+console.log(`[Socket] NODE_ENV: ${process.env.NODE_ENV}`)
+console.log(`[Socket] CORS origins: ${CORS_ORIGINS.join(", ")}`)
+
+// Graceful shutdown handler
+process.on("SIGTERM", () => {
+  console.log("[Socket] Received SIGTERM, shutting down gracefully...")
+  httpServer.close(() => {
+    console.log("[Socket] Server closed")
+    process.exit(0)
+  })
+})
+
+process.on("SIGINT", () => {
+  console.log("[Socket] Received SIGINT, shutting down gracefully...")
+  httpServer.close(() => {
+    console.log("[Socket] Server closed")
+    process.exit(0)
+  })
+})
+
 // Start HTTP server (Socket.io attaches automatically)
 httpServer.listen(PORT, () => {
-  console.log(`[Socket] Server running on port ${PORT}`)
+  console.log(`[Socket] ✅ Server successfully running on port ${PORT}`)
   console.log(`[Socket] Health check: http://localhost:${PORT}/health`)
-  console.log(`[Socket] CORS enabled for: ${CORS_ORIGINS.join(", ")}`)
+})
+
+httpServer.on("error", (err) => {
+  console.error("[Socket] ❌ Server error:", err)
+  process.exit(1)
 })
