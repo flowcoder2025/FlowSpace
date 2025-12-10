@@ -16,11 +16,16 @@ export function createGameConfig(
   parent: HTMLElement,
   scenes: Phaser.Types.Scenes.SceneType[]
 ): Phaser.Types.Core.GameConfig {
+  // 🔧 초기 크기 계산 - 컨테이너가 아직 레이아웃되지 않았을 경우 fallback
+  // 실제 크기는 ResizeObserver에 의해 마운트 직후 조정됨
+  const initialWidth = parent.clientWidth > 0 ? parent.clientWidth : window.innerWidth
+  const initialHeight = parent.clientHeight > 0 ? parent.clientHeight : window.innerHeight
+
   return {
     type: Phaser.AUTO,
     parent,
-    width: parent.clientWidth,
-    height: parent.clientHeight,
+    width: initialWidth,
+    height: initialHeight,
     backgroundColor: "#1a1a2e",
     pixelArt: true,
     physics: {

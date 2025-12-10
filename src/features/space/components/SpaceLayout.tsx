@@ -294,8 +294,8 @@ function SpaceLayoutContent({
       <div className="flex-1 overflow-hidden">
         <PanelGroup direction="horizontal" className="h-full">
           {/* Center Panel - Game Canvas + Floating Chat */}
-          <Panel defaultSize={isParticipantsOpen ? 80 : 100}>
-            <div className="relative h-full">
+          <Panel defaultSize={isParticipantsOpen ? 80 : 100} className="overflow-hidden">
+            <div className="relative h-full w-full overflow-hidden">
               <GameCanvas
                 playerId={resolvedUserId}
                 playerNickname={currentNickname}
