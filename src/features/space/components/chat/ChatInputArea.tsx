@@ -43,6 +43,9 @@ export function ChatInputArea({ onSend, onDeactivate, isActive }: ChatInputAreaP
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
+      // 🔒 모든 키 입력이 게임 엔진으로 전파되지 않도록 차단
+      e.stopPropagation()
+
       if (e.key === "Enter") {
         e.preventDefault()
         if (value.trim()) {
@@ -55,6 +58,7 @@ export function ChatInputArea({ onSend, onDeactivate, isActive }: ChatInputAreaP
         setValue("")
         onDeactivate()
       }
+      // WASD, 방향키 등 다른 키는 기본 동작 (텍스트 입력) 허용
     },
     [value, onSend, onDeactivate]
   )

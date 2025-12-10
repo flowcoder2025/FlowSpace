@@ -10,11 +10,20 @@
 import { useState, useCallback, useEffect, useRef } from "react"
 
 const STORAGE_KEY = "flowspace-chat-position"
-const DEFAULT_POSITION = { x: 16, y: 16 }
 
 // 채팅창 크기 (경계 계산용)
-const CHAT_WIDTH = 320
-const CHAT_HEIGHT = 200
+const CHAT_WIDTH = 384 // w-96 = 24rem = 384px
+const CHAT_HEIGHT = 280
+
+// 기본 위치: 좌하단 (LoL 스타일)
+// y는 window 기준이므로 mount 후 계산
+const getDefaultPosition = () => {
+  if (typeof window === "undefined") return { x: 16, y: 400 }
+  return {
+    x: 16,
+    y: window.innerHeight - CHAT_HEIGHT - 100, // 하단에서 100px 위
+  }
+}
 
 interface Position {
   x: number
@@ -23,7 +32,7 @@ interface Position {
 
 export function useChatDrag() {
   const [position, setPosition] = useState<Position>(() => {
-    if (typeof window === "undefined") return DEFAULT_POSITION
+    if (typeof window === "undefined") return { x: 16, y: 400 }
     try {
       const saved = localStorage.getItem(STORAGE_KEY)
       if (saved) {
@@ -35,7 +44,7 @@ export function useChatDrag() {
     } catch {
       // Ignore parsing errors
     }
-    return DEFAULT_POSITION
+    return getDefaultPosition()
   })
 
   const [isDragging, setIsDragging] = useState(false)
