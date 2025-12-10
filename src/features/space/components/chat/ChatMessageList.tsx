@@ -1,12 +1,10 @@
 "use client"
 
 /**
- * ChatMessageList - LoL 인게임 스타일 메시지 목록
+ * ChatMessageList - 채팅 메시지 목록
  *
  * 스타일:
- * - 배경 없음, 텍스트 + 그림자만
- * - 닉네임: 내용 형식
- * - 메시지별 opacity 지원 (페이드아웃)
+ * - 타임스탬프 [HH:MM] 닉네임: 내용 형식
  *
  * 기능:
  * - 이모지 리액션 (👍 ❤️ ✅)
@@ -27,10 +25,12 @@ const REACTION_EMOJI: Record<ReactionType, string> = {
 }
 
 // ============================================
-// 확장된 메시지 타입 (opacity 포함)
+// 타임스탬프 포맷 함수
 // ============================================
-interface ExtendedChatMessage extends ChatMessage {
-  opacity?: number
+function formatTime(date: Date): string {
+  const hours = date.getHours().toString().padStart(2, "0")
+  const minutes = date.getMinutes().toString().padStart(2, "0")
+  return `${hours}:${minutes}`
 }
 
 // ============================================
@@ -90,7 +90,7 @@ function ReactionButtons({
 // 개별 메시지 렌더링
 // ============================================
 interface ChatMessageItemProps {
-  message: ExtendedChatMessage
+  message: ChatMessage
   isOwn: boolean
   currentUserId: string
   onReact: (messageId: string, type: ReactionType) => void
@@ -99,21 +99,14 @@ interface ChatMessageItemProps {
 function ChatMessageItem({ message, isOwn, currentUserId, onReact }: ChatMessageItemProps) {
   const [isHovered, setIsHovered] = useState(false)
   const isSystem = message.type === "system" || message.type === "announcement"
-  const opacity = message.opacity ?? 1
+  const timeStr = formatTime(message.timestamp)
 
   // 시스템 메시지 (노란색)
   if (isSystem) {
     return (
-      <div
-        className="py-0.5 transition-opacity duration-500"
-        style={{ opacity }}
-      >
-        <span
-          className="text-[12px] text-yellow-400 font-medium"
-          style={{
-            textShadow: "0 1px 3px rgba(0,0,0,0.9), 0 0 8px rgba(0,0,0,0.5)",
-          }}
-        >
+      <div className="py-0.5 px-2">
+        <span className="text-[11px] text-yellow-400/90">
+          <span className="text-white/40 mr-1">[{timeStr}]</span>
           {message.content}
         </span>
       </div>
@@ -121,29 +114,25 @@ function ChatMessageItem({ message, isOwn, currentUserId, onReact }: ChatMessage
   }
 
   // 닉네임 색상
-  const nicknameColor = isOwn ? "text-cyan-400" : "text-lime-400"
+  const nicknameColor = isOwn ? "text-primary" : "text-emerald-400"
 
   return (
     <div
-      className="py-0.5 transition-opacity duration-500"
-      style={{ opacity }}
+      className="py-0.5 px-2 hover:bg-white/5 rounded"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      <span
-        className="text-[12px] leading-relaxed"
-        style={{
-          textShadow: "0 1px 3px rgba(0,0,0,0.9), 0 0 8px rgba(0,0,0,0.5)",
-        }}
-      >
+      <span className="text-[11px] leading-relaxed">
+        {/* 타임스탬프 */}
+        <span className="text-white/40 mr-1">[{timeStr}]</span>
         {/* 닉네임 */}
-        <span className={cn("font-bold", nicknameColor)}>
+        <span className={cn("font-semibold", nicknameColor)}>
           {message.senderNickname}
         </span>
         {/* 구분자 */}
-        <span className="text-white/70">: </span>
+        <span className="text-white/50">: </span>
         {/* 내용 */}
-        <span className="text-white">
+        <span className="text-white/90">
           {message.content}
         </span>
         {/* 리액션 버튼 */}
@@ -157,17 +146,12 @@ function ChatMessageItem({ message, isOwn, currentUserId, onReact }: ChatMessage
       </span>
       {/* 기존 리액션 표시 */}
       {message.reactions && message.reactions.length > 0 && (
-        <div
-          className="pl-4 text-[10px]"
-          style={{
-            textShadow: "0 1px 2px rgba(0,0,0,0.8)",
-          }}
-        >
+        <div className="pl-12 text-[10px] text-white/60">
           {(Object.keys(REACTION_EMOJI) as ReactionType[]).map((type) => {
             const count = message.reactions!.filter((r) => r.type === type).length
             if (count === 0) return null
             return (
-              <span key={type} className="mr-1.5 text-white/80">
+              <span key={type} className="mr-1.5">
                 {REACTION_EMOJI[type]} {count}
               </span>
             )
@@ -182,7 +166,7 @@ function ChatMessageItem({ message, isOwn, currentUserId, onReact }: ChatMessage
 // ChatMessageList Props
 // ============================================
 interface ChatMessageListProps {
-  messages: ExtendedChatMessage[]
+  messages: ChatMessage[]
   currentUserId: string
   isActive: boolean
   onReact?: (messageId: string, type: ReactionType) => void
@@ -236,19 +220,13 @@ export function ChatMessageList({
       tabIndex={isActive ? 0 : -1}
       onScroll={handleScroll}
       className={cn(
-        "overflow-y-auto px-1 min-h-0",
-        "scrollbar-none", // 스크롤바 숨김 (LoL 스타일)
+        "overflow-y-auto py-1 min-h-0",
         isActive && "focus:outline-none"
       )}
     >
       {recentMessages.length === 0 ? (
-        <div className="py-2">
-          <span
-            className="text-[11px] text-white/50"
-            style={{
-              textShadow: "0 1px 2px rgba(0,0,0,0.8)",
-            }}
-          >
+        <div className="py-2 px-2">
+          <span className="text-[11px] text-white/40">
             채팅을 시작하세요...
           </span>
         </div>

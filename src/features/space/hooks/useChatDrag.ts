@@ -12,8 +12,8 @@ import { useState, useCallback, useEffect, useRef } from "react"
 const STORAGE_KEY = "flowspace-chat-position"
 
 // 채팅창 크기 (경계 계산용)
-const CHAT_WIDTH = 384 // w-96 = 24rem = 384px
-const CHAT_HEIGHT = 280
+const CHAT_WIDTH = 320 // w-80 = 20rem = 320px
+const CHAT_HEIGHT = 240
 
 // 기본 위치: 좌하단 (LoL 스타일)
 // y는 window 기준이므로 mount 후 계산
