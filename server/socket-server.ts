@@ -124,9 +124,17 @@ async function verifyGuestSession(
 
 // Create HTTP server for health checks (Railway requirement)
 const httpServer = createServer((req, res) => {
-  if (req.url === "/health" || req.url === "/") {
+  const url = req.url || ""
+  const method = req.method || "GET"
+
+  // Health check 요청 로깅 (디버깅용)
+  console.log(`[Socket] HTTP ${method} ${url} from ${req.socket.remoteAddress}`)
+
+  if (url === "/health" || url === "/") {
+    const response = { status: "ok", timestamp: Date.now(), uptime: process.uptime() }
     res.writeHead(200, { "Content-Type": "application/json" })
-    res.end(JSON.stringify({ status: "ok", timestamp: Date.now() }))
+    res.end(JSON.stringify(response))
+    console.log(`[Socket] Health check responded: 200 OK`)
   } else {
     res.writeHead(404)
     res.end()
@@ -475,9 +483,11 @@ process.on("SIGINT", () => {
 })
 
 // Start HTTP server (Socket.io attaches automatically)
-httpServer.listen(PORT, () => {
+// Railway requires binding to 0.0.0.0 for external access
+httpServer.listen(PORT, "0.0.0.0", () => {
   console.log(`[Socket] ✅ Server successfully running on port ${PORT}`)
-  console.log(`[Socket] Health check: http://localhost:${PORT}/health`)
+  console.log(`[Socket] Health check: http://0.0.0.0:${PORT}/health`)
+  console.log(`[Socket] Waiting for connections...`)
 })
 
 httpServer.on("error", (err) => {
