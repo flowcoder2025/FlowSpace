@@ -328,7 +328,9 @@ export function VideoTile({ track, isLocal = false, isScreenShare = false, class
     <div
       ref={containerRef}
       className={cn(
-        "group relative aspect-video overflow-hidden rounded-lg bg-muted",
+        "group relative aspect-video rounded-lg bg-muted",
+        // 전체화면이 아닐 때만 overflow-hidden (Portal이 잘리지 않도록)
+        !isFullscreen && "overflow-hidden",
         track.isSpeaking && "ring-2 ring-primary ring-offset-2",
         isFullscreen && "fixed inset-0 z-50 aspect-auto rounded-none",
         className
@@ -338,14 +340,16 @@ export function VideoTile({ track, isLocal = false, isScreenShare = false, class
     >
       {/* Video element - 🔑 항상 렌더링하여 adaptiveStream이 트랙을 활성화할 수 있게 함 */}
       {/* hidden(display:none) 대신 opacity-0 + absolute로 숨김 - IntersectionObserver가 감지할 수 있도록 */}
+      {/* 🔧 absolute z-0: 전체화면 시 Portal로 렌더링되는 채팅 오버레이(z-max)가 위에 표시되도록 */}
+      {/* z-index는 positioned 요소(relative/absolute/fixed)에만 적용됨 */}
       <video
         ref={videoRef}
         autoPlay
         playsInline
         muted={isLocal} // Mute local video to prevent feedback
         className={cn(
-          "size-full object-cover",
-          !shouldShowVideo && "absolute inset-0 opacity-0 pointer-events-none"
+          "absolute inset-0 size-full object-cover z-0",
+          !shouldShowVideo && "opacity-0 pointer-events-none"
         )}
       />
 

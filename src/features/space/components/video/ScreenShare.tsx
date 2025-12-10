@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useEffect } from "react"
+import { useRef, useEffect, useState } from "react"
 import { cn } from "@/lib/utils"
 import { Text, Button } from "@/components/ui"
 import type { ParticipantTrack } from "../../livekit/types"
@@ -34,7 +34,9 @@ interface ScreenShareProps {
 // Large view for screen share presentations
 // ============================================
 export function ScreenShare({ track, onClose, className }: ScreenShareProps) {
+  const containerRef = useRef<HTMLDivElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
+  const [isFullscreen, setIsFullscreen] = useState(false)
 
   // Attach screen track to video element
   useEffect(() => {
@@ -58,12 +60,24 @@ export function ScreenShare({ track, onClose, className }: ScreenShareProps) {
     }
   }, [track.screenTrack])
 
+  // Fullscreen change detection
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement)
+    }
+    document.addEventListener("fullscreenchange", handleFullscreenChange)
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFullscreenChange)
+    }
+  }, [])
+
+  // 컨테이너를 전체화면으로 (Portal이 렌더링될 수 있도록)
   const handleFullscreen = () => {
-    if (videoRef.current) {
+    if (containerRef.current) {
       if (document.fullscreenElement) {
         document.exitFullscreen()
       } else {
-        videoRef.current.requestFullscreen()
+        containerRef.current.requestFullscreen()
       }
     }
   }
@@ -74,17 +88,23 @@ export function ScreenShare({ track, onClose, className }: ScreenShareProps) {
 
   return (
     <div
+      ref={containerRef}
       className={cn(
-        "relative overflow-hidden rounded-lg bg-black",
+        "relative rounded-lg bg-black",
+        // 전체화면이 아닐 때만 overflow-hidden (Portal이 잘리지 않도록)
+        !isFullscreen && "overflow-hidden",
+        isFullscreen && "fixed inset-0 z-50",
         className
       )}
     >
       {/* Screen share video */}
+      {/* 🔧 absolute z-0: 전체화면 시 Portal로 렌더링되는 채팅 오버레이(z-max)가 위에 표시되도록 */}
+      {/* z-index는 positioned 요소(relative/absolute/fixed)에만 적용됨 */}
       <video
         ref={videoRef}
         autoPlay
         playsInline
-        className="size-full object-contain"
+        className="absolute inset-0 size-full object-contain z-0"
       />
 
       {/* Header overlay */}

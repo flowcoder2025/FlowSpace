@@ -8,12 +8,34 @@
  *
  * 기능:
  * - 이모지 리액션 (👍 ❤️ ✅)
- * - 자동 스크롤
+ * - 자동 스크롤 (과거 기록 보는 중엔 유지)
  * - 마우스 호버 시 리액션 버튼 표시
+ * - 스크롤바 활성화 시에만 표시
+ * - 최신 메시지 이동 버튼
  */
-import { useRef, useState, useEffect, useCallback } from "react"
+import { useRef, useState, useEffect, useCallback, useImperativeHandle, forwardRef } from "react"
 import { cn } from "@/lib/utils"
 import type { ChatMessage, ReactionType, MessageReaction } from "../../types/space.types"
+
+// ============================================
+// 화살표 아이콘 컴포넌트
+// ============================================
+function ChevronDownIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <polyline points="6 9 12 15 18 9" />
+    </svg>
+  )
+}
 
 // ============================================
 // 리액션 이모지 매핑
@@ -163,84 +185,191 @@ function ChatMessageItem({ message, isOwn, currentUserId, onReact }: ChatMessage
 }
 
 // ============================================
-// ChatMessageList Props
+// ChatMessageList Props & Handle
 // ============================================
 interface ChatMessageListProps {
   messages: ChatMessage[]
   currentUserId: string
   isActive: boolean
   onReact?: (messageId: string, type: ReactionType) => void
+  onDeactivate?: () => void  // 채팅 기록 영역에서 Enter 시 비활성화
+}
+
+export interface ChatMessageListHandle {
+  scrollToBottom: () => void
 }
 
 // ============================================
 // ChatMessageList Component
 // ============================================
-export function ChatMessageList({
-  messages,
-  currentUserId,
-  isActive,
-  onReact,
-}: ChatMessageListProps) {
-  const containerRef = useRef<HTMLDivElement>(null)
-  const [userScrolled, setUserScrolled] = useState(false)
+// 스크롤 속도 상수
+const SCROLL_STEP = 40
 
-  // 새 메시지 시 자동 스크롤
-  useEffect(() => {
-    if (!userScrolled && containerRef.current) {
-      containerRef.current.scrollTop = containerRef.current.scrollHeight
-    }
-  }, [messages, userScrolled])
+export const ChatMessageList = forwardRef<ChatMessageListHandle, ChatMessageListProps>(
+  function ChatMessageList({ messages, currentUserId, isActive, onReact, onDeactivate }, ref) {
+    const containerRef = useRef<HTMLDivElement>(null)
+    const [userScrolled, setUserScrolled] = useState(false)
+    // 새 메시지 알림용 (과거 기록 보는 중 신규 메시지 있음)
+    const [hasNewMessages, setHasNewMessages] = useState(false)
+    // 이전 메시지 수 추적 (상태로 관리)
+    const [prevMessageCount, setPrevMessageCount] = useState(messages.length)
 
-  // 스크롤 핸들러
-  const handleScroll = useCallback(() => {
-    const el = containerRef.current
-    if (el && el.scrollHeight - el.scrollTop <= el.clientHeight + 10) {
-      setUserScrolled(false)
-    } else {
-      setUserScrolled(true)
-    }
-  }, [])
-
-  // 리액션 핸들러
-  const handleReact = useCallback(
-    (messageId: string, type: ReactionType) => {
-      if (onReact) {
-        onReact(messageId, type)
+    // 최하단 스크롤 함수
+    const scrollToBottom = useCallback(() => {
+      if (containerRef.current) {
+        containerRef.current.scrollTop = containerRef.current.scrollHeight
+        setUserScrolled(false)
+        setHasNewMessages(false)
       }
-    },
-    [onReact]
-  )
+    }, [])
 
-  // 최근 메시지만 표시 (성능 최적화)
-  const recentMessages = messages.slice(-50)
+    // 외부에서 호출 가능하도록 ref로 노출
+    useImperativeHandle(ref, () => ({
+      scrollToBottom,
+    }), [scrollToBottom])
 
-  return (
-    <div
-      ref={containerRef}
-      tabIndex={isActive ? 0 : -1}
-      onScroll={handleScroll}
-      className={cn(
-        "overflow-y-auto py-1 min-h-0",
-        isActive && "focus:outline-none"
-      )}
-    >
-      {recentMessages.length === 0 ? (
-        <div className="py-2 px-2">
-          <span className="text-[11px] text-white/40">
-            채팅을 시작하세요...
-          </span>
+    // 새 메시지 감지 및 처리
+    // 메시지 수 변화에 반응하여 알림 표시 또는 자동 스크롤
+    /* eslint-disable react-hooks/set-state-in-effect */
+    useEffect(() => {
+      const newCount = messages.length
+
+      if (newCount > prevMessageCount) {
+        // 새 메시지가 도착함
+        if (userScrolled) {
+          // 과거 기록 보는 중이면 알림 표시
+          setHasNewMessages(true)
+        } else {
+          // 최하단에 있으면 자동 스크롤
+          if (containerRef.current) {
+            containerRef.current.scrollTop = containerRef.current.scrollHeight
+          }
+        }
+      }
+
+      setPrevMessageCount(newCount)
+    }, [messages.length, prevMessageCount, userScrolled])
+    /* eslint-enable react-hooks/set-state-in-effect */
+
+    // 스크롤 핸들러
+    const handleScroll = useCallback(() => {
+      const el = containerRef.current
+      if (!el) return
+
+      const isAtBottom = el.scrollHeight - el.scrollTop <= el.clientHeight + 30
+
+      if (isAtBottom) {
+        setUserScrolled(false)
+        setHasNewMessages(false)
+      } else {
+        setUserScrolled(true)
+      }
+    }, [])
+
+    // 리액션 핸들러
+    const handleReact = useCallback(
+      (messageId: string, type: ReactionType) => {
+        if (onReact) {
+          onReact(messageId, type)
+        }
+      },
+      [onReact]
+    )
+
+    // 키보드 핸들러 (방향키 스크롤 + Enter 비활성화)
+    const handleKeyDown = useCallback(
+      (e: React.KeyboardEvent<HTMLDivElement>) => {
+        const el = containerRef.current
+        if (!el) return
+
+        switch (e.key) {
+          case "ArrowUp":
+            e.preventDefault()
+            el.scrollTop -= SCROLL_STEP
+            setUserScrolled(true)
+            break
+          case "ArrowDown":
+            e.preventDefault()
+            el.scrollTop += SCROLL_STEP
+            // 최하단 도달 체크
+            if (el.scrollHeight - el.scrollTop <= el.clientHeight + 30) {
+              setUserScrolled(false)
+              setHasNewMessages(false)
+            }
+            break
+          case "Enter":
+            e.preventDefault()
+            // 채팅 비활성화
+            if (onDeactivate) {
+              scrollToBottom()
+              onDeactivate()
+            }
+            break
+        }
+      },
+      [onDeactivate, scrollToBottom]
+    )
+
+    // 최근 메시지만 표시 (성능 최적화)
+    const recentMessages = messages.slice(-50)
+
+    return (
+      <div className="relative flex-1 min-h-0">
+        <div
+          ref={containerRef}
+          tabIndex={isActive ? 0 : -1}
+          onScroll={handleScroll}
+          onKeyDown={isActive ? handleKeyDown : undefined}
+          className={cn(
+            "h-full overflow-y-auto py-1 flex flex-col",
+            // 활성화 시에만 스크롤바 표시
+            isActive ? "chat-scrollbar" : "chat-scrollbar-hidden",
+            "outline-none"  // 포커스 표시 없음 (키보드 스크롤은 작동)
+          )}
+        >
+          {/* 메시지를 하단에 고정하기 위한 스페이서 */}
+          <div className="flex-1" />
+
+          {/* 메시지 목록 */}
+          <div className="flex flex-col">
+            {recentMessages.length === 0 ? (
+              <div className="py-2 px-2">
+                <span className="text-[11px] text-white/40">
+                  채팅을 시작하세요...
+                </span>
+              </div>
+            ) : (
+              recentMessages.map((msg) => (
+                <ChatMessageItem
+                  key={msg.id}
+                  message={msg}
+                  isOwn={msg.senderId === currentUserId}
+                  currentUserId={currentUserId}
+                  onReact={handleReact}
+                />
+              ))
+            )}
+          </div>
         </div>
-      ) : (
-        recentMessages.map((msg) => (
-          <ChatMessageItem
-            key={msg.id}
-            message={msg}
-            isOwn={msg.senderId === currentUserId}
-            currentUserId={currentUserId}
-            onReact={handleReact}
-          />
-        ))
-      )}
-    </div>
-  )
-}
+
+        {/* 최신 메시지 이동 버튼 (과거 기록 보는 중 + 활성화 상태) */}
+        {isActive && userScrolled && (
+          <button
+            onClick={scrollToBottom}
+            className={cn(
+              "absolute bottom-2 left-1/2 -translate-x-1/2",
+              "flex items-center gap-1 px-3 py-1.5 rounded-full",
+              "bg-black/60 backdrop-blur-sm border border-white/10",
+              "text-[11px] text-white/80 hover:bg-black/80 hover:text-white",
+              "transition-all duration-200 shadow-lg",
+              hasNewMessages && "animate-pulse"
+            )}
+          >
+            <ChevronDownIcon className="w-3 h-3" />
+            {hasNewMessages ? "새 메시지" : "최신으로"}
+          </button>
+        )}
+      </div>
+    )
+  }
+)

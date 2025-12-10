@@ -68,7 +68,7 @@ export function ChatInputArea({ onSend, onDeactivate, isActive }: ChatInputAreaP
   return (
     <div className="mt-1">
       <div
-        className="flex items-center gap-2 px-2 py-1.5 rounded"
+        className="flex items-center gap-2 px-2 py-1.5 rounded-lg border border-white/10 shadow-lg"
         style={{
           backgroundColor: "rgba(0, 0, 0, 0.6)",
           backdropFilter: "blur(4px)",

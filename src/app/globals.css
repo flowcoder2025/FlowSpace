@@ -145,3 +145,37 @@
     height: 0;
   }
 }
+
+/* ============================================
+   CHAT SCROLLBAR - 투명 테마
+   ============================================ */
+.chat-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+.chat-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+
+.chat-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chat-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+
+.chat-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.35);
+}
+
+/* 비활성화 시 스크롤바 숨김 */
+.chat-scrollbar-hidden {
+  scrollbar-width: none;
+}
+
+.chat-scrollbar-hidden::-webkit-scrollbar {
+  display: none;
+}

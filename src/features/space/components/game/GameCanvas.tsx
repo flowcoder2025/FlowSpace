@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { useCallback } from "react"
 import dynamic from "next/dynamic"
 import { cn } from "@/lib/utils"
 import { VStack, Text } from "@/components/ui"
@@ -59,10 +59,8 @@ export function GameCanvas({
   onPlayerMove,
   className,
 }: GameCanvasProps) {
-  const [isReady, setIsReady] = useState(false)
-
   const handleGameReady = useCallback(() => {
-    setIsReady(true)
+    // 게임 준비 완료 - 추가 로직 필요시 여기에 구현
   }, [])
 
   return (
@@ -74,13 +72,6 @@ export function GameCanvas({
         onPlayerMove={onPlayerMove}
         onGameReady={handleGameReady}
       />
-
-      {/* Overlay instructions (shown briefly after game is ready) */}
-      {isReady && (
-        <div className="pointer-events-none absolute bottom-4 left-4 rounded-lg bg-black/50 px-3 py-2 text-white backdrop-blur-sm">
-          <Text size="xs">WASD 또는 방향키로 이동 · Space로 점프</Text>
-        </div>
-      )}
     </div>
   )
 }
