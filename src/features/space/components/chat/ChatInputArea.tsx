@@ -58,15 +58,15 @@ export function ChatInputArea({ onSend, onDeactivate, isActive }: ChatInputAreaP
   if (!isActive) return null
 
   return (
-    <div className="border-t border-border/30 px-2 py-1.5">
+    <div className="border-t border-white/10 px-2 py-1.5">
       <input
         ref={inputRef}
         type="text"
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder="메시지 입력... (Enter로 전송, ESC로 취소)"
-        className="w-full bg-transparent text-xs outline-none placeholder:text-muted-foreground/50"
+        placeholder="메시지 입력... (Enter 전송, ESC 취소)"
+        className="w-full bg-transparent text-[11px] text-white outline-none placeholder:text-white/40"
         autoComplete="off"
       />
     </div>

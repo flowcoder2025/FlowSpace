@@ -1,36 +1,25 @@
 "use client"
 
 /**
- * FloatingChatOverlay - 플로팅 채팅 오버레이 컨테이너
+ * FloatingChatOverlay - ZEP 스타일 미니멀 채팅 오버레이
  *
  * 기능:
- * - 드래그 가능한 헤더
- * - 반투명 배경
- * - 채팅 활성화 시 확장
+ * - 반투명 배경의 텍스트 오버레이
+ * - 드래그 가능 (GPU 가속 transform 사용)
  * - Enter 키로 채팅 모드 토글
+ * - 이모지 리액션 지원
  */
-import { useEffect } from "react"
+import { useEffect, useCallback, useState } from "react"
 import { cn } from "@/lib/utils"
 import { useChatMode } from "../../hooks/useChatMode"
 import { useChatDrag } from "../../hooks/useChatDrag"
 import { ChatMessageList } from "./ChatMessageList"
 import { ChatInputArea } from "./ChatInputArea"
-import type { ChatMessage } from "../../types/space.types"
+import type { ChatMessage, ReactionType } from "../../types/space.types"
 
 // ============================================
 // Icons
 // ============================================
-const ChatIcon = () => (
-  <svg className="size-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth={2}
-      d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-    />
-  </svg>
-)
-
 const GripIcon = () => (
   <svg className="size-3" fill="currentColor" viewBox="0 0 24 24">
     <circle cx="8" cy="6" r="1.5" />
@@ -48,6 +37,7 @@ const GripIcon = () => (
 interface FloatingChatOverlayProps {
   messages: ChatMessage[]
   onSendMessage: (content: string) => void
+  onReact?: (messageId: string, type: ReactionType) => void
   currentUserId: string
   isVisible?: boolean
 }
@@ -58,11 +48,60 @@ interface FloatingChatOverlayProps {
 export function FloatingChatOverlay({
   messages,
   onSendMessage,
+  onReact,
   currentUserId,
   isVisible = true,
 }: FloatingChatOverlayProps) {
   const { isActive, toggleMode, deactivate } = useChatMode()
   const { position, isDragging, handleMouseDown } = useChatDrag()
+
+  // 리액션 핸들러 (로컬 상태 업데이트용)
+  const [localMessages, setLocalMessages] = useState<ChatMessage[]>(messages)
+
+  // 외부 메시지 동기화
+  useEffect(() => {
+    setLocalMessages(messages)
+  }, [messages])
+
+  // 리액션 토글 핸들러
+  const handleReact = useCallback(
+    (messageId: string, type: ReactionType) => {
+      // 로컬 상태 업데이트 (낙관적 UI)
+      setLocalMessages((prev) =>
+        prev.map((msg) => {
+          if (msg.id !== messageId) return msg
+
+          const reactions = msg.reactions || []
+          const existingIndex = reactions.findIndex(
+            (r) => r.type === type && r.userId === currentUserId
+          )
+
+          if (existingIndex >= 0) {
+            // 이미 반응했으면 제거
+            return {
+              ...msg,
+              reactions: reactions.filter((_, i) => i !== existingIndex),
+            }
+          } else {
+            // 새 반응 추가
+            return {
+              ...msg,
+              reactions: [
+                ...reactions,
+                { type, userId: currentUserId, userNickname: "" },
+              ],
+            }
+          }
+        })
+      )
+
+      // 서버에 전송 (옵션)
+      if (onReact) {
+        onReact(messageId, type)
+      }
+    },
+    [currentUserId, onReact]
+  )
 
   // 전역 Enter 키 리스너 (채팅 비활성 상태에서만)
   useEffect(() => {
@@ -96,42 +135,39 @@ export function FloatingChatOverlay({
     <div
       style={{
         position: "absolute",
-        left: position.x,
-        top: position.y,
+        transform: `translate3d(${position.x}px, ${position.y}px, 0)`,
+        willChange: isDragging ? "transform" : "auto",
         zIndex: 40,
       }}
       className={cn(
-        "w-72 flex flex-col rounded-lg border border-border/40",
-        "bg-background/75 backdrop-blur-md shadow-lg",
-        "transition-all duration-200 ease-out",
-        isActive ? "h-80" : "h-36",
-        isDragging && "cursor-grabbing shadow-xl"
+        "w-80 flex flex-col rounded-lg",
+        "bg-black/40 backdrop-blur-sm",
+        "transition-[height,box-shadow] duration-200 ease-out",
+        isActive ? "h-52" : "h-32",
+        isDragging && "cursor-grabbing shadow-2xl"
       )}
     >
       {/* 드래그 가능한 헤더 */}
       <div
         onMouseDown={handleMouseDown}
         className={cn(
-          "flex items-center gap-2 px-2 py-1.5 border-b border-border/30",
+          "flex items-center gap-2 px-2 py-1 border-b border-white/10",
           "cursor-grab select-none shrink-0",
           isDragging && "cursor-grabbing"
         )}
       >
-        <span className="text-muted-foreground/50">
+        <span className="text-white/30">
           <GripIcon />
         </span>
-        <span className="text-muted-foreground/70">
-          <ChatIcon />
-        </span>
-        <span className="text-[10px] font-medium text-muted-foreground flex-1">
+        <span className="text-[10px] font-medium text-white/60 flex-1">
           채팅
         </span>
         <span
           className={cn(
             "text-[9px] px-1.5 py-0.5 rounded",
             isActive
-              ? "bg-primary/20 text-primary"
-              : "bg-muted/50 text-muted-foreground/60"
+              ? "bg-cyan-500/30 text-cyan-300"
+              : "bg-white/10 text-white/40"
           )}
         >
           {isActive ? "입력 중" : "Enter"}
@@ -140,9 +176,10 @@ export function FloatingChatOverlay({
 
       {/* 메시지 목록 */}
       <ChatMessageList
-        messages={messages}
+        messages={localMessages}
         currentUserId={currentUserId}
         isActive={isActive}
+        onReact={handleReact}
       />
 
       {/* 입력 영역 (활성화 시만) */}

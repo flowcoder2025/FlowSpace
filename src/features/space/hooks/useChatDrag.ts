@@ -1,15 +1,20 @@
 /**
- * useChatDrag - 채팅창 드래그 훅
+ * useChatDrag - 채팅창 드래그 훅 (개선판)
  *
- * 기능:
- * - 마우스 다운 → 드래그 시작
- * - 마우스 이동 → 위치 업데이트
- * - 마우스 업 → 드래그 종료 + localStorage 저장
+ * 개선 사항:
+ * - requestAnimationFrame 사용으로 부드러운 60fps 이동
+ * - CSS transform 기반으로 GPU 가속
+ * - 대각선 이동 완벽 지원
+ * - 화면 경계 처리
  */
 import { useState, useCallback, useEffect, useRef } from "react"
 
 const STORAGE_KEY = "flowspace-chat-position"
 const DEFAULT_POSITION = { x: 16, y: 16 }
+
+// 채팅창 크기 (경계 계산용)
+const CHAT_WIDTH = 320
+const CHAT_HEIGHT = 200
 
 interface Position {
   x: number
@@ -34,52 +39,122 @@ export function useChatDrag() {
   })
 
   const [isDragging, setIsDragging] = useState(false)
-  const dragStartRef = useRef<Position>({ x: 0, y: 0 })
-  const positionRef = useRef<Position>(position)
 
-  // Keep positionRef in sync
+  // Refs for smooth animation
+  const dragStartRef = useRef<Position>({ x: 0, y: 0 })
+  const currentPositionRef = useRef<Position>(position)
+  const rafIdRef = useRef<number | null>(null)
+
+  // Keep ref in sync with state
   useEffect(() => {
-    positionRef.current = position
+    currentPositionRef.current = position
   }, [position])
 
-  const handleMouseDown = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault()
-      setIsDragging(true)
-      dragStartRef.current = {
-        x: e.clientX - positionRef.current.x,
-        y: e.clientY - positionRef.current.y,
-      }
-    },
-    []
-  )
+  // 화면 경계 내로 위치 제한
+  const clampPosition = useCallback((x: number, y: number): Position => {
+    if (typeof window === "undefined") return { x, y }
+
+    const maxX = window.innerWidth - CHAT_WIDTH - 16
+    const maxY = window.innerHeight - CHAT_HEIGHT - 16
+
+    return {
+      x: Math.max(0, Math.min(x, maxX)),
+      y: Math.max(0, Math.min(y, maxY)),
+    }
+  }, [])
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    setIsDragging(true)
+    dragStartRef.current = {
+      x: e.clientX - currentPositionRef.current.x,
+      y: e.clientY - currentPositionRef.current.y,
+    }
+  }, [])
 
   useEffect(() => {
     if (!isDragging) return
 
+    let lastMouseX = 0
+    let lastMouseY = 0
+
+    const updatePosition = () => {
+      const newX = lastMouseX - dragStartRef.current.x
+      const newY = lastMouseY - dragStartRef.current.y
+      const clamped = clampPosition(newX, newY)
+
+      // 이전 위치와 다를 때만 업데이트
+      if (
+        clamped.x !== currentPositionRef.current.x ||
+        clamped.y !== currentPositionRef.current.y
+      ) {
+        currentPositionRef.current = clamped
+        setPosition(clamped)
+      }
+
+      if (isDragging) {
+        rafIdRef.current = requestAnimationFrame(updatePosition)
+      }
+    }
+
     const handleMouseMove = (e: MouseEvent) => {
-      const newX = Math.max(0, e.clientX - dragStartRef.current.x)
-      const newY = Math.max(0, e.clientY - dragStartRef.current.y)
-      setPosition({ x: newX, y: newY })
+      // 마우스 좌표만 저장 (실제 업데이트는 rAF에서)
+      lastMouseX = e.clientX
+      lastMouseY = e.clientY
     }
 
     const handleMouseUp = () => {
       setIsDragging(false)
-      // Save position to localStorage
+
+      // rAF 취소
+      if (rafIdRef.current !== null) {
+        cancelAnimationFrame(rafIdRef.current)
+        rafIdRef.current = null
+      }
+
+      // localStorage에 위치 저장
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(positionRef.current))
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(currentPositionRef.current))
       } catch {
         // Ignore storage errors
       }
     }
 
-    window.addEventListener("mousemove", handleMouseMove)
+    // rAF 루프 시작
+    rafIdRef.current = requestAnimationFrame(updatePosition)
+
+    window.addEventListener("mousemove", handleMouseMove, { passive: true })
     window.addEventListener("mouseup", handleMouseUp)
+
     return () => {
+      if (rafIdRef.current !== null) {
+        cancelAnimationFrame(rafIdRef.current)
+      }
       window.removeEventListener("mousemove", handleMouseMove)
       window.removeEventListener("mouseup", handleMouseUp)
     }
-  }, [isDragging])
+  }, [isDragging, clampPosition])
+
+  // 창 리사이즈 시 위치 재조정
+  useEffect(() => {
+    const handleResize = () => {
+      const clamped = clampPosition(
+        currentPositionRef.current.x,
+        currentPositionRef.current.y
+      )
+      if (
+        clamped.x !== currentPositionRef.current.x ||
+        clamped.y !== currentPositionRef.current.y
+      ) {
+        setPosition(clamped)
+      }
+    }
+
+    window.addEventListener("resize", handleResize)
+    return () => window.removeEventListener("resize", handleResize)
+  }, [clampPosition])
 
   return {
     position,

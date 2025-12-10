@@ -19,6 +19,14 @@ export interface Participant {
 // ============================================
 // Chat Types
 // ============================================
+export type ReactionType = "thumbsup" | "heart" | "check"
+
+export interface MessageReaction {
+  type: ReactionType
+  userId: string
+  userNickname: string
+}
+
 export interface ChatMessage {
   id: string
   senderId: string
@@ -26,6 +34,7 @@ export interface ChatMessage {
   content: string
   timestamp: Date
   type: "message" | "system" | "announcement"
+  reactions?: MessageReaction[]
 }
 
 // ============================================
