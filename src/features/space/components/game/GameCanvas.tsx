@@ -66,7 +66,7 @@ export function GameCanvas({
   }, [])
 
   return (
-    <div className={cn("relative size-full", className)}>
+    <div className={cn("absolute inset-0", className)}>
       <PhaserGame
         playerId={playerId}
         playerNickname={playerNickname}

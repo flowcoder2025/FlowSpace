@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint .",
     "socket:dev": "NODE_ENV=development tsx server/socket-server.ts",
-    "socket:start": "NODE_OPTIONS='--no-warnings' NODE_ENV=production tsx server/socket-server.ts",
+    "socket:start": "exec node --no-warnings --import tsx server/socket-server.ts",
     "livekit:dev": "livekit-server --dev --config ./livekit.yaml",
     "dev:all": "concurrently \"npm run dev\" \"npm run socket:dev\" \"npm run livekit:dev\"",
     "db:generate": "prisma generate",

@@ -135,11 +135,15 @@ export const PhaserGame = forwardRef<PhaserGameRef, PhaserGameProps>(
       })
       resizeObserver.observe(containerRef.current)
 
-      // 🔧 마운트 직후 + 주기적 크기 검증
+      // 🔧 마운트 직후 즉시 크기 설정 (여러 시점에서 시도)
+      // RAF + 타이머 조합으로 레이아웃 완료 시점 포착
+      handleResize(false) // 즉시 시도
       const rafId = requestAnimationFrame(() => {
-        setTimeout(() => handleResize(false), 50)
-        // 🔧 추가 검증: 200ms 후 다시 한번 확인 (레이아웃 안정화 후)
-        setTimeout(() => handleResize(true), 200)
+        handleResize(false) // RAF 후 시도
+        setTimeout(() => handleResize(false), 16) // 1프레임 후
+        setTimeout(() => handleResize(false), 50) // 50ms 후
+        setTimeout(() => handleResize(true), 100) // 100ms 후 (강제)
+        setTimeout(() => handleResize(true), 300) // 300ms 후 (안전장치)
       })
 
       // 🔧 채팅 포커스 변경 시 크기 복구 (CHAT_FOCUS_CHANGED 이벤트 감지)
@@ -173,13 +177,11 @@ export const PhaserGame = forwardRef<PhaserGameRef, PhaserGameProps>(
     return (
       <div
         ref={containerRef}
-        className="size-full"
+        className="absolute inset-0"
         style={{
-          minHeight: "100%",
-          minWidth: "100%",
-          // 🔧 Phaser 캔버스가 컨테이너를 채우도록 보장
-          display: "block",
-          position: "relative",
+          // 🔧 absolute positioning으로 부모 크기에 정확히 맞춤
+          width: "100%",
+          height: "100%",
         }}
       />
     )
