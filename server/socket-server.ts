@@ -19,11 +19,29 @@ import type {
   ProfileUpdateData,
 } from "../src/features/space/socket/types"
 
-const PORT = parseInt(process.env.SOCKET_PORT || "3001", 10)
+const PORT = parseInt(process.env.PORT || process.env.SOCKET_PORT || "3001", 10)
 const NEXT_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000"
 // 🔒 보안: NODE_ENV === "development"로 명시적 제한
 // staging, test, 미설정 환경에서 인증 우회 방지
 const IS_DEV = process.env.NODE_ENV === "development"
+
+// CORS 허용 origin 설정 (환경 변수 또는 기본값)
+const CORS_ORIGINS = (() => {
+  const origins: string[] = ["http://localhost:3000", "http://127.0.0.1:3000"]
+
+  // 프로덕션 URL 추가
+  if (process.env.NEXT_PUBLIC_APP_URL) {
+    origins.push(process.env.NEXT_PUBLIC_APP_URL)
+  }
+
+  // Railway/Vercel 등 추가 허용 도메인
+  if (process.env.CORS_ORIGINS) {
+    const additionalOrigins = process.env.CORS_ORIGINS.split(",").map(o => o.trim())
+    origins.push(...additionalOrigins)
+  }
+
+  return origins
+})()
 
 // ============================================
 // 📊 이벤트 로깅 함수
@@ -111,7 +129,7 @@ const io = new Server<
   SocketData
 >(PORT, {
   cors: {
-    origin: ["http://localhost:3000", "http://127.0.0.1:3000"],
+    origin: CORS_ORIGINS,
     methods: ["GET", "POST"],
     credentials: true,
   },
@@ -423,4 +441,4 @@ io.on("connection", (socket) => {
 })
 
 console.log(`[Socket] Server running on port ${PORT}`)
-console.log(`[Socket] CORS enabled for: http://localhost:3000`)
+console.log(`[Socket] CORS enabled for: ${CORS_ORIGINS.join(", ")}`)
