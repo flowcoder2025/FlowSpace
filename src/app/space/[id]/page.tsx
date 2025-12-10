@@ -78,6 +78,60 @@ interface VerifyResponse {
 const IS_DEV = process.env.NODE_ENV === "development"
 
 // ============================================
+// Fetch with Timeout and Retry
+// ============================================
+const DEFAULT_TIMEOUT = 15000 // 15초 타임아웃
+const MAX_RETRIES = 2 // 최대 2번 재시도
+
+interface FetchWithRetryOptions extends RequestInit {
+  timeout?: number
+  retries?: number
+}
+
+async function fetchWithRetry(
+  url: string,
+  options: FetchWithRetryOptions = {}
+): Promise<Response> {
+  const { timeout = DEFAULT_TIMEOUT, retries = MAX_RETRIES, ...fetchOptions } = options
+
+  let lastError: Error | null = null
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), timeout)
+
+    try {
+      const response = await fetch(url, {
+        ...fetchOptions,
+        signal: controller.signal,
+      })
+      clearTimeout(timeoutId)
+      return response
+    } catch (err) {
+      clearTimeout(timeoutId)
+      lastError = err instanceof Error ? err : new Error("Fetch failed")
+
+      // AbortError (타임아웃) 또는 네트워크 오류인 경우 재시도
+      const isRetryable =
+        lastError.name === "AbortError" ||
+        lastError.message.includes("fetch") ||
+        lastError.message.includes("network")
+
+      if (isRetryable && attempt < retries) {
+        console.log(`[SpacePage] Fetch retry ${attempt + 1}/${retries} for ${url}`)
+        // 재시도 전 짧은 대기 (지수 백오프)
+        await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)))
+        continue
+      }
+
+      throw lastError
+    }
+  }
+
+  throw lastError || new Error("Fetch failed after retries")
+}
+
+// ============================================
 // Space Page Component
 // ============================================
 export default function SpacePage() {
@@ -217,7 +271,7 @@ export default function SpacePage() {
 
     async function verifySession() {
       try {
-        const res = await fetch("/api/guest/verify", {
+        const res = await fetchWithRetry("/api/guest/verify", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -279,7 +333,7 @@ export default function SpacePage() {
 
     async function fetchSpace() {
       try {
-        const res = await fetch(`/api/spaces/${spaceId}`)
+        const res = await fetchWithRetry(`/api/spaces/${spaceId}`)
         if (!res.ok) {
           if (res.status === 404) {
             setError("존재하지 않는 공간입니다")
@@ -291,8 +345,11 @@ export default function SpacePage() {
         const data = await res.json()
         setSpace(data)
       } catch (err) {
-        setError("공간을 불러올 수 없습니다")
-        console.error(err)
+        const errorMessage = err instanceof Error && err.name === "AbortError"
+          ? "서버 응답 시간 초과. 네트워크 연결을 확인하고 다시 시도해주세요."
+          : "공간을 불러올 수 없습니다"
+        setError(errorMessage)
+        console.error("[SpacePage] fetchSpace error:", err)
       } finally {
         setLoading(false)
       }
@@ -340,6 +397,13 @@ export default function SpacePage() {
     },
     []
   )
+
+  // 🔄 재시도 핸들러 (에러 발생 시 페이지 새로고침)
+  const handleRetry = useCallback(() => {
+    setError(null)
+    setLoading(true)
+    window.location.reload()
+  }, [])
 
   // Handle exit
   const handleExit = useCallback(async () => {
@@ -458,14 +522,51 @@ export default function SpacePage() {
 
   // Error state (🔒 verifiedUser도 체크 - 서버 검증 필수)
   if (error || !space || !session || !verifiedUser) {
+    const isTimeoutError = error?.includes("시간 초과") || error?.includes("timeout")
+    const isNetworkError = error?.includes("네트워크") || error?.includes("연결")
+
     return (
       <main className="min-h-screen bg-muted/30">
         <Container>
           <VStack gap="lg" align="center" className="py-24">
-            <Text tone="muted">{error || "공간을 찾을 수 없습니다"}</Text>
-            <Button variant="outline" asChild>
-              <Link href="/">홈으로 돌아가기</Link>
-            </Button>
+            <div className="rounded-full bg-destructive/10 p-4">
+              <svg
+                className="size-12 text-destructive"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                />
+              </svg>
+            </div>
+            <VStack gap="sm" align="center">
+              <Text size="lg" weight="semibold">
+                {isTimeoutError ? "연결 시간 초과" : "공간 로딩 실패"}
+              </Text>
+              <Text tone="muted" className="text-center max-w-md">
+                {error || "공간을 찾을 수 없습니다"}
+              </Text>
+              {(isTimeoutError || isNetworkError) && (
+                <Text size="sm" tone="muted" className="text-center">
+                  서버가 일시적으로 응답하지 않을 수 있습니다. 잠시 후 다시 시도해주세요.
+                </Text>
+              )}
+            </VStack>
+            <VStack gap="sm" className="w-full max-w-xs">
+              {(isTimeoutError || isNetworkError || !space) && (
+                <Button onClick={handleRetry} className="w-full">
+                  다시 시도
+                </Button>
+              )}
+              <Button variant="outline" asChild className="w-full">
+                <Link href="/">홈으로 돌아가기</Link>
+              </Button>
+            </VStack>
           </VStack>
         </Container>
       </main>
