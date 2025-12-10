@@ -1,13 +1,17 @@
 "use client"
 
 /**
- * ChatMessageList - ZEP 스타일 미니멀 채팅 오버레이
+ * ChatMessageList - LoL 인게임 스타일 메시지 목록
+ *
+ * 스타일:
+ * - 배경 없음, 텍스트 + 그림자만
+ * - 닉네임: 내용 형식
+ * - 메시지별 opacity 지원 (페이드아웃)
  *
  * 기능:
- * - 텍스트만 표시 (박스 없음)
- * - 형식: HH:MM 닉네임: 내용
  * - 이모지 리액션 (👍 ❤️ ✅)
  * - 자동 스크롤
+ * - 마우스 호버 시 리액션 버튼 표시
  */
 import { useRef, useState, useEffect, useCallback } from "react"
 import { cn } from "@/lib/utils"
@@ -20,6 +24,13 @@ const REACTION_EMOJI: Record<ReactionType, string> = {
   thumbsup: "👍",
   heart: "❤️",
   check: "✅",
+}
+
+// ============================================
+// 확장된 메시지 타입 (opacity 포함)
+// ============================================
+interface ExtendedChatMessage extends ChatMessage {
+  opacity?: number
 }
 
 // ============================================
@@ -40,7 +51,6 @@ function ReactionButtons({
   onReact,
   isVisible,
 }: ReactionButtonsProps) {
-  // 각 리액션 타입별 카운트 및 사용자 리액션 여부
   const reactionCounts = (Object.keys(REACTION_EMOJI) as ReactionType[]).map((type) => {
     const typeReactions = reactions.filter((r) => r.type === type)
     const hasReacted = typeReactions.some((r) => r.userId === currentUserId)
@@ -48,27 +58,31 @@ function ReactionButtons({
   })
 
   return (
-    <div
+    <span
       className={cn(
-        "inline-flex items-center gap-0.5 ml-1 transition-opacity duration-150",
-        isVisible ? "opacity-100" : "opacity-0"
+        "inline-flex items-center gap-0.5 ml-2 transition-opacity duration-200",
+        isVisible ? "opacity-100" : "opacity-0 pointer-events-none"
       )}
     >
       {reactionCounts.map(({ type, count, hasReacted }) => (
         <button
           key={type}
-          onClick={() => onReact(messageId, type)}
+          onClick={(e) => {
+            e.stopPropagation()
+            onReact(messageId, type)
+          }}
           className={cn(
-            "text-[10px] px-1 py-0.5 rounded hover:bg-white/20 transition-colors",
-            hasReacted && "bg-white/30"
+            "text-[11px] px-1 rounded transition-all",
+            "hover:bg-white/20 active:scale-95",
+            "drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]",
+            hasReacted && "bg-white/20"
           )}
-          title={`${REACTION_EMOJI[type]} 반응`}
         >
           {REACTION_EMOJI[type]}
-          {count > 0 && <span className="ml-0.5 text-[9px]">{count}</span>}
+          {count > 0 && <span className="ml-0.5 text-[10px]">{count}</span>}
         </button>
       ))}
-    </div>
+    </span>
   )
 }
 
@@ -76,7 +90,7 @@ function ReactionButtons({
 // 개별 메시지 렌더링
 // ============================================
 interface ChatMessageItemProps {
-  message: ChatMessage
+  message: ExtendedChatMessage
   isOwn: boolean
   currentUserId: string
   onReact: (messageId: string, type: ReactionType) => void
@@ -85,46 +99,49 @@ interface ChatMessageItemProps {
 function ChatMessageItem({ message, isOwn, currentUserId, onReact }: ChatMessageItemProps) {
   const [isHovered, setIsHovered] = useState(false)
   const isSystem = message.type === "system" || message.type === "announcement"
+  const opacity = message.opacity ?? 1
 
-  const formatTime = (date: Date) => {
-    return new Date(date).toLocaleTimeString("ko-KR", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    })
-  }
-
-  // 시스템 메시지
+  // 시스템 메시지 (노란색)
   if (isSystem) {
     return (
-      <div className="py-0.5">
-        <span className="text-[11px] text-yellow-300/90 drop-shadow-sm">
-          ⚡ {message.content}
+      <div
+        className="py-0.5 transition-opacity duration-500"
+        style={{ opacity }}
+      >
+        <span
+          className="text-[12px] text-yellow-400 font-medium"
+          style={{
+            textShadow: "0 1px 3px rgba(0,0,0,0.9), 0 0 8px rgba(0,0,0,0.5)",
+          }}
+        >
+          {message.content}
         </span>
       </div>
     )
   }
 
-  // 닉네임 색상 (발신자 구분용)
-  const nicknameColor = isOwn
-    ? "text-cyan-300"
-    : "text-emerald-300"
+  // 닉네임 색상
+  const nicknameColor = isOwn ? "text-cyan-400" : "text-lime-400"
 
   return (
     <div
-      className="py-0.5 group"
+      className="py-0.5 transition-opacity duration-500"
+      style={{ opacity }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      <span className="text-[11px] leading-relaxed drop-shadow-md">
-        {/* 타임스탬프 */}
-        <span className="text-white/50 mr-1">
-          {formatTime(message.timestamp)}
-        </span>
+      <span
+        className="text-[12px] leading-relaxed"
+        style={{
+          textShadow: "0 1px 3px rgba(0,0,0,0.9), 0 0 8px rgba(0,0,0,0.5)",
+        }}
+      >
         {/* 닉네임 */}
-        <span className={cn("font-semibold mr-1", nicknameColor)}>
-          {message.senderNickname}:
+        <span className={cn("font-bold", nicknameColor)}>
+          {message.senderNickname}
         </span>
+        {/* 구분자 */}
+        <span className="text-white/70">: </span>
         {/* 내용 */}
         <span className="text-white">
           {message.content}
@@ -140,12 +157,17 @@ function ChatMessageItem({ message, isOwn, currentUserId, onReact }: ChatMessage
       </span>
       {/* 기존 리액션 표시 */}
       {message.reactions && message.reactions.length > 0 && (
-        <div className="pl-12 text-[10px] text-white/70">
+        <div
+          className="pl-4 text-[10px]"
+          style={{
+            textShadow: "0 1px 2px rgba(0,0,0,0.8)",
+          }}
+        >
           {(Object.keys(REACTION_EMOJI) as ReactionType[]).map((type) => {
             const count = message.reactions!.filter((r) => r.type === type).length
             if (count === 0) return null
             return (
-              <span key={type} className="mr-1">
+              <span key={type} className="mr-1.5 text-white/80">
                 {REACTION_EMOJI[type]} {count}
               </span>
             )
@@ -160,7 +182,7 @@ function ChatMessageItem({ message, isOwn, currentUserId, onReact }: ChatMessage
 // ChatMessageList Props
 // ============================================
 interface ChatMessageListProps {
-  messages: ChatMessage[]
+  messages: ExtendedChatMessage[]
   currentUserId: string
   isActive: boolean
   onReact?: (messageId: string, type: ReactionType) => void
@@ -178,28 +200,14 @@ export function ChatMessageList({
   const containerRef = useRef<HTMLDivElement>(null)
   const [userScrolled, setUserScrolled] = useState(false)
 
-  // 새 메시지 시 자동 스크롤 (사용자가 위로 스크롤하지 않은 경우)
+  // 새 메시지 시 자동 스크롤
   useEffect(() => {
     if (!userScrolled && containerRef.current) {
       containerRef.current.scrollTop = containerRef.current.scrollHeight
     }
   }, [messages, userScrolled])
 
-  // 방향키 스크롤
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (!containerRef.current) return
-
-    if (e.key === "ArrowUp") {
-      e.preventDefault()
-      containerRef.current.scrollTop -= 40
-      setUserScrolled(true)
-    } else if (e.key === "ArrowDown") {
-      e.preventDefault()
-      containerRef.current.scrollTop += 40
-    }
-  }, [])
-
-  // 스크롤 핸들러 - 바닥에 도달하면 userScrolled 리셋
+  // 스크롤 핸들러
   const handleScroll = useCallback(() => {
     const el = containerRef.current
     if (el && el.scrollHeight - el.scrollTop <= el.clientHeight + 10) {
@@ -209,7 +217,7 @@ export function ChatMessageList({
     }
   }, [])
 
-  // 리액션 핸들러 (외부로 전달)
+  // 리액션 핸들러
   const handleReact = useCallback(
     (messageId: string, type: ReactionType) => {
       if (onReact) {
@@ -219,26 +227,33 @@ export function ChatMessageList({
     [onReact]
   )
 
+  // 최근 메시지만 표시 (성능 최적화)
+  const recentMessages = messages.slice(-50)
+
   return (
     <div
       ref={containerRef}
       tabIndex={isActive ? 0 : -1}
-      onKeyDown={handleKeyDown}
       onScroll={handleScroll}
       className={cn(
-        "flex-1 overflow-y-auto px-2 py-1 min-h-0",
-        "scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent",
+        "overflow-y-auto px-1 min-h-0",
+        "scrollbar-none", // 스크롤바 숨김 (LoL 스타일)
         isActive && "focus:outline-none"
       )}
     >
-      {messages.length === 0 ? (
-        <div className="flex items-center justify-center h-full">
-          <span className="text-[11px] text-white/40 drop-shadow-sm">
-            채팅을 시작하세요
+      {recentMessages.length === 0 ? (
+        <div className="py-2">
+          <span
+            className="text-[11px] text-white/50"
+            style={{
+              textShadow: "0 1px 2px rgba(0,0,0,0.8)",
+            }}
+          >
+            채팅을 시작하세요...
           </span>
         </div>
       ) : (
-        messages.map((msg) => (
+        recentMessages.map((msg) => (
           <ChatMessageItem
             key={msg.id}
             message={msg}
