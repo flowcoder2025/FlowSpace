@@ -354,14 +354,21 @@ export function VideoTile({ track, isLocal = false, isScreenShare = false, class
         )}
       />
 
-      {/* Placeholder - 비디오가 없을 때만 표시 (캐릭터 스프라이트) */}
+      {/* Placeholder - 비디오가 없을 때만 표시 (캐릭터 정면 프레임 확대) */}
       {!shouldShowVideo && (
         <div className="flex size-full items-center justify-center bg-black">
-          <img
-            src={`/assets/game/sprites/character-${track.avatarColor || "default"}.png`}
-            alt={track.participantName}
-            className="size-16 object-contain pixelated"
-            style={{ imageRendering: "pixelated" }}
+          {/* 스프라이트 시트에서 정면(첫 번째 행, 첫 번째 열) 프레임만 크롭하여 표시 */}
+          {/* 스프라이트: 96x128px, 4열x5행, 각 프레임 24x26px */}
+          <div
+            className="size-20"
+            style={{
+              backgroundImage: `url(/assets/game/sprites/character-${track.avatarColor || "default"}.png)`,
+              backgroundSize: "400% 500%", // 4열 x 5행
+              backgroundPosition: "0 0", // 첫 번째 프레임 (정면)
+              imageRendering: "pixelated",
+            }}
+            role="img"
+            aria-label={track.participantName}
           />
         </div>
       )}
