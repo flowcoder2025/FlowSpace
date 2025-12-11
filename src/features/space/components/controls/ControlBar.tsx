@@ -249,7 +249,15 @@ export function ControlBar({
                 <ChevronDownIcon />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="center" side="top" className="w-64">
+            <DropdownMenuContent
+              align="center"
+              side="top"
+              className="w-64"
+              onCloseAutoFocus={(e) => {
+                // 닫힐 때 트리거로 포커스 복원 방지 (게임 키보드 입력 충돌 방지)
+                e.preventDefault()
+              }}
+            >
               {/* 마이크 선택 */}
               <DropdownMenuLabel className="flex items-center gap-2">
                 <MicSmallIcon />
@@ -329,7 +337,15 @@ export function ControlBar({
                 <ChevronDownIcon />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="center" side="top" className="w-64">
+            <DropdownMenuContent
+              align="center"
+              side="top"
+              className="w-64"
+              onCloseAutoFocus={(e) => {
+                // 닫힐 때 트리거로 포커스 복원 방지 (게임 키보드 입력 충돌 방지)
+                e.preventDefault()
+              }}
+            >
               {/* 카메라 선택 */}
               <DropdownMenuLabel className="flex items-center gap-2">
                 <CameraSmallIcon />
