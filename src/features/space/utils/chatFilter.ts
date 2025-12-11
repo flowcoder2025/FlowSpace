@@ -2,13 +2,62 @@
  * Chat Message Filter
  * 채팅 탭에 따른 메시지 필터링 로직
  *
- * 탭 구조 (4개):
+ * 탭 구조 (5개):
  * - all: 전체 메시지 (일반 + 파티 + 귓속말 + 시스템)
  * - party: 파티/구역 채팅만
  * - whisper: 귓속말만
  * - system: 시스템 메시지만
+ * - links: URL이 포함된 메시지만
  */
 import type { ChatMessage, ChatTab } from "../types/space.types"
+
+// ============================================
+// URL 추출 관련
+// ============================================
+
+/**
+ * URL을 매칭하는 정규식
+ * - http://, https:// 프로토콜 지원
+ * - www. 로 시작하는 URL도 지원
+ * - 도메인명만 있는 경우도 일부 지원 (예: example.com)
+ */
+const URL_REGEX = /(?:https?:\/\/|www\.)[^\s<>"{}|\\^`\[\]]+|(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+(?:com|net|org|io|dev|co|kr|me|app|xyz|info|biz|tv|cc|ly|to|link|page|site|online|tech|ai|cloud|gg|live|stream|blog|store|shop|news|edu|gov|mil|int)[^\s<>"{}|\\^`\[\]]*/gi
+
+/**
+ * 메시지 내용에서 URL 목록 추출
+ *
+ * @param content 메시지 내용
+ * @returns 추출된 URL 배열
+ *
+ * @example
+ * extractUrls("Check out https://example.com and www.test.org")
+ * // ["https://example.com", "www.test.org"]
+ */
+export function extractUrls(content: string): string[] {
+  const matches = content.match(URL_REGEX)
+  return matches ? [...new Set(matches)] : []  // 중복 제거
+}
+
+/**
+ * 메시지에 URL이 포함되어 있는지 확인
+ *
+ * @param message 메시지
+ * @returns URL 포함 여부
+ */
+export function hasUrl(message: ChatMessage): boolean {
+  return URL_REGEX.test(message.content)
+}
+
+/**
+ * URL이 포함된 메시지인지 확인하는 헬퍼
+ */
+export function isLinkMessage(message: ChatMessage): boolean {
+  // 시스템 메시지는 제외 (조작 안내 메시지 등)
+  if (message.type === "system" || message.type === "announcement") {
+    return false
+  }
+  return hasUrl(message)
+}
 
 /**
  * 탭에 따라 메시지를 필터링
@@ -50,6 +99,10 @@ export function filterMessagesByTab(
         (msg) => msg.type === "system" || msg.type === "announcement"
       )
 
+    case "links":
+      // URL이 포함된 메시지만 표시 (시스템 메시지 제외)
+      return messages.filter((msg) => isLinkMessage(msg))
+
     default:
       return messages
   }
@@ -77,6 +130,7 @@ export function calculateUnreadCounts(
     party: 0,
     whisper: 0,
     system: 0,
+    links: 0,
   }
 
   for (const msg of messages) {
@@ -101,6 +155,14 @@ export function calculateUnreadCounts(
       msg.timestamp > lastReadTimestamps.system
     if (isSystemUnread) {
       counts.system++
+    }
+
+    // 링크 탭: URL이 포함된 메시지 중 읽지 않은 것 (시스템 메시지 제외)
+    const isLinksUnread =
+      isLinkMessage(msg) &&
+      msg.timestamp > lastReadTimestamps.links
+    if (isLinksUnread) {
+      counts.links++
     }
 
     // 🔧 전체 탭: 개별 탭에서 읽지 않은 메시지만 카운트

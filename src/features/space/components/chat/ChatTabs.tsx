@@ -31,6 +31,7 @@ const TABS: TabConfig[] = [
   { id: "party", label: "파티", shortLabel: "파", badgeColor: "bg-blue-500" },
   { id: "whisper", label: "귓속말", shortLabel: "귓", badgeColor: "bg-purple-500" },
   { id: "system", label: "시스템", shortLabel: "시" },
+  { id: "links", label: "링크", shortLabel: "링", badgeColor: "bg-emerald-500" },
 ]
 
 // ============================================

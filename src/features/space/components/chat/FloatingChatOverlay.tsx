@@ -65,6 +65,7 @@ export function FloatingChatOverlay({
     party: new Date(),
     whisper: new Date(),
     system: new Date(),
+    links: new Date(),
   })
   // 💬 답장 상태
   const [replyTo, setReplyTo] = useState<ReplyTo | null>(null)

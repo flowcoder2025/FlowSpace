@@ -43,8 +43,9 @@ export type MessageType = "message" | "party" | "whisper" | "system" | "announce
  * - party: 파티/구역 채팅만 표시
  * - whisper: 귓속말만 표시 (송신 + 수신)
  * - system: 시스템 메시지만 표시
+ * - links: URL이 포함된 메시지만 표시
  */
-export type ChatTab = "all" | "party" | "whisper" | "system"
+export type ChatTab = "all" | "party" | "whisper" | "system" | "links"
 
 /**
  * 파티/구역 정보
