@@ -436,10 +436,13 @@ export default function SpaceEntryPage() {
                         {entering ? "입장 중..." : getText("BTN.GUEST.ENTER")}
                       </Button>
 
-                      {/* Login Option */}
-                      <div className="text-center">
+                      {/* Login Option - 로그인 후 초대 페이지로 복귀 */}
+                      <div className="text-center border-t pt-4">
+                        <Text size="sm" tone="muted" className="mb-2">
+                          계정이 있으신가요?
+                        </Text>
                         <Button variant="ghost" asChild>
-                          <Link href="/login">
+                          <Link href={`/login?callbackUrl=/spaces/${inviteCode}`}>
                             {getText("BTN.GUEST.LOGIN")}
                           </Link>
                         </Button>

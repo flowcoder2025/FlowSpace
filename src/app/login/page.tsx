@@ -78,7 +78,7 @@ function AuthForm() {
         </div>
       )}
 
-      {/* Google Login Button */}
+      {/* Google Login / Signup Button */}
       <Button
         variant="outline"
         size="lg"
@@ -96,8 +96,25 @@ function AuthForm() {
         </HStack>
       </Button>
 
+      {/* Account Info */}
+      <VStack gap="xs" align="center" className="pt-2 text-center">
+        <Text tone="muted" size="sm">
+          계정이 없으신가요? Google로 바로 가입됩니다
+        </Text>
+      </VStack>
+
+      {/* Separator */}
+      <div className="relative py-2">
+        <div className="absolute inset-0 flex items-center">
+          <span className="w-full border-t" />
+        </div>
+        <div className="relative flex justify-center text-xs uppercase">
+          <span className="bg-card px-2 text-muted-foreground">또는</span>
+        </div>
+      </div>
+
       {/* Guest Entry Info */}
-      <VStack gap="xs" align="center" className="pt-4 text-center">
+      <VStack gap="xs" align="center" className="text-center">
         <Text tone="muted" size="sm">
           공간에 게스트로 입장하시려면
         </Text>
