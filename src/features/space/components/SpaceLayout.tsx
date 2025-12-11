@@ -383,9 +383,9 @@ function SpaceLayoutContent({
           </div>
         )}
 
-        {/* 그리드 모드 - 전체 화면 오버레이 */}
+        {/* 그리드 모드 - 전체 화면 오버레이 (채팅과 동일한 반투명 배경) */}
         {isParticipantsOpen && participantViewMode === "grid" && (
-          <div className="pointer-events-auto absolute inset-0 z-30 bg-black/90 backdrop-blur-sm">
+          <div className="pointer-events-auto absolute inset-0 z-30 bg-black/30 backdrop-blur-sm">
             <ParticipantPanel
               participantTracks={allParticipantTracks}
               localParticipantId={resolvedUserId}
