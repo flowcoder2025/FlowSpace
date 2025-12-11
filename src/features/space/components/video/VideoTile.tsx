@@ -354,21 +354,30 @@ export function VideoTile({ track, isLocal = false, isScreenShare = false, class
         )}
       />
 
-      {/* Placeholder - 비디오가 없을 때만 표시 (캐릭터 정면 프레임 확대) */}
+      {/* Placeholder - 비디오가 없을 때만 표시 (새 아바타 이미지 + 색상 필터) */}
       {!shouldShowVideo && (
         <div className="flex size-full items-center justify-center bg-black">
-          {/* 스프라이트 시트에서 정면(첫 번째 행, 첫 번째 열) 프레임만 크롭하여 표시 */}
-          {/* 스프라이트: 96x128px, 4열x5행, 각 프레임 24x26px */}
-          <div
-            className="size-20"
+          {/* 아바타 색상에 따른 hue-rotate 필터 적용 */}
+          {/* 원본 이미지: 청록색(teal, ~180° hue) */}
+          <img
+            src="/Game.jpeg"
+            alt={track.participantName}
+            className="size-20 object-contain"
             style={{
-              backgroundImage: `url(/assets/game/sprites/character-${track.avatarColor || "default"}.png)`,
-              backgroundSize: "400% 500%", // 4열 x 5행
-              backgroundPosition: "0 0", // 첫 번째 프레임 (정면)
-              imageRendering: "pixelated",
+              filter: (() => {
+                // 원본 청록색(180°)에서 목표 색상으로 회전
+                const hueMap: Record<string, number> = {
+                  default: 0,     // 청록색 유지
+                  red: 180,       // 빨강(0°): 180° 회전
+                  green: -60,     // 초록(120°): -60° 회전
+                  purple: 90,     // 보라(270°): 90° 회전
+                  orange: -150,   // 주황(30°): -150° 회전
+                  pink: 150,      // 핑크(330°): 150° 회전
+                }
+                const hue = hueMap[track.avatarColor || "default"] ?? 0
+                return hue !== 0 ? `hue-rotate(${hue}deg)` : undefined
+              })(),
             }}
-            role="img"
-            aria-label={track.participantName}
           />
         </div>
       )}
