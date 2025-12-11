@@ -4,10 +4,11 @@
 import * as Phaser from "phaser"
 
 // Map configuration
+// 맵 크기를 넉넉하게 설정하여 모든 화면 크기에서 빈 공간 없이 표시
 export const MAP_CONFIG = {
   TILE_SIZE: 32,
-  MAP_WIDTH: 30,  // tiles
-  MAP_HEIGHT: 20, // tiles
+  MAP_WIDTH: 50,  // tiles (1600px) - 넓은 화면 지원
+  MAP_HEIGHT: 35, // tiles (1120px) - 넓은 화면 지원
   PLAYER_SPEED: 160,
 }
 

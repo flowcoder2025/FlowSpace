@@ -219,51 +219,72 @@ export class MainScene extends Phaser.Scene {
       this.createWall(MAP_WIDTH - 1, y)
     }
 
-    // Interior walls (enhanced room layout)
-    // Vertical wall with door gap
-    for (let y = 3; y < 8; y++) {
-      if (y !== 5) { // Door gap at y=5
-        this.createWall(10, y)
+    // Interior walls (enhanced room layout) - 확장된 맵 크기에 맞게 조정
+    // 좌측 상단 회의실 벽
+    for (let y = 3; y < 10; y++) {
+      if (y !== 6) { // Door gap at y=6
+        this.createWall(12, y)
       }
     }
 
-    // Horizontal wall with door gap
-    for (let x = 15; x < 22; x++) {
-      if (x !== 18) { // Door gap at x=18
-        this.createWall(x, 12)
+    // 중앙 가로 벽
+    for (let x = 18; x < 32; x++) {
+      if (x !== 25) { // Door gap at x=25
+        this.createWall(x, 15)
       }
     }
 
-    // Small meeting room walls
-    for (let x = 24; x < 28; x++) {
-      this.createWall(x, 5)
+    // 우측 상단 회의실 벽
+    for (let x = 35; x < 42; x++) {
+      this.createWall(x, 6)
     }
-    for (let y = 5; y < 10; y++) {
-      if (y !== 7) { // Door gap
-        this.createWall(24, y)
+    for (let y = 6; y < 14; y++) {
+      if (y !== 10) { // Door gap
+        this.createWall(35, y)
+      }
+    }
+
+    // 좌측 하단 휴게실 벽
+    for (let x = 5; x < 15; x++) {
+      if (x !== 10) { // Door gap
+        this.createWall(x, 22)
+      }
+    }
+
+    // 우측 하단 세미나실 벽
+    for (let y = 22; y < 30; y++) {
+      if (y !== 26) { // Door gap
+        this.createWall(40, y)
       }
     }
 
     // Add decorative elements
     // Accent tiles (entry points and special areas)
-    this.createAccentTile(5, 5, 0) // Diamond accent
-    this.createAccentTile(15, 8, 1) // Circle accent
-    this.createAccentTile(25, 15, 2) // Corner accent
+    this.createAccentTile(8, 8, 0) // Diamond accent
+    this.createAccentTile(25, 10, 1) // Circle accent
+    this.createAccentTile(38, 20, 2) // Corner accent
+    this.createAccentTile(15, 25, 0) // Additional accent
 
     // Spawn point indicator at center
     this.createSpawnPoint(Math.floor(MAP_WIDTH / 2), Math.floor(MAP_HEIGHT / 2))
 
-    // Carpet areas
-    this.createCarpetArea(3, 10, 4, 3) // Reception area
-    this.createCarpetArea(25, 6, 2, 3) // Meeting room
+    // Carpet areas - 확장된 공간에 맞게 배치
+    this.createCarpetArea(5, 12, 5, 4) // Reception area
+    this.createCarpetArea(36, 7, 4, 5) // Meeting room
+    this.createCarpetArea(20, 25, 6, 4) // Lounge area
+    this.createCarpetArea(6, 23, 6, 4) // Break room
 
-    // Plants/decorations
+    // Plants/decorations - 모서리와 주요 포인트에 배치
     this.createPlant(2, 2)
     this.createPlant(MAP_WIDTH - 3, 2)
     this.createPlant(2, MAP_HEIGHT - 3)
     this.createPlant(MAP_WIDTH - 3, MAP_HEIGHT - 3)
-    this.createPlant(12, 5)
-    this.createPlant(26, 8)
+    this.createPlant(15, 6)
+    this.createPlant(30, 8)
+    this.createPlant(42, 12)
+    this.createPlant(8, 20)
+    this.createPlant(32, 28)
+    this.createPlant(18, 18)
   }
 
   private createWall(tileX: number, tileY: number) {
@@ -325,52 +346,70 @@ export class MainScene extends Phaser.Scene {
   private createInteractiveObjects() {
     const TILE_SIZE = TILE_CONFIG.SIZE
 
-    // Define interactive objects for this map
+    // Define interactive objects for this map - 확장된 맵에 맞게 배치
     const objectConfigs: InteractiveObjectConfig[] = [
-      // Info sign at entrance
+      // Info sign at entrance (중앙 상단)
       {
         id: "info-welcome",
-        x: 5,
-        y: 3,
+        x: 25,
+        y: 5,
         type: "info",
         label: "환영 메시지",
         data: { message: "FLOW 메타버스에 오신 것을 환영합니다!" },
       },
-      // Portal to another area
+      // Portal to meeting room (좌측 회의실 입구)
       {
         id: "portal-meeting",
-        x: 13,
-        y: 5,
+        x: 12,
+        y: 6,
         type: "portal",
         label: "회의실 이동",
         data: { destination: "meeting-room" },
       },
-      // NPC guide
+      // NPC guide (중앙)
       {
         id: "npc-guide",
-        x: 8,
-        y: 10,
+        x: 20,
+        y: 18,
         type: "npc",
         label: "가이드 대화",
         data: { name: "가이드 봇", dialogue: ["안녕하세요!", "도움이 필요하시면 말씀해주세요."] },
       },
-      // Collectible item
+      // Collectible item (우측 회의실)
       {
         id: "item-badge",
-        x: 20,
-        y: 8,
+        x: 38,
+        y: 10,
         type: "item",
         label: "배지 획득",
         data: { itemId: "welcome-badge", itemName: "환영 배지" },
       },
-      // Door to meeting room
+      // Door to seminar room (우측 하단)
       {
-        id: "door-meeting",
-        x: 18,
-        y: 12,
+        id: "door-seminar",
+        x: 40,
+        y: 26,
         type: "door",
-        label: "문 열기",
-        data: { locked: false, targetRoom: "meeting-room" },
+        label: "세미나실 입장",
+        data: { locked: false, targetRoom: "seminar-room" },
+      },
+      // Info sign at lounge (좌측 하단 휴게실)
+      {
+        id: "info-lounge",
+        x: 10,
+        y: 22,
+        type: "info",
+        label: "휴게실 안내",
+        data: { message: "편하게 쉬어가세요! ☕" },
+      },
+      // Portal to central area (중앙 가로벽 입구)
+      {
+        id: "portal-center",
+        x: 25,
+        y: 15,
+        type: "portal",
+        label: "중앙홀 이동",
+        data: { destination: "central-hall" },
       },
     ]
 
@@ -572,7 +611,8 @@ export class MainScene extends Phaser.Scene {
     // Camera follows player container
     this.cameras.main.startFollow(this.playerContainer, true, 0.1, 0.1)
     this.cameras.main.setBounds(0, 0, MAP_WIDTH * TILE_SIZE, MAP_HEIGHT * TILE_SIZE)
-    this.cameras.main.setZoom(1.5)
+    // 줌 레벨: 1.2 (더 넓은 시야 확보, 맵 전체가 잘 보이도록)
+    this.cameras.main.setZoom(1.2)
   }
 
   /**
