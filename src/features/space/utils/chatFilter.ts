@@ -62,6 +62,10 @@ export function filterMessagesByTab(
  * @param lastReadTimestamps 탭별 마지막으로 읽은 타임스탬프
  * @param currentUserId 현재 사용자 ID
  * @returns 탭별 읽지 않은 메시지 수
+ *
+ * 🔧 개선 (2025-12-11):
+ * "전체" 탭의 unread 계산 시, 개별 탭(귓속말/시스템/파티)에서 이미 읽은 메시지는 제외
+ * → 귓속말 탭에서 읽으면 전체 탭에서도 읽음 처리됨
  */
 export function calculateUnreadCounts(
   messages: ChatMessage[],
@@ -76,34 +80,48 @@ export function calculateUnreadCounts(
   }
 
   for (const msg of messages) {
-    // 전체 탭: 마지막 읽은 시간 이후의 메시지
-    if (msg.timestamp > lastReadTimestamps.all) {
-      counts.all++
-    }
-
     // 파티 탭: 파티 메시지 중 읽지 않은 것
-    if (
-      msg.type === "party" &&
-      msg.timestamp > lastReadTimestamps.party
-    ) {
+    const isPartyUnread = msg.type === "party" && msg.timestamp > lastReadTimestamps.party
+    if (isPartyUnread) {
       counts.party++
     }
 
     // 귓속말 탭: 내가 관련된 귓속말 중 읽지 않은 것
-    if (
+    const isWhisperUnread =
       msg.type === "whisper" &&
       msg.timestamp > lastReadTimestamps.whisper &&
       (msg.senderId === currentUserId || msg.targetId === currentUserId)
-    ) {
+    if (isWhisperUnread) {
       counts.whisper++
     }
 
     // 시스템 탭: 시스템 메시지 중 읽지 않은 것
-    if (
+    const isSystemUnread =
       (msg.type === "system" || msg.type === "announcement") &&
       msg.timestamp > lastReadTimestamps.system
-    ) {
+    if (isSystemUnread) {
       counts.system++
+    }
+
+    // 🔧 전체 탭: 개별 탭에서 읽지 않은 메시지만 카운트
+    // - 일반 채팅: 전체 탭 타임스탬프 기준
+    // - 파티/귓속말/시스템: 해당 개별 탭에서도 읽지 않은 경우에만 카운트
+    const isUnreadInAll = msg.timestamp > lastReadTimestamps.all
+    if (isUnreadInAll) {
+      // 메시지 타입별로 개별 탭에서도 읽지 않은 경우에만 전체 탭에 카운트
+      if (msg.type === "party") {
+        // 파티 메시지: 파티 탭에서도 읽지 않은 경우만
+        if (isPartyUnread) counts.all++
+      } else if (msg.type === "whisper") {
+        // 귓속말: 귓속말 탭에서도 읽지 않은 경우만 (+ 나와 관련된 것만)
+        if (isWhisperUnread) counts.all++
+      } else if (msg.type === "system" || msg.type === "announcement") {
+        // 시스템: 시스템 탭에서도 읽지 않은 경우만
+        if (isSystemUnread) counts.all++
+      } else {
+        // 일반 채팅 (chat 타입): 전체 탭 타임스탬프만 기준
+        counts.all++
+      }
     }
   }
 

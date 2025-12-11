@@ -68,6 +68,27 @@ export {
 export { IconBox, iconBoxVariants } from "./icon-box"
 
 // ============================================
+// Dropdown Menu Components
+// ============================================
+export {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuCheckboxItem,
+  DropdownMenuRadioItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuShortcut,
+  DropdownMenuGroup,
+  DropdownMenuPortal,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuRadioGroup,
+} from "./dropdown-menu"
+
+// ============================================
 // Type Exports
 // ============================================
 export type { VariantProps } from "class-variance-authority"

@@ -322,7 +322,8 @@ export function VideoTile({ track, isLocal = false, isScreenShare = false, class
   // hasAudio, isAudioMuted, canPip는 렌더링에서만 사용
   const hasAudio = !!track.audioTrack
   const isAudioMuted = track.isAudioMuted ?? !hasAudio
-  const canPip = shouldShowVideo && document.pictureInPictureEnabled && !isLocal
+  // 🔧 로컬 비디오에서도 PIP 허용 (자신의 비디오를 PIP로 볼 수 있도록)
+  const canPip = shouldShowVideo && document.pictureInPictureEnabled
 
   return (
     <div
@@ -370,38 +371,37 @@ export function VideoTile({ track, isLocal = false, isScreenShare = false, class
       )}
 
       {/* Video controls overlay (top-right) - visible on hover */}
-      {shouldShowVideo && (
-        <div
-          className={cn(
-            "absolute right-2 top-2 flex items-center gap-1 transition-opacity duration-200",
-            showControls || isFullscreen ? "opacity-100" : "opacity-0"
-          )}
-        >
-          {/* PIP Button (for remote videos only) */}
-          {canPip && (
-            <button
-              onClick={handleTogglePip}
-              className={cn(
-                "rounded bg-black/60 p-1.5 text-white transition-colors hover:bg-black/80",
-                isPipActive && "bg-primary/80 hover:bg-primary/90"
-              )}
-              title={isPipActive ? "PIP 종료" : "PIP 모드"}
-              aria-label={isPipActive ? "PIP 모드 종료" : "PIP 모드 시작"}
-            >
-              <PipIcon />
-            </button>
-          )}
-          {/* Fullscreen Button */}
+      {/* 🔧 비디오 유무와 관계없이 항상 렌더링 (전체화면은 비디오 없이도 가능) */}
+      <div
+        className={cn(
+          "absolute right-2 top-2 flex items-center gap-1 transition-opacity duration-200",
+          showControls || isFullscreen ? "opacity-100" : "opacity-0"
+        )}
+      >
+        {/* PIP Button - 비디오가 있을 때만 */}
+        {canPip && (
           <button
-            onClick={handleToggleFullscreen}
-            className="rounded bg-black/60 p-1.5 text-white transition-colors hover:bg-black/80"
-            title={isFullscreen ? "전체화면 종료" : "전체화면"}
-            aria-label={isFullscreen ? "전체화면 종료" : "전체화면으로 보기"}
+            onClick={handleTogglePip}
+            className={cn(
+              "rounded bg-black/60 p-1.5 text-white transition-colors hover:bg-black/80",
+              isPipActive && "bg-primary/80 hover:bg-primary/90"
+            )}
+            title={isPipActive ? "PIP 종료" : "PIP 모드"}
+            aria-label={isPipActive ? "PIP 모드 종료" : "PIP 모드 시작"}
           >
-            {isFullscreen ? <ExitFullscreenIcon /> : <FullscreenIcon />}
+            <PipIcon />
           </button>
-        </div>
-      )}
+        )}
+        {/* Fullscreen Button - 항상 표시 */}
+        <button
+          onClick={handleToggleFullscreen}
+          className="rounded bg-black/60 p-1.5 text-white transition-colors hover:bg-black/80"
+          title={isFullscreen ? "전체화면 종료" : "전체화면"}
+          aria-label={isFullscreen ? "전체화면 종료" : "전체화면으로 보기"}
+        >
+          {isFullscreen ? <ExitFullscreenIcon /> : <FullscreenIcon />}
+        </button>
+      </div>
 
       {/* Overlay info (bottom) */}
       <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-2">

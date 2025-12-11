@@ -27,6 +27,13 @@ export interface PlayerJumpData {
 // Message type (공유 타입 - space.types.ts와 일치)
 export type MessageType = "message" | "party" | "whisper" | "system" | "announcement"
 
+// 답장 대상 정보 (Socket 전송용)
+export interface ReplyToData {
+  id: string                  // 원본 메시지 ID
+  senderNickname: string      // 원본 작성자 닉네임
+  content: string             // 원본 내용 미리보기 (최대 50자)
+}
+
 // Chat message data
 export interface ChatMessageData {
   id: string
@@ -43,6 +50,9 @@ export interface ChatMessageData {
   // 파티 전용 필드
   partyId?: string            // 파티/구역 ID (party일 때만)
   partyName?: string          // 파티/구역 이름 (party일 때만)
+
+  // 답장 필드 (모든 메시지 타입에 적용 가능)
+  replyTo?: ReplyToData       // 답장 대상 정보
 }
 
 // Room/Space data
@@ -76,11 +86,11 @@ export interface ClientToServerEvents {
   // Jump
   "player:jump": (data: PlayerJumpData) => void
 
-  // Chat
-  "chat:message": (data: { content: string }) => void
+  // Chat (답장 지원)
+  "chat:message": (data: { content: string; replyTo?: ReplyToData }) => void
 
-  // Whisper (귓속말)
-  "whisper:send": (data: { targetNickname: string; content: string }) => void
+  // Whisper (귓속말, 답장 지원)
+  "whisper:send": (data: { targetNickname: string; content: string; replyTo?: ReplyToData }) => void
 
   // Party (파티/구역 채팅)
   "party:join": (data: { partyId: string; partyName: string }) => void

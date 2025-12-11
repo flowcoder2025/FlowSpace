@@ -62,6 +62,15 @@ export interface PartyZone {
   }
 }
 
+/**
+ * 답장 대상 정보 (카카오톡 스타일 인라인 답장)
+ */
+export interface ReplyTo {
+  id: string                  // 원본 메시지 ID
+  senderNickname: string      // 원본 작성자 닉네임
+  content: string             // 원본 내용 미리보기 (최대 50자)
+}
+
 export interface ChatMessage {
   id: string
   senderId: string
@@ -78,6 +87,9 @@ export interface ChatMessage {
   // 파티 전용 필드
   partyId?: string            // 파티/구역 ID (party일 때만)
   partyName?: string          // 파티/구역 이름 (party일 때만)
+
+  // 답장 필드 (모든 메시지 타입에 적용 가능)
+  replyTo?: ReplyTo           // 답장 대상 정보
 }
 
 // ============================================

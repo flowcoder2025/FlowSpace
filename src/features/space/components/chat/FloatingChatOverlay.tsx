@@ -26,15 +26,16 @@ import { ChatMessageList, type ChatMessageListHandle } from "./ChatMessageList"
 import { ChatInputArea } from "./ChatInputArea"
 import { ChatTabs } from "./ChatTabs"
 import { filterMessagesByTab, calculateUnreadCounts } from "../../utils/chatFilter"
-import type { ChatMessage, ReactionType, ChatTab } from "../../types/space.types"
+import type { ChatMessage, ReactionType, ChatTab, ReplyTo } from "../../types/space.types"
+import type { ReplyToData } from "../../socket/types"
 
 // ============================================
 // FloatingChatOverlay Props
 // ============================================
 interface FloatingChatOverlayProps {
   messages: ChatMessage[]
-  onSendMessage: (content: string) => void
-  onSendWhisper?: (targetNickname: string, content: string) => void  // 📬 귓속말 전송
+  onSendMessage: (content: string, replyTo?: ReplyToData) => void  // 답장 지원
+  onSendWhisper?: (targetNickname: string, content: string, replyTo?: ReplyToData) => void  // 📬 귓속말 전송 + 답장
   onReact?: (messageId: string, type: ReactionType) => void
   currentUserId: string
   isVisible?: boolean
@@ -65,6 +66,8 @@ export function FloatingChatOverlay({
     whisper: new Date(),
     system: new Date(),
   })
+  // 💬 답장 상태
+  const [replyTo, setReplyTo] = useState<ReplyTo | null>(null)
 
   // 헤더 표시 상태 (활성화 중 + 비활성화 후 5초간만 표시)
   const [showHeader, setShowHeader] = useState(true)
@@ -101,6 +104,55 @@ export function FloatingChatOverlay({
     messageListRef.current?.scrollToBottom()
     deactivate()
   }, [deactivate])
+
+  // 💬 답장 버튼 클릭 핸들러
+  const handleReply = useCallback((message: ChatMessage) => {
+    // 답장 대상 정보 설정
+    const replyToInfo: ReplyTo = {
+      id: message.id,
+      senderNickname: message.senderNickname,
+      content: message.content.slice(0, 50),  // 미리보기는 50자까지
+    }
+    setReplyTo(replyToInfo)
+    // 채팅 모드 활성화 (아직 아니면)
+    if (!isActive) {
+      toggleMode()
+    }
+  }, [isActive, toggleMode])
+
+  // 💬 답장 취소 핸들러
+  const handleCancelReply = useCallback(() => {
+    setReplyTo(null)
+  }, [])
+
+  // 💬 메시지 전송 핸들러 (답장 정보 포함)
+  const handleSendMessage = useCallback((content: string, replyToData?: ReplyTo) => {
+    // ReplyTo → ReplyToData 변환
+    const socketReplyTo: ReplyToData | undefined = replyToData
+      ? {
+          id: replyToData.id,
+          senderNickname: replyToData.senderNickname,
+          content: replyToData.content,
+        }
+      : undefined
+    onSendMessage(content, socketReplyTo)
+    setReplyTo(null)
+  }, [onSendMessage])
+
+  // 💬 귓속말 전송 핸들러 (답장 정보 포함)
+  const handleSendWhisper = useCallback((targetNickname: string, content: string, replyToData?: ReplyTo) => {
+    if (!onSendWhisper) return
+    // ReplyTo → ReplyToData 변환
+    const socketReplyTo: ReplyToData | undefined = replyToData
+      ? {
+          id: replyToData.id,
+          senderNickname: replyToData.senderNickname,
+          content: replyToData.content,
+        }
+      : undefined
+    onSendWhisper(targetNickname, content, socketReplyTo)
+    setReplyTo(null)
+  }, [onSendWhisper])
 
   // 📬 탭 변경 핸들러 (변경 시 해당 탭의 읽음 시간 업데이트)
   const handleTabChange = useCallback((tab: ChatTab) => {
@@ -186,12 +238,29 @@ export function FloatingChatOverlay({
     return messagesWithReactions
   }, [messages, localReactions, GUIDE_MESSAGE, activeTab, currentUserId])
 
+  // 채팅 영역 ref (외부 클릭 감지용)
+  const chatOverlayRef = useRef<HTMLDivElement>(null)
+
+  // 채팅 영역 외부 클릭 시 비활성화
+  useEffect(() => {
+    if (!isActive) return
+
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement
+      // 채팅 오버레이 내부 클릭이면 무시
+      if (chatOverlayRef.current?.contains(target)) return
+      // 외부 클릭 시 비활성화
+      handleDeactivate()
+    }
+
+    // mousedown으로 빠르게 감지 (click보다 먼저 발생)
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [isActive, handleDeactivate])
+
   // 전역 Enter 키 리스너 (전체화면 모드에서도 작동)
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      // 채팅 활성화 상태면 무시 (입력창에서 처리)
-      if (isActive) return
-
       // input/textarea/contenteditable에서는 무시
       const target = e.target as HTMLElement
       if (
@@ -207,14 +276,20 @@ export function FloatingChatOverlay({
         e.preventDefault()
         e.stopPropagation()
         e.stopImmediatePropagation()
-        toggleMode()
+
+        // 채팅 활성화 상태면 비활성화, 아니면 활성화
+        if (isActive) {
+          handleDeactivate()
+        } else {
+          toggleMode()
+        }
       }
     }
 
     // capture: true로 이벤트를 먼저 캡처하여 다른 핸들러보다 먼저 처리
     window.addEventListener("keydown", handleGlobalKeyDown, { capture: true })
     return () => window.removeEventListener("keydown", handleGlobalKeyDown, { capture: true })
-  }, [isActive, toggleMode])
+  }, [isActive, toggleMode, handleDeactivate])
 
   if (!isVisible) return null
 
@@ -227,6 +302,7 @@ export function FloatingChatOverlay({
   // 🔧 전체화면 내부에서는 absolute 사용 (fixed는 fullscreen 컨텍스트에서 예상대로 작동하지 않을 수 있음)
   const chatOverlayContent = (
     <div
+      ref={chatOverlayRef}
       style={{
         position: isFullscreen ? "absolute" : "fixed",
         left: isFullscreen ? position.x : undefined,
@@ -282,16 +358,19 @@ export function FloatingChatOverlay({
           currentUserId={currentUserId}
           isActive={isActive}
           onReact={handleReact}
+          onReply={handleReply}
           onDeactivate={handleDeactivate}
         />
       </div>
 
       {/* 입력 영역 - 활성화 시만 표시 */}
       <ChatInputArea
-        onSend={onSendMessage}
-        onSendWhisper={onSendWhisper}
+        onSend={handleSendMessage}
+        onSendWhisper={handleSendWhisper}
         onDeactivate={handleDeactivate}
         isActive={isActive}
+        replyTo={replyTo}
+        onCancelReply={handleCancelReply}
       />
 
       {/* 리사이즈 핸들 (우하단) */}

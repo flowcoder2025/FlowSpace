@@ -1,12 +1,6 @@
 "use client"
 
-import { useState, useCallback, useMemo } from "react"
-import {
-  Panel,
-  PanelGroup,
-  PanelResizeHandle,
-} from "react-resizable-panels"
-import { cn } from "@/lib/utils"
+import { useState, useCallback, useMemo, useEffect } from "react"
 
 import { SpaceHeader } from "./SpaceHeader"
 import { FloatingChatOverlay } from "./chat"
@@ -17,25 +11,9 @@ import { GameCanvas } from "./game/GameCanvas"
 import { SpaceSettingsModal } from "./SpaceSettingsModal"
 import { useSocket } from "../socket"
 import { LiveKitRoomProvider, useLiveKitMedia } from "../livekit"
-import { useNotificationSound } from "../hooks"
-import type { ChatMessageData, AvatarColor } from "../socket/types"
+import { useNotificationSound, useChatStorage } from "../hooks"
+import type { ChatMessageData, AvatarColor, ReplyToData } from "../socket/types"
 import type { ChatMessage } from "../types/space.types"
-
-// ============================================
-// ResizeHandle Component
-// ============================================
-function ResizeHandle({ className }: { className?: string }) {
-  return (
-    <PanelResizeHandle
-      className={cn(
-        "group relative flex w-1 items-center justify-center bg-border transition-colors hover:bg-primary/50 data-resize-handle-active:bg-primary",
-        className
-      )}
-    >
-      <div className="absolute h-8 w-1 rounded-full bg-muted-foreground/20 opacity-0 transition-opacity group-hover:opacity-100 group-data-resize-handle-active:opacity-100" />
-    </PanelResizeHandle>
-  )
-}
 
 // ============================================
 // SpaceLayout Props
@@ -69,6 +47,8 @@ function socketToChatMessage(data: ChatMessageData): ChatMessage {
     // 📬 귓속말 전용 필드
     targetId: data.targetId,
     targetNickname: data.targetNickname,
+    // 💬 답장 필드
+    replyTo: data.replyTo,
   }
 }
 
@@ -115,6 +95,27 @@ function SpaceLayoutContent({
 
   // Chat messages
   const [messages, setMessages] = useState<ChatMessage[]>([])
+
+  // 💾 채팅 내역 localStorage 영속성
+  const { loadMessages, saveMessages } = useChatStorage({ spaceId })
+
+  // 📥 컴포넌트 마운트 시 저장된 메시지 로드
+  // localStorage에서 초기 데이터 로드 시 동기 setState가 필요하므로 lint 규칙 비활성화
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    const savedMessages = loadMessages()
+    if (savedMessages.length > 0) {
+      setMessages(savedMessages)
+    }
+  }, [loadMessages])
+  /* eslint-enable react-hooks/set-state-in-effect */
+
+  // 💾 메시지 변경 시 저장 (디바운스됨)
+  useEffect(() => {
+    if (messages.length > 0) {
+      saveMessages(messages)
+    }
+  }, [messages, saveMessages])
 
   // 🔔 알림음 훅
   const { playWhisperSound } = useNotificationSound()
@@ -246,13 +247,13 @@ function SpaceLayoutContent({
   }, [activeScreenShare, closedScreenTrackId])
 
   // Handlers
-  const handleSendMessage = useCallback((content: string) => {
-    sendMessage(content)
+  const handleSendMessage = useCallback((content: string, replyTo?: ReplyToData) => {
+    sendMessage(content, replyTo)
   }, [sendMessage])
 
-  // 📬 귓속말 전송 핸들러
-  const handleSendWhisper = useCallback((targetNickname: string, content: string) => {
-    sendWhisper(targetNickname, content)
+  // 📬 귓속말 전송 핸들러 (답장 지원)
+  const handleSendWhisper = useCallback((targetNickname: string, content: string, replyTo?: ReplyToData) => {
+    sendWhisper(targetNickname, content, replyTo)
   }, [sendWhisper])
 
   const handleToggleMic = useCallback(async () => {
@@ -327,65 +328,51 @@ function SpaceLayoutContent({
         </div>
       )}
 
-      {/* Main Content with Resizable Panels */}
-      <div className="flex-1 overflow-hidden">
-        <PanelGroup direction="horizontal" className="h-full">
-          {/* Center Panel - Game Canvas + Floating Chat */}
-          <Panel defaultSize={isParticipantsOpen ? 80 : 100} className="h-full overflow-hidden">
-            <div className="relative h-full w-full overflow-hidden bg-[#1a1a2e]">
-              <GameCanvas
-                playerId={resolvedUserId}
-                playerNickname={currentNickname}
-                avatarColor={currentAvatarColor}
-              />
-              {/* 플로팅 채팅 오버레이 */}
-              <FloatingChatOverlay
-                messages={messages}
-                onSendMessage={handleSendMessage}
-                onSendWhisper={handleSendWhisper}
-                currentUserId={resolvedUserId}
-                isVisible={isChatOpen}
-              />
-            </div>
-          </Panel>
+      {/* Main Content - ZEP 스타일 플로팅 레이아웃 */}
+      <div className="relative flex-1 overflow-hidden bg-[#1a1a2e]">
+        {/* Game Canvas - 전체 영역 */}
+        <GameCanvas
+          playerId={resolvedUserId}
+          playerNickname={currentNickname}
+          avatarColor={currentAvatarColor}
+        />
 
-          {/* Right Panel - Participants */}
-          {isParticipantsOpen && (
-            <>
-              <ResizeHandle />
-              <Panel
-                defaultSize={20}
-                minSize={15}
-                maxSize={35}
-                collapsible
-                onCollapse={() => setIsParticipantsOpen(false)}
-              >
-                <ParticipantPanel
-                  participantTracks={allParticipantTracks}
-                  localParticipantId={resolvedUserId}
-                />
-              </Panel>
-            </>
-          )}
-        </PanelGroup>
+        {/* 플로팅 채팅 오버레이 (좌측 하단) */}
+        <FloatingChatOverlay
+          messages={messages}
+          onSendMessage={handleSendMessage}
+          onSendWhisper={handleSendWhisper}
+          currentUserId={resolvedUserId}
+          isVisible={isChatOpen}
+        />
+
+        {/* 플로팅 참가자 비디오 (우측) */}
+        {isParticipantsOpen && (
+          <div className="pointer-events-auto absolute right-2 top-2 z-20 w-44 max-h-[calc(100%-80px)] overflow-y-auto">
+            <ParticipantPanel
+              participantTracks={allParticipantTracks}
+              localParticipantId={resolvedUserId}
+            />
+          </div>
+        )}
+
+        {/* 플로팅 컨트롤 바 (하단 중앙) */}
+        <ControlBar
+          isMicOn={mediaState.isMicrophoneEnabled}
+          isCameraOn={mediaState.isCameraEnabled}
+          isScreenSharing={mediaState.isScreenShareEnabled}
+          isChatOpen={isChatOpen}
+          isParticipantsOpen={isParticipantsOpen}
+          mediaError={displayError}
+          onToggleMic={handleToggleMic}
+          onToggleCamera={handleToggleCamera}
+          onToggleScreenShare={handleToggleScreenShare}
+          onToggleChat={handleToggleChat}
+          onToggleParticipants={handleToggleParticipants}
+          onOpenSettings={handleOpenSettings}
+          onDismissError={handleDismissError}
+        />
       </div>
-
-      {/* Control Bar */}
-      <ControlBar
-        isMicOn={mediaState.isMicrophoneEnabled}
-        isCameraOn={mediaState.isCameraEnabled}
-        isScreenSharing={mediaState.isScreenShareEnabled}
-        isChatOpen={isChatOpen}
-        isParticipantsOpen={isParticipantsOpen}
-        mediaError={displayError}
-        onToggleMic={handleToggleMic}
-        onToggleCamera={handleToggleCamera}
-        onToggleScreenShare={handleToggleScreenShare}
-        onToggleChat={handleToggleChat}
-        onToggleParticipants={handleToggleParticipants}
-        onOpenSettings={handleOpenSettings}
-        onDismissError={handleDismissError}
-      />
 
       {/* Settings Modal */}
       <SpaceSettingsModal

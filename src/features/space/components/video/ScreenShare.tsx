@@ -1,12 +1,14 @@
 "use client"
 
-import { useRef, useEffect, useState } from "react"
+import { useRef, useEffect, useState, useCallback } from "react"
 import { cn } from "@/lib/utils"
 import { Text, Button } from "@/components/ui"
 import type { ParticipantTrack } from "../../livekit/types"
 
+const IS_DEV = process.env.NODE_ENV === "development"
+
 // ============================================
-// CloseIcon
+// Icons
 // ============================================
 const CloseIcon = () => (
   <svg className="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -17,6 +19,13 @@ const CloseIcon = () => (
 const FullscreenIcon = () => (
   <svg className="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+  </svg>
+)
+
+const PipIcon = () => (
+  <svg className="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8M3 17V7a2 2 0 012-2h6" />
+    <rect x="3" y="13" width="8" height="6" rx="1" strokeWidth={2} />
   </svg>
 )
 
@@ -37,6 +46,12 @@ export function ScreenShare({ track, onClose, className }: ScreenShareProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const [isPipActive, setIsPipActive] = useState(false)
+  // Check PIP availability (lazy initialization for client-side only)
+  const [canPip] = useState(() => {
+    if (typeof document === "undefined") return false
+    return !!document.pictureInPictureEnabled
+  })
 
   // Attach screen track to video element
   useEffect(() => {
@@ -71,8 +86,35 @@ export function ScreenShare({ track, onClose, className }: ScreenShareProps) {
     }
   }, [])
 
+  // PIP change detection
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video) return
+
+    const handleEnterPip = () => {
+      setIsPipActive(true)
+      if (IS_DEV) {
+        console.log("[ScreenShare] Entered PIP mode for:", track.participantName)
+      }
+    }
+    const handleLeavePip = () => {
+      setIsPipActive(false)
+      if (IS_DEV) {
+        console.log("[ScreenShare] Left PIP mode for:", track.participantName)
+      }
+    }
+
+    video.addEventListener("enterpictureinpicture", handleEnterPip)
+    video.addEventListener("leavepictureinpicture", handleLeavePip)
+
+    return () => {
+      video.removeEventListener("enterpictureinpicture", handleEnterPip)
+      video.removeEventListener("leavepictureinpicture", handleLeavePip)
+    }
+  }, [track.participantName])
+
   // 컨테이너를 전체화면으로 (Portal이 렌더링될 수 있도록)
-  const handleFullscreen = () => {
+  const handleFullscreen = useCallback(() => {
     if (containerRef.current) {
       if (document.fullscreenElement) {
         document.exitFullscreen()
@@ -80,7 +122,23 @@ export function ScreenShare({ track, onClose, className }: ScreenShareProps) {
         containerRef.current.requestFullscreen()
       }
     }
-  }
+  }, [])
+
+  // Toggle PIP handler
+  const handleTogglePip = useCallback(async () => {
+    const video = videoRef.current
+    if (!video) return
+
+    try {
+      if (document.pictureInPictureElement === video) {
+        await document.exitPictureInPicture()
+      } else if (document.pictureInPictureEnabled) {
+        await video.requestPictureInPicture()
+      }
+    } catch (error) {
+      console.error("[ScreenShare] PIP toggle error:", error)
+    }
+  }, [])
 
   if (!track.screenTrack) {
     return null
@@ -116,11 +174,30 @@ export function ScreenShare({ track, onClose, className }: ScreenShareProps) {
           </Text>
         </div>
         <div className="flex items-center gap-1">
+          {/* PIP Button */}
+          {canPip && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleTogglePip}
+              className={cn(
+                "size-8 p-0 text-white hover:bg-white/20",
+                isPipActive && "bg-primary/60 hover:bg-primary/80"
+              )}
+              title={isPipActive ? "PIP 종료" : "PIP 모드"}
+              aria-label={isPipActive ? "PIP 모드 종료" : "PIP 모드 시작"}
+            >
+              <PipIcon />
+            </Button>
+          )}
+          {/* Fullscreen Button */}
           <Button
             variant="ghost"
             size="sm"
             onClick={handleFullscreen}
             className="size-8 p-0 text-white hover:bg-white/20"
+            title={isFullscreen ? "전체화면 종료" : "전체화면"}
+            aria-label={isFullscreen ? "전체화면 종료" : "전체화면으로 보기"}
           >
             <FullscreenIcon />
           </Button>
@@ -130,6 +207,8 @@ export function ScreenShare({ track, onClose, className }: ScreenShareProps) {
               size="sm"
               onClick={onClose}
               className="size-8 p-0 text-white hover:bg-white/20"
+              title="닫기"
+              aria-label="화면 공유 닫기"
             >
               <CloseIcon />
             </Button>

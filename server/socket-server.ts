@@ -401,8 +401,8 @@ io.on("connection", (socket) => {
     console.log(`[Socket] Player ${playerId} jumped at (${verifiedJumpData.x}, ${verifiedJumpData.y})`)
   })
 
-  // Chat message
-  socket.on("chat:message", ({ content }) => {
+  // Chat message (답장 지원)
+  socket.on("chat:message", ({ content, replyTo }) => {
     const { spaceId, playerId, nickname } = socket.data
 
     if (spaceId && playerId && content.trim()) {
@@ -413,6 +413,8 @@ io.on("connection", (socket) => {
         content: content.trim(),
         timestamp: Date.now(),
         type: "message",
+        // 답장 정보 포함 (있는 경우에만)
+        ...(replyTo && { replyTo }),
       }
 
       // Broadcast to all players in room (including sender)
@@ -420,8 +422,8 @@ io.on("connection", (socket) => {
     }
   })
 
-  // 📬 Whisper (귓속말) - 특정 닉네임의 사용자에게만 전송
-  socket.on("whisper:send", ({ targetNickname, content }) => {
+  // 📬 Whisper (귓속말) - 특정 닉네임의 사용자에게만 전송 (답장 지원)
+  socket.on("whisper:send", ({ targetNickname, content, replyTo }) => {
     const { spaceId, playerId, nickname } = socket.data
 
     if (!spaceId || !playerId || !content.trim()) return
@@ -457,7 +459,7 @@ io.on("connection", (socket) => {
       return
     }
 
-    // 귓속말 메시지 생성
+    // 귓속말 메시지 생성 (답장 정보 포함)
     const whisperMessage: ChatMessageData = {
       id: `whisper-${Date.now()}-${playerId}`,
       senderId: playerId,
@@ -467,6 +469,8 @@ io.on("connection", (socket) => {
       type: "whisper",
       targetId: targetPlayerId,
       targetNickname: targetNickname,
+      // 답장 정보 포함 (있는 경우에만)
+      ...(replyTo && { replyTo }),
     }
 
     // 수신자에게 전송

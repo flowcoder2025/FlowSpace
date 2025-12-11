@@ -15,7 +15,7 @@
  */
 import { useRef, useState, useEffect, useCallback, useImperativeHandle, forwardRef } from "react"
 import { cn } from "@/lib/utils"
-import type { ChatMessage, ReactionType, MessageReaction } from "../../types/space.types"
+import type { ChatMessage, ReactionType, MessageReaction, ReplyTo } from "../../types/space.types"
 
 // ============================================
 // 화살표 아이콘 컴포넌트
@@ -33,6 +33,27 @@ function ChevronDownIcon({ className }: { className?: string }) {
       className={className}
     >
       <polyline points="6 9 12 15 18 9" />
+    </svg>
+  )
+}
+
+// ============================================
+// 답장 아이콘 컴포넌트
+// ============================================
+function ReplyIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <polyline points="9 17 4 12 9 7" />
+      <path d="M20 18v-2a4 4 0 0 0-4-4H4" />
     </svg>
   )
 }
@@ -56,23 +77,29 @@ function formatTime(date: Date): string {
 }
 
 // ============================================
-// 리액션 버튼 컴포넌트
+// 리액션 + 답장 버튼 컴포넌트
 // ============================================
-interface ReactionButtonsProps {
+interface ActionButtonsProps {
   messageId: string
+  message: ChatMessage
   reactions?: MessageReaction[]
   currentUserId: string
   onReact: (messageId: string, type: ReactionType) => void
+  onReply?: (message: ChatMessage) => void
   isVisible: boolean
+  showReplyButton?: boolean
 }
 
-function ReactionButtons({
+function ActionButtons({
   messageId,
+  message,
   reactions = [],
   currentUserId,
   onReact,
+  onReply,
   isVisible,
-}: ReactionButtonsProps) {
+  showReplyButton = true,
+}: ActionButtonsProps) {
   const reactionCounts = (Object.keys(REACTION_EMOJI) as ReactionType[]).map((type) => {
     const typeReactions = reactions.filter((r) => r.type === type)
     const hasReacted = typeReactions.some((r) => r.userId === currentUserId)
@@ -86,6 +113,24 @@ function ReactionButtons({
         isVisible ? "opacity-100" : "opacity-0 pointer-events-none"
       )}
     >
+      {/* 답장 버튼 */}
+      {showReplyButton && onReply && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            onReply(message)
+          }}
+          className={cn(
+            "text-[11px] px-1 rounded transition-all",
+            "hover:text-white active:scale-95",
+            "drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]"
+          )}
+          title="답장"
+        >
+          <ReplyIcon className="w-3 h-3 text-white/70" />
+        </button>
+      )}
+      {/* 리액션 버튼들 */}
       {reactionCounts.map(({ type, count, hasReacted }) => (
         <button
           key={type}
@@ -109,6 +154,43 @@ function ReactionButtons({
 }
 
 // ============================================
+// 인용 블록 컴포넌트 (카카오톡 스타일)
+// ============================================
+interface ReplyQuoteProps {
+  replyTo: ReplyTo
+  onClick?: () => void
+}
+
+function ReplyQuote({ replyTo, onClick }: ReplyQuoteProps) {
+  // 내용 미리보기 (최대 30자)
+  const preview = replyTo.content.length > 30
+    ? replyTo.content.slice(0, 30) + "..."
+    : replyTo.content
+
+  return (
+    <button
+      onClick={(e) => {
+        e.stopPropagation()
+        onClick?.()
+      }}
+      className={cn(
+        "flex items-center gap-1 text-[10px] mb-0.5 px-1.5 py-0.5 rounded",
+        "bg-white/5 border-l-2 border-white/40",
+        "hover:border-white/60 transition-colors cursor-pointer",
+        "text-left w-fit max-w-[200px]"
+      )}
+    >
+      <span className="text-primary/80 font-medium shrink-0">
+        {replyTo.senderNickname}
+      </span>
+      <span className="text-white/50 truncate">
+        {preview}
+      </span>
+    </button>
+  )
+}
+
+// ============================================
 // 개별 메시지 렌더링
 // ============================================
 interface ChatMessageItemProps {
@@ -116,15 +198,31 @@ interface ChatMessageItemProps {
   isOwn: boolean
   currentUserId: string
   onReact: (messageId: string, type: ReactionType) => void
+  onReply?: (message: ChatMessage) => void
+  onScrollToMessage?: (messageId: string) => void
 }
 
-function ChatMessageItem({ message, isOwn, currentUserId, onReact }: ChatMessageItemProps) {
+function ChatMessageItem({
+  message,
+  isOwn,
+  currentUserId,
+  onReact,
+  onReply,
+  onScrollToMessage,
+}: ChatMessageItemProps) {
   const [isHovered, setIsHovered] = useState(false)
   const isSystem = message.type === "system" || message.type === "announcement"
   const isWhisper = message.type === "whisper"
   const timeStr = formatTime(message.timestamp)
 
-  // 시스템 메시지 (노란색)
+  // 인용 클릭 핸들러
+  const handleQuoteClick = useCallback(() => {
+    if (message.replyTo && onScrollToMessage) {
+      onScrollToMessage(message.replyTo.id)
+    }
+  }, [message.replyTo, onScrollToMessage])
+
+  // 시스템 메시지 (노란색) - 답장 불가
   if (isSystem) {
     return (
       <div className="py-0.5 px-2">
@@ -148,7 +246,12 @@ function ChatMessageItem({ message, isOwn, currentUserId, onReact }: ChatMessage
         className="py-0.5 px-2 hover:bg-purple-500/10 rounded"
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
+        data-message-id={message.id}
       >
+        {/* 인용 블록 (답장인 경우) */}
+        {message.replyTo && (
+          <ReplyQuote replyTo={message.replyTo} onClick={handleQuoteClick} />
+        )}
         <span className="text-[11px] leading-relaxed">
           {/* 타임스탬프 */}
           <span className="text-white/40 mr-1">[{timeStr}]</span>
@@ -164,12 +267,14 @@ function ChatMessageItem({ message, isOwn, currentUserId, onReact }: ChatMessage
           <span className="text-purple-100">
             {message.content}
           </span>
-          {/* 리액션 버튼 */}
-          <ReactionButtons
+          {/* 액션 버튼 (답장 + 리액션) */}
+          <ActionButtons
             messageId={message.id}
+            message={message}
             reactions={message.reactions}
             currentUserId={currentUserId}
             onReact={onReact}
+            onReply={onReply}
             isVisible={isHovered}
           />
         </span>
@@ -185,7 +290,12 @@ function ChatMessageItem({ message, isOwn, currentUserId, onReact }: ChatMessage
       className="py-0.5 px-2 hover:bg-white/5 rounded"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
+      data-message-id={message.id}
     >
+      {/* 인용 블록 (답장인 경우) */}
+      {message.replyTo && (
+        <ReplyQuote replyTo={message.replyTo} onClick={handleQuoteClick} />
+      )}
       <span className="text-[11px] leading-relaxed">
         {/* 타임스탬프 */}
         <span className="text-white/40 mr-1">[{timeStr}]</span>
@@ -199,12 +309,14 @@ function ChatMessageItem({ message, isOwn, currentUserId, onReact }: ChatMessage
         <span className="text-white/90">
           {message.content}
         </span>
-        {/* 리액션 버튼 */}
-        <ReactionButtons
+        {/* 액션 버튼 (답장 + 리액션) */}
+        <ActionButtons
           messageId={message.id}
+          message={message}
           reactions={message.reactions}
           currentUserId={currentUserId}
           onReact={onReact}
+          onReply={onReply}
           isVisible={isHovered}
         />
       </span>
@@ -234,11 +346,13 @@ interface ChatMessageListProps {
   currentUserId: string
   isActive: boolean
   onReact?: (messageId: string, type: ReactionType) => void
+  onReply?: (message: ChatMessage) => void  // 답장 콜백
   onDeactivate?: () => void  // 채팅 기록 영역에서 Enter 시 비활성화
 }
 
 export interface ChatMessageListHandle {
   scrollToBottom: () => void
+  scrollToMessage: (messageId: string) => void  // 특정 메시지로 스크롤
 }
 
 // ============================================
@@ -248,13 +362,15 @@ export interface ChatMessageListHandle {
 const SCROLL_STEP = 40
 
 export const ChatMessageList = forwardRef<ChatMessageListHandle, ChatMessageListProps>(
-  function ChatMessageList({ messages, currentUserId, isActive, onReact, onDeactivate }, ref) {
+  function ChatMessageList({ messages, currentUserId, isActive, onReact, onReply, onDeactivate }, ref) {
     const containerRef = useRef<HTMLDivElement>(null)
     const [userScrolled, setUserScrolled] = useState(false)
     // 새 메시지 알림용 (과거 기록 보는 중 신규 메시지 있음)
     const [hasNewMessages, setHasNewMessages] = useState(false)
     // 이전 메시지 수 추적 (상태로 관리)
     const [prevMessageCount, setPrevMessageCount] = useState(messages.length)
+    // 하이라이트된 메시지 ID (스크롤 후 잠시 표시)
+    const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null)
 
     // 최하단 스크롤 함수
     const scrollToBottom = useCallback(() => {
@@ -265,10 +381,27 @@ export const ChatMessageList = forwardRef<ChatMessageListHandle, ChatMessageList
       }
     }, [])
 
+    // 특정 메시지로 스크롤 (인용 클릭 시)
+    const scrollToMessage = useCallback((messageId: string) => {
+      if (!containerRef.current) return
+
+      const messageElement = containerRef.current.querySelector(
+        `[data-message-id="${messageId}"]`
+      ) as HTMLElement | null
+
+      if (messageElement) {
+        messageElement.scrollIntoView({ behavior: "smooth", block: "center" })
+        // 하이라이트 효과
+        setHighlightedMessageId(messageId)
+        setTimeout(() => setHighlightedMessageId(null), 2000)
+      }
+    }, [])
+
     // 외부에서 호출 가능하도록 ref로 노출
     useImperativeHandle(ref, () => ({
       scrollToBottom,
-    }), [scrollToBottom])
+      scrollToMessage,
+    }), [scrollToBottom, scrollToMessage])
 
     // 새 메시지 감지 및 처리
     // 메시지 수 변화에 반응하여 알림 표시 또는 자동 스크롤
@@ -382,13 +515,22 @@ export const ChatMessageList = forwardRef<ChatMessageListHandle, ChatMessageList
               </div>
             ) : (
               recentMessages.map((msg) => (
-                <ChatMessageItem
+                <div
                   key={msg.id}
-                  message={msg}
-                  isOwn={msg.senderId === currentUserId}
-                  currentUserId={currentUserId}
-                  onReact={handleReact}
-                />
+                  className={cn(
+                    "transition-all duration-300",
+                    highlightedMessageId === msg.id && "ring-1 ring-white/30 rounded"
+                  )}
+                >
+                  <ChatMessageItem
+                    message={msg}
+                    isOwn={msg.senderId === currentUserId}
+                    currentUserId={currentUserId}
+                    onReact={handleReact}
+                    onReply={onReply}
+                    onScrollToMessage={scrollToMessage}
+                  />
+                </div>
               ))
             )}
           </div>

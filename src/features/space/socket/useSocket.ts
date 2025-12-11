@@ -11,6 +11,7 @@ import type {
   PlayerJumpData,
   AvatarColor,
   ProfileUpdateData,
+  ReplyToData,
 } from "./types"
 import { eventBridge, GameEvents } from "../game/events"
 
@@ -51,8 +52,8 @@ interface UseSocketReturn {
   socketError: SocketError | null // 🔒 세션 검증 실패 시 에러
   effectivePlayerId: string | null // 🔒 서버에서 파생된 실제 플레이어 ID
   partyState: PartyState // 🎉 현재 파티 상태
-  sendMessage: (content: string) => void
-  sendWhisper: (targetNickname: string, content: string) => void  // 📬 귓속말 전송
+  sendMessage: (content: string, replyTo?: ReplyToData) => void  // 답장 지원
+  sendWhisper: (targetNickname: string, content: string, replyTo?: ReplyToData) => void  // 📬 귓속말 전송 (답장 지원)
   joinParty: (partyId: string, partyName: string) => void  // 🎉 파티 입장
   leaveParty: () => void  // 🎉 파티 퇴장
   sendPartyMessage: (content: string) => void  // 🎉 파티 메시지 전송
@@ -413,17 +414,21 @@ export function useSocket({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [spaceId, playerId, sessionToken])
 
-  // Send chat message
-  const sendMessage = useCallback((content: string) => {
+  // Send chat message (답장 지원)
+  const sendMessage = useCallback((content: string, replyTo?: ReplyToData) => {
     if (socketRef.current && isConnected && content.trim()) {
-      socketRef.current.emit("chat:message", { content })
+      socketRef.current.emit("chat:message", { content, ...(replyTo && { replyTo }) })
     }
   }, [isConnected])
 
-  // 📬 Send whisper (귓속말)
-  const sendWhisper = useCallback((targetNickname: string, content: string) => {
+  // 📬 Send whisper (귓속말, 답장 지원)
+  const sendWhisper = useCallback((targetNickname: string, content: string, replyTo?: ReplyToData) => {
     if (socketRef.current && isConnected && content.trim() && targetNickname.trim()) {
-      socketRef.current.emit("whisper:send", { targetNickname: targetNickname.trim(), content: content.trim() })
+      socketRef.current.emit("whisper:send", {
+        targetNickname: targetNickname.trim(),
+        content: content.trim(),
+        ...(replyTo && { replyTo }),
+      })
     }
   }, [isConnected])
 
