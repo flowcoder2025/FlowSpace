@@ -65,11 +65,11 @@ export function UserNav() {
   // 비로그인 상태
   return (
     <HStack gap="md">
-      <Button variant="outline" asChild>
+      <Button variant="ghost" asChild>
         <Link href="/login">{getText("BTN.AUTH.LOGIN")}</Link>
       </Button>
       <Button asChild>
-        <Link href="/spaces/new">{getText("BTN.LANDING.CREATE_SPACE")}</Link>
+        <Link href="/login">{getText("BTN.AUTH.SIGNUP")}</Link>
       </Button>
     </HStack>
   )

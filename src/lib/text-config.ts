@@ -142,6 +142,7 @@ export const ID_TEXT: Record<string, string> = {
   "LID.AUTH.ERROR.DEFAULT": isAppsInToss ? "로그인에 실패했어요. 다시 시도해주세요." : "로그인에 실패했습니다. 다시 시도해주세요.",
   "LID.AUTH.ERROR.OAUTH": isAppsInToss ? "소셜 로그인에 실패했어요" : "소셜 로그인에 실패했습니다",
   "BTN.AUTH.LOGIN": BUTTON_TEXT.login,
+  "BTN.AUTH.SIGNUP": BUTTON_TEXT.signup,
   "BTN.AUTH.REGISTER": BUTTON_TEXT.signup,
   "BTN.AUTH.LOGOUT": BUTTON_TEXT.logout,
   "BTN.AUTH.GITHUB": "GitHub로 계속하기",
