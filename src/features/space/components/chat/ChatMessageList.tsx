@@ -13,9 +13,10 @@
  * - 스크롤바 활성화 시에만 표시
  * - 최신 메시지 이동 버튼
  */
-import { useRef, useState, useEffect, useCallback, useImperativeHandle, forwardRef } from "react"
+import { useRef, useState, useEffect, useCallback, useImperativeHandle, forwardRef, useMemo } from "react"
 import { cn } from "@/lib/utils"
 import type { ChatMessage, ReactionType, MessageReaction, ReplyTo } from "../../types/space.types"
+import { parseContentWithUrls, type ContentSegment } from "../../utils/chatFilter"
 
 // ============================================
 // 화살표 아이콘 컴포넌트
@@ -55,6 +56,75 @@ function ReplyIcon({ className }: { className?: string }) {
       <polyline points="9 17 4 12 9 7" />
       <path d="M20 18v-2a4 4 0 0 0-4-4H4" />
     </svg>
+  )
+}
+
+// ============================================
+// 링크 아이콘 컴포넌트
+// ============================================
+function ExternalLinkIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+      <polyline points="15 3 21 3 21 9" />
+      <line x1="10" y1="14" x2="21" y2="3" />
+    </svg>
+  )
+}
+
+// ============================================
+// 링크 렌더링 컴포넌트
+// ============================================
+interface LinkifiedContentProps {
+  content: string
+  className?: string
+}
+
+function LinkifiedContent({ content, className }: LinkifiedContentProps) {
+  const segments = useMemo(() => parseContentWithUrls(content), [content])
+
+  return (
+    <span className={className}>
+      {segments.map((segment, index) => {
+        if (segment.type === "text") {
+          return <span key={index}>{segment.value}</span>
+        }
+
+        // URL 링크 렌더링
+        return (
+          <a
+            key={index}
+            href={segment.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className={cn(
+              "inline-flex items-center gap-0.5",
+              "text-sky-400 hover:text-sky-300 underline underline-offset-2",
+              "transition-colors duration-150"
+            )}
+            title={`새 탭에서 열기: ${segment.href}`}
+          >
+            {/* URL 표시 (너무 길면 축약) */}
+            <span className="break-all">
+              {segment.value.length > 50
+                ? segment.value.slice(0, 47) + "..."
+                : segment.value}
+            </span>
+            <ExternalLinkIcon className="w-3 h-3 shrink-0 opacity-70" />
+          </a>
+        )
+      })}
+    </span>
   )
 }
 
@@ -228,7 +298,7 @@ function ChatMessageItem({
       <div className="py-0.5 px-2">
         <span className="text-[11px] text-yellow-400/90">
           <span className="text-white/40 mr-1">[{timeStr}]</span>
-          {message.content}
+          <LinkifiedContent content={message.content} />
         </span>
       </div>
     )
@@ -264,9 +334,7 @@ function ChatMessageItem({
           {/* 구분자 */}
           <span className="text-purple-300/50">: </span>
           {/* 내용 */}
-          <span className="text-purple-100">
-            {message.content}
-          </span>
+          <LinkifiedContent content={message.content} className="text-purple-100" />
           {/* 액션 버튼 (답장 + 리액션) */}
           <ActionButtons
             messageId={message.id}
@@ -306,9 +374,7 @@ function ChatMessageItem({
         {/* 구분자 */}
         <span className="text-white/50">: </span>
         {/* 내용 */}
-        <span className="text-white/90">
-          {message.content}
-        </span>
+        <LinkifiedContent content={message.content} className="text-white/90" />
         {/* 액션 버튼 (답장 + 리액션) */}
         <ActionButtons
           messageId={message.id}

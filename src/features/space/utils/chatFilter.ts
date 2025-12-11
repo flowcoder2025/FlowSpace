@@ -204,6 +204,108 @@ export function isPartyMessage(message: ChatMessage): boolean {
   return message.type === "party"
 }
 
+// ============================================
+// 링크 렌더링 관련
+// ============================================
+
+/**
+ * URL에 프로토콜이 없으면 추가
+ */
+function ensureProtocol(url: string): string {
+  if (url.startsWith("http://") || url.startsWith("https://")) {
+    return url
+  }
+  return `https://${url}`
+}
+
+/**
+ * URL 매칭 정보 타입
+ */
+interface UrlMatch {
+  url: string
+  index: number
+  length: number
+}
+
+/**
+ * 텍스트에서 URL 매칭 정보 추출 (위치 포함)
+ */
+function findUrlMatches(content: string): UrlMatch[] {
+  const matches: UrlMatch[] = []
+  // 새 정규식 인스턴스 생성 (lastIndex 초기화)
+  const regex = new RegExp(URL_REGEX.source, "gi")
+  let match: RegExpExecArray | null
+
+  while ((match = regex.exec(content)) !== null) {
+    matches.push({
+      url: match[0],
+      index: match.index,
+      length: match[0].length,
+    })
+  }
+
+  return matches
+}
+
+/**
+ * 콘텐츠를 파싱하여 텍스트와 URL을 분리
+ * React 컴포넌트에서 링크 렌더링에 사용
+ *
+ * @param content 원본 메시지 내용
+ * @returns 텍스트와 URL이 분리된 세그먼트 배열
+ *
+ * @example
+ * parseContentWithUrls("Check out https://example.com for more")
+ * // [
+ * //   { type: "text", value: "Check out " },
+ * //   { type: "url", value: "https://example.com", href: "https://example.com" },
+ * //   { type: "text", value: " for more" }
+ * // ]
+ */
+export type ContentSegment =
+  | { type: "text"; value: string }
+  | { type: "url"; value: string; href: string }
+
+export function parseContentWithUrls(content: string): ContentSegment[] {
+  const matches = findUrlMatches(content)
+
+  if (matches.length === 0) {
+    return [{ type: "text", value: content }]
+  }
+
+  const segments: ContentSegment[] = []
+  let lastIndex = 0
+
+  for (const match of matches) {
+    // URL 앞의 텍스트
+    if (match.index > lastIndex) {
+      segments.push({
+        type: "text",
+        value: content.slice(lastIndex, match.index),
+      })
+    }
+
+    // URL 자체
+    segments.push({
+      type: "url",
+      value: match.url,
+      href: ensureProtocol(match.url),
+    })
+
+    lastIndex = match.index + match.length
+  }
+
+  // URL 뒤의 남은 텍스트
+  if (lastIndex < content.length) {
+    segments.push({
+      type: "text",
+      value: content.slice(lastIndex),
+    })
+  }
+
+  return segments
+}
+
 /**
  * 귓속말 메시지의 표시 방향 결정
  *
