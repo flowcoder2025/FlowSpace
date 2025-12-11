@@ -17,6 +17,7 @@ import { GameCanvas } from "./game/GameCanvas"
 import { SpaceSettingsModal } from "./SpaceSettingsModal"
 import { useSocket } from "../socket"
 import { LiveKitRoomProvider, useLiveKitMedia } from "../livekit"
+import { useNotificationSound } from "../hooks"
 import type { ChatMessageData, AvatarColor } from "../socket/types"
 import type { ChatMessage } from "../types/space.types"
 
@@ -65,6 +66,9 @@ function socketToChatMessage(data: ChatMessageData): ChatMessage {
     content: data.content,
     timestamp: new Date(data.timestamp),
     type: data.type,
+    // 📬 귓속말 전용 필드
+    targetId: data.targetId,
+    targetNickname: data.targetNickname,
   }
 }
 
@@ -112,6 +116,9 @@ function SpaceLayoutContent({
   // Chat messages
   const [messages, setMessages] = useState<ChatMessage[]>([])
 
+  // 🔔 알림음 훅
+  const { playWhisperSound } = useNotificationSound()
+
   // Socket message handlers
   const handleChatMessage = useCallback((data: ChatMessageData) => {
     setMessages((prev) => [...prev, socketToChatMessage(data)])
@@ -121,12 +128,35 @@ function SpaceLayoutContent({
     setMessages((prev) => [...prev, socketToChatMessage(data)])
   }, [])
 
+  // 📬 귓속말 메시지 핸들러 (송신/수신 모두 같은 핸들러)
+  const handleWhisperMessage = useCallback((data: ChatMessageData) => {
+    setMessages((prev) => [...prev, socketToChatMessage(data)])
+    // 🔔 수신한 귓속말만 알림음 재생 (내가 보낸 게 아닌 경우)
+    if (data.senderId !== userId) {
+      playWhisperSound()
+    }
+  }, [userId, playWhisperSound])
+
+  // 📬 귓속말 에러 핸들러 (대상을 찾을 수 없을 때 등)
+  const handleWhisperError = useCallback((error: string) => {
+    // 시스템 메시지로 에러 표시
+    const errorMessage: ChatMessage = {
+      id: `whisper-error-${Date.now()}`,
+      senderId: "system",
+      senderNickname: "시스템",
+      content: error,
+      timestamp: new Date(),
+      type: "system",
+    }
+    setMessages((prev) => [...prev, errorMessage])
+  }, [])
+
   // 🔄 Local state for nickname/avatar (enables hot reload without socket reconnection)
   const [currentNickname, setCurrentNickname] = useState(userNickname)
   const [currentAvatarColor, setCurrentAvatarColor] = useState<AvatarColor>(userAvatarColor)
 
   // Socket connection for game position sync (🔒 sessionToken으로 서버 검증)
-  const { players, socketError, effectivePlayerId, sendMessage, updateProfile } = useSocket({
+  const { players, socketError, effectivePlayerId, sendMessage, sendWhisper, updateProfile } = useSocket({
     spaceId,
     playerId: userId,
     nickname: currentNickname,
@@ -134,6 +164,8 @@ function SpaceLayoutContent({
     sessionToken, // 게스트 세션 인증용
     onChatMessage: handleChatMessage,
     onSystemMessage: handleSystemMessage,
+    onWhisperMessage: handleWhisperMessage,  // 📬 귓속말 수신
+    onWhisperError: handleWhisperError,      // 📬 귓속말 에러
   })
 
   // LiveKit for audio/video (@livekit/components-react 공식 훅 기반)
@@ -217,6 +249,11 @@ function SpaceLayoutContent({
   const handleSendMessage = useCallback((content: string) => {
     sendMessage(content)
   }, [sendMessage])
+
+  // 📬 귓속말 전송 핸들러
+  const handleSendWhisper = useCallback((targetNickname: string, content: string) => {
+    sendWhisper(targetNickname, content)
+  }, [sendWhisper])
 
   const handleToggleMic = useCallback(async () => {
     await toggleMicrophone()
@@ -305,6 +342,7 @@ function SpaceLayoutContent({
               <FloatingChatOverlay
                 messages={messages}
                 onSendMessage={handleSendMessage}
+                onSendWhisper={handleSendWhisper}
                 currentUserId={resolvedUserId}
                 isVisible={isChatOpen}
               />

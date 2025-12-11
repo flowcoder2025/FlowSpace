@@ -25,6 +25,10 @@ interface UseSocketOptions {
   sessionToken?: string // 🔒 세션 토큰 (서버 검증용)
   onChatMessage?: (message: ChatMessageData) => void
   onSystemMessage?: (message: ChatMessageData) => void
+  onWhisperMessage?: (message: ChatMessageData) => void  // 📬 귓속말 수신 (송신 + 수신 모두)
+  onWhisperError?: (error: string) => void  // 📬 귓속말 에러 (대상 못찾음 등)
+  onPartyMessage?: (message: ChatMessageData) => void  // 🎉 파티/구역 메시지 수신
+  onPartyError?: (error: string) => void  // 🎉 파티 에러
   onPlayerJoined?: (player: PlayerPosition) => void
   onPlayerLeft?: (playerId: string) => void
 }
@@ -35,12 +39,23 @@ export type SocketError = {
   message: string
 }
 
+// 🎉 파티 상태 타입 (단순히 현재 참가 중인 파티 정보만)
+export interface PartyState {
+  partyId: string | null
+  partyName: string | null
+}
+
 interface UseSocketReturn {
   isConnected: boolean
   players: Map<string, PlayerPosition>
   socketError: SocketError | null // 🔒 세션 검증 실패 시 에러
   effectivePlayerId: string | null // 🔒 서버에서 파생된 실제 플레이어 ID
+  partyState: PartyState // 🎉 현재 파티 상태
   sendMessage: (content: string) => void
+  sendWhisper: (targetNickname: string, content: string) => void  // 📬 귓속말 전송
+  joinParty: (partyId: string, partyName: string) => void  // 🎉 파티 입장
+  leaveParty: () => void  // 🎉 파티 퇴장
+  sendPartyMessage: (content: string) => void  // 🎉 파티 메시지 전송
   updateProfile: (data: ProfileUpdateData) => void // 🔄 프로필 핫 업데이트
   disconnect: () => void
 }
@@ -53,6 +68,10 @@ export function useSocket({
   sessionToken,
   onChatMessage,
   onSystemMessage,
+  onWhisperMessage,
+  onWhisperError,
+  onPartyMessage,
+  onPartyError,
   onPlayerJoined,
   onPlayerLeft,
 }: UseSocketOptions): UseSocketReturn {
@@ -63,6 +82,8 @@ export function useSocket({
   const [socketError, setSocketError] = useState<SocketError | null>(null)
   // 🔒 서버에서 파생된 실제 플레이어 ID (room:joined에서 수신)
   const [effectivePlayerId, setEffectivePlayerId] = useState<string | null>(null)
+  // 🎉 파티 상태 (현재 참가 중인 파티)
+  const [partyState, setPartyState] = useState<PartyState>({ partyId: null, partyName: null })
 
   // Use refs to persist state across useEffect re-runs (fixes timing race condition)
   const pendingPlayersRef = useRef<PlayerPosition[]>([])
@@ -72,6 +93,10 @@ export function useSocket({
   // This prevents socket reconnection when parent component re-renders
   const onChatMessageRef = useRef(onChatMessage)
   const onSystemMessageRef = useRef(onSystemMessage)
+  const onWhisperMessageRef = useRef(onWhisperMessage)  // 📬 귓속말 콜백
+  const onWhisperErrorRef = useRef(onWhisperError)      // 📬 귓속말 에러 콜백
+  const onPartyMessageRef = useRef(onPartyMessage)      // 🎉 파티 메시지 콜백
+  const onPartyErrorRef = useRef(onPartyError)          // 🎉 파티 에러 콜백
   const onPlayerJoinedRef = useRef(onPlayerJoined)
   const onPlayerLeftRef = useRef(onPlayerLeft)
 
@@ -83,6 +108,10 @@ export function useSocket({
   useEffect(() => {
     onChatMessageRef.current = onChatMessage
     onSystemMessageRef.current = onSystemMessage
+    onWhisperMessageRef.current = onWhisperMessage  // 📬 귓속말 콜백
+    onWhisperErrorRef.current = onWhisperError      // 📬 귓속말 에러 콜백
+    onPartyMessageRef.current = onPartyMessage      // 🎉 파티 메시지 콜백
+    onPartyErrorRef.current = onPartyError          // 🎉 파티 에러 콜백
     onPlayerJoinedRef.current = onPlayerJoined
     onPlayerLeftRef.current = onPlayerLeft
     // 🔄 Update profile refs (used for movement events)
@@ -118,6 +147,8 @@ export function useSocket({
     socket.on("disconnect", () => {
       console.log("[Socket] Disconnected from server")
       setIsConnected(false)
+      // 파티 상태 초기화
+      setPartyState({ partyId: null, partyName: null })
     })
 
     // Handle GAME_READY event - sync all pending players
@@ -246,6 +277,53 @@ export function useSocket({
       onSystemMessageRef.current?.(message)
     })
 
+    // 📬 Whisper events (귓속말)
+    socket.on("whisper:receive", (message: ChatMessageData) => {
+      if (IS_DEV) {
+        console.log("[Socket] Whisper received from:", message.senderNickname)
+      }
+      onWhisperMessageRef.current?.(message)
+    })
+
+    socket.on("whisper:sent", (message: ChatMessageData) => {
+      if (IS_DEV) {
+        console.log("[Socket] Whisper sent to:", message.targetNickname)
+      }
+      onWhisperMessageRef.current?.(message)
+    })
+
+    socket.on("whisper:error", (data: { message: string }) => {
+      console.warn("[Socket] Whisper error:", data.message)
+      onWhisperErrorRef.current?.(data.message)
+    })
+
+    // 🎉 Party events (파티/구역 채팅) - 단순히 메시지만 처리
+    socket.on("party:joined", (data) => {
+      if (IS_DEV) {
+        console.log("[Socket] Joined party zone:", data.partyName)
+      }
+      setPartyState({ partyId: data.partyId, partyName: data.partyName })
+    })
+
+    socket.on("party:left", (data) => {
+      if (IS_DEV) {
+        console.log("[Socket] Left party zone:", data.partyId)
+      }
+      setPartyState({ partyId: null, partyName: null })
+    })
+
+    socket.on("party:message", (message: ChatMessageData) => {
+      if (IS_DEV) {
+        console.log("[Socket] Party message from:", message.senderNickname, "in", message.partyName)
+      }
+      onPartyMessageRef.current?.(message)
+    })
+
+    socket.on("party:error", (data: { message: string }) => {
+      console.warn("[Socket] Party error:", data.message)
+      onPartyErrorRef.current?.(data.message)
+    })
+
     // 🔄 Profile update events (다른 플레이어의 닉네임/아바타 변경)
     socket.on("player:profileUpdated", (data) => {
       if (IS_DEV) {
@@ -342,6 +420,34 @@ export function useSocket({
     }
   }, [isConnected])
 
+  // 📬 Send whisper (귓속말)
+  const sendWhisper = useCallback((targetNickname: string, content: string) => {
+    if (socketRef.current && isConnected && content.trim() && targetNickname.trim()) {
+      socketRef.current.emit("whisper:send", { targetNickname: targetNickname.trim(), content: content.trim() })
+    }
+  }, [isConnected])
+
+  // 🎉 Join party (파티/구역 입장)
+  const joinParty = useCallback((partyId: string, partyName: string) => {
+    if (socketRef.current && isConnected) {
+      socketRef.current.emit("party:join", { partyId, partyName })
+    }
+  }, [isConnected])
+
+  // 🎉 Leave party (파티/구역 퇴장)
+  const leaveParty = useCallback(() => {
+    if (socketRef.current && isConnected) {
+      socketRef.current.emit("party:leave")
+    }
+  }, [isConnected])
+
+  // 🎉 Send party message (파티/구역 메시지 전송)
+  const sendPartyMessage = useCallback((content: string) => {
+    if (socketRef.current && isConnected && content.trim()) {
+      socketRef.current.emit("party:message", { content })
+    }
+  }, [isConnected])
+
   // Disconnect
   const disconnect = useCallback(() => {
     if (socketRef.current) {
@@ -374,7 +480,12 @@ export function useSocket({
     players,
     socketError, // 🔒 세션 검증 실패 시 에러
     effectivePlayerId, // 🔒 서버에서 파생된 실제 플레이어 ID
+    partyState, // 🎉 현재 파티 상태
     sendMessage,
+    sendWhisper, // 📬 귓속말 전송
+    joinParty, // 🎉 파티 입장
+    leaveParty, // 🎉 파티 퇴장
+    sendPartyMessage, // 🎉 파티 메시지 전송
     updateProfile, // 🔄 프로필 핫 업데이트
     disconnect,
   }

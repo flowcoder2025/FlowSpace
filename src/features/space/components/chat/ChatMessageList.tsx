@@ -121,6 +121,7 @@ interface ChatMessageItemProps {
 function ChatMessageItem({ message, isOwn, currentUserId, onReact }: ChatMessageItemProps) {
   const [isHovered, setIsHovered] = useState(false)
   const isSystem = message.type === "system" || message.type === "announcement"
+  const isWhisper = message.type === "whisper"
   const timeStr = formatTime(message.timestamp)
 
   // 시스템 메시지 (노란색)
@@ -130,6 +131,47 @@ function ChatMessageItem({ message, isOwn, currentUserId, onReact }: ChatMessage
         <span className="text-[11px] text-yellow-400/90">
           <span className="text-white/40 mr-1">[{timeStr}]</span>
           {message.content}
+        </span>
+      </div>
+    )
+  }
+
+  // 📬 귓속말 메시지 (보라색)
+  if (isWhisper) {
+    const isSent = message.senderId === currentUserId
+    const directionLabel = isSent
+      ? `→ ${message.targetNickname}`
+      : `← ${message.senderNickname}`
+
+    return (
+      <div
+        className="py-0.5 px-2 hover:bg-purple-500/10 rounded"
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+      >
+        <span className="text-[11px] leading-relaxed">
+          {/* 타임스탬프 */}
+          <span className="text-white/40 mr-1">[{timeStr}]</span>
+          {/* 귓속말 라벨 */}
+          <span className="text-purple-400 font-medium mr-1">[귓속말]</span>
+          {/* 방향 표시 (→ 받는사람 또는 ← 보낸사람) */}
+          <span className="text-purple-300">
+            {directionLabel}
+          </span>
+          {/* 구분자 */}
+          <span className="text-purple-300/50">: </span>
+          {/* 내용 */}
+          <span className="text-purple-100">
+            {message.content}
+          </span>
+          {/* 리액션 버튼 */}
+          <ReactionButtons
+            messageId={message.id}
+            reactions={message.reactions}
+            currentUserId={currentUserId}
+            onReact={onReact}
+            isVisible={isHovered}
+          />
         </span>
       </div>
     )

@@ -24,6 +24,9 @@ export interface PlayerJumpData {
   y: number
 }
 
+// Message type (공유 타입 - space.types.ts와 일치)
+export type MessageType = "message" | "party" | "whisper" | "system" | "announcement"
+
 // Chat message data
 export interface ChatMessageData {
   id: string
@@ -31,7 +34,15 @@ export interface ChatMessageData {
   senderNickname: string
   content: string
   timestamp: number
-  type: "message" | "system"
+  type: MessageType
+
+  // 귓속말 전용 필드
+  targetId?: string           // 수신자 ID (whisper일 때만)
+  targetNickname?: string     // 수신자 닉네임 (whisper일 때만)
+
+  // 파티 전용 필드
+  partyId?: string            // 파티/구역 ID (party일 때만)
+  partyName?: string          // 파티/구역 이름 (party일 때만)
 }
 
 // Room/Space data
@@ -68,6 +79,14 @@ export interface ClientToServerEvents {
   // Chat
   "chat:message": (data: { content: string }) => void
 
+  // Whisper (귓속말)
+  "whisper:send": (data: { targetNickname: string; content: string }) => void
+
+  // Party (파티/구역 채팅)
+  "party:join": (data: { partyId: string; partyName: string }) => void
+  "party:leave": () => void
+  "party:message": (data: { content: string }) => void
+
   // Profile update (닉네임/아바타 핫 변경)
   "player:updateProfile": (data: ProfileUpdateData) => void
 }
@@ -92,6 +111,17 @@ export interface ServerToClientEvents {
   "chat:message": (message: ChatMessageData) => void
   "chat:system": (message: ChatMessageData) => void
 
+  // Whisper (귓속말)
+  "whisper:receive": (message: ChatMessageData) => void
+  "whisper:sent": (message: ChatMessageData) => void  // 송신 확인 (내가 보낸 귓속말)
+  "whisper:error": (data: { message: string }) => void
+
+  // Party (파티/구역 채팅) - 단순히 구역 내 메시지만 구분
+  "party:joined": (data: { partyId: string; partyName: string }) => void
+  "party:left": (data: { partyId: string }) => void
+  "party:message": (message: ChatMessageData) => void
+  "party:error": (data: { message: string }) => void
+
   // Error (🔒 세션 검증 실패 등)
   "error": (data: { message: string }) => void
 }
@@ -108,4 +138,7 @@ export interface SocketData {
   nickname: string
   avatarColor?: AvatarColor
   sessionToken?: string // 🔒 세션 토큰 (중복 접속 방지용)
+  // 파티/구역 정보
+  partyId?: string      // 현재 참가 중인 파티 ID
+  partyName?: string    // 현재 참가 중인 파티 이름
 }

@@ -159,6 +159,10 @@ const io = new Server<
 // Room state: spaceId -> Map<playerId, PlayerPosition>
 const rooms = new Map<string, Map<string, PlayerPosition>>()
 
+// 🎉 Party/Zone state: partyRoomId -> Set<socketId>
+// partyRoomId format: "{spaceId}:party:{partyId}"
+const partyRooms = new Map<string, Set<string>>()
+
 function getOrCreateRoom(spaceId: string): Map<string, PlayerPosition> {
   if (!rooms.has(spaceId)) {
     rooms.set(spaceId, new Map())
@@ -172,6 +176,30 @@ function removePlayerFromRoom(spaceId: string, playerId: string): void {
     room.delete(playerId)
     if (room.size === 0) {
       rooms.delete(spaceId)
+    }
+  }
+}
+
+// 🎉 Party room helper functions
+function getPartyRoomId(spaceId: string, partyId: string): string {
+  return `${spaceId}:party:${partyId}`
+}
+
+function getOrCreatePartyRoom(spaceId: string, partyId: string): Set<string> {
+  const partyRoomId = getPartyRoomId(spaceId, partyId)
+  if (!partyRooms.has(partyRoomId)) {
+    partyRooms.set(partyRoomId, new Set())
+  }
+  return partyRooms.get(partyRoomId)!
+}
+
+function removeFromPartyRoom(spaceId: string, partyId: string, socketId: string): void {
+  const partyRoomId = getPartyRoomId(spaceId, partyId)
+  const partyRoom = partyRooms.get(partyRoomId)
+  if (partyRoom) {
+    partyRoom.delete(socketId)
+    if (partyRoom.size === 0) {
+      partyRooms.delete(partyRoomId)
     }
   }
 }
@@ -392,6 +420,161 @@ io.on("connection", (socket) => {
     }
   })
 
+  // 📬 Whisper (귓속말) - 특정 닉네임의 사용자에게만 전송
+  socket.on("whisper:send", ({ targetNickname, content }) => {
+    const { spaceId, playerId, nickname } = socket.data
+
+    if (!spaceId || !playerId || !content.trim()) return
+
+    // 🔒 자기 자신에게 귓속말 보내기 방지
+    if (targetNickname === nickname) {
+      socket.emit("whisper:error", { message: "자기 자신에게는 귓속말을 보낼 수 없습니다." })
+      return
+    }
+
+    // 같은 공간의 소켓들 중에서 targetNickname과 일치하는 소켓 찾기
+    const socketsInRoom = io.sockets.adapter.rooms.get(spaceId)
+    if (!socketsInRoom) {
+      socket.emit("whisper:error", { message: "공간을 찾을 수 없습니다." })
+      return
+    }
+
+    let targetSocket: typeof socket | null = null
+    let targetPlayerId: string | null = null
+
+    for (const socketId of socketsInRoom) {
+      const s = io.sockets.sockets.get(socketId)
+      if (s && s.data.nickname === targetNickname && s.data.playerId !== playerId) {
+        targetSocket = s
+        targetPlayerId = s.data.playerId
+        break
+      }
+    }
+
+    // 대상 사용자가 없으면 에러 반환
+    if (!targetSocket || !targetPlayerId) {
+      socket.emit("whisper:error", { message: `"${targetNickname}" 님을 찾을 수 없습니다.` })
+      return
+    }
+
+    // 귓속말 메시지 생성
+    const whisperMessage: ChatMessageData = {
+      id: `whisper-${Date.now()}-${playerId}`,
+      senderId: playerId,
+      senderNickname: nickname || "Unknown",
+      content: content.trim(),
+      timestamp: Date.now(),
+      type: "whisper",
+      targetId: targetPlayerId,
+      targetNickname: targetNickname,
+    }
+
+    // 수신자에게 전송
+    targetSocket.emit("whisper:receive", whisperMessage)
+
+    // 송신자에게 확인 전송 (내가 보낸 귓속말도 화면에 표시하기 위함)
+    socket.emit("whisper:sent", whisperMessage)
+
+    if (IS_DEV) {
+      console.log(`[Socket] Whisper from ${nickname} to ${targetNickname}: ${content.trim().substring(0, 30)}...`)
+    }
+  })
+
+  // 🎉 Party join (파티/구역 입장) - 단순히 구역 내 메시지를 받기 위한 룸 참가
+  socket.on("party:join", ({ partyId, partyName }) => {
+    const { spaceId, playerId, nickname } = socket.data
+
+    if (!spaceId || !playerId) return
+
+    // 이전 파티에서 나가기 (한 번에 하나의 파티만 참가 가능)
+    if (socket.data.partyId) {
+      const oldPartyId = socket.data.partyId
+      const oldPartyRoomId = getPartyRoomId(spaceId, oldPartyId)
+
+      removeFromPartyRoom(spaceId, oldPartyId, socket.id)
+      socket.leave(oldPartyRoomId)
+
+      if (IS_DEV) {
+        console.log(`[Socket] ${nickname} left party zone ${oldPartyId}`)
+      }
+    }
+
+    // 새 파티 룸에 참가
+    const partyRoom = getOrCreatePartyRoom(spaceId, partyId)
+    const partyRoomId = getPartyRoomId(spaceId, partyId)
+
+    partyRoom.add(socket.id)
+    socket.join(partyRoomId)
+
+    // 소켓 데이터에 파티 정보 저장
+    socket.data.partyId = partyId
+    socket.data.partyName = partyName
+
+    // 입장 확인 전송 (멤버 목록 없음 - 단순 확인)
+    socket.emit("party:joined", { partyId, partyName })
+
+    if (IS_DEV) {
+      console.log(`[Socket] ${nickname} entered party zone ${partyName} (${partyId})`)
+    }
+  })
+
+  // 🎉 Party leave (파티/구역 퇴장) - 구역에서 나가면 더 이상 파티 메시지 수신 안 함
+  socket.on("party:leave", () => {
+    const { spaceId, playerId, nickname, partyId, partyName } = socket.data
+
+    if (!spaceId || !playerId || !partyId) return
+
+    const partyRoomId = getPartyRoomId(spaceId, partyId)
+
+    // 파티 룸에서 제거
+    removeFromPartyRoom(spaceId, partyId, socket.id)
+    socket.leave(partyRoomId)
+
+    // 소켓 데이터에서 파티 정보 제거
+    socket.data.partyId = undefined
+    socket.data.partyName = undefined
+
+    // 퇴장 확인 전송
+    socket.emit("party:left", { partyId })
+
+    if (IS_DEV) {
+      console.log(`[Socket] ${nickname} left party zone ${partyName} (${partyId})`)
+    }
+  })
+
+  // 🎉 Party message (파티/구역 채팅)
+  socket.on("party:message", ({ content }) => {
+    const { spaceId, playerId, nickname, partyId, partyName } = socket.data
+
+    if (!spaceId || !playerId || !partyId || !content.trim()) {
+      if (!partyId) {
+        socket.emit("party:error", { message: "파티에 참가하지 않았습니다." })
+      }
+      return
+    }
+
+    const partyRoomId = getPartyRoomId(spaceId, partyId)
+
+    // 파티 메시지 생성
+    const partyMessage: ChatMessageData = {
+      id: `party-${Date.now()}-${playerId}`,
+      senderId: playerId,
+      senderNickname: nickname || "Unknown",
+      content: content.trim(),
+      timestamp: Date.now(),
+      type: "party",
+      partyId,
+      partyName,
+    }
+
+    // 파티 룸에 있는 모든 멤버에게 전송 (송신자 포함)
+    io.to(partyRoomId).emit("party:message", partyMessage)
+
+    if (IS_DEV) {
+      console.log(`[Socket] Party message in ${partyName}: ${nickname}: ${content.trim().substring(0, 30)}...`)
+    }
+  })
+
   // 🔄 Profile update (닉네임/아바타 핫 업데이트)
   socket.on("player:updateProfile", (data: ProfileUpdateData) => {
     const { spaceId, playerId } = socket.data
@@ -429,10 +612,19 @@ io.on("connection", (socket) => {
 
   // Disconnect
   socket.on("disconnect", (reason) => {
-    const { spaceId, playerId, nickname, sessionToken } = socket.data
+    const { spaceId, playerId, nickname, sessionToken, partyId, partyName } = socket.data
 
     if (spaceId && playerId) {
       removePlayerFromRoom(spaceId, playerId)
+
+      // 🎉 파티 정리: 파티에 참가 중이었다면 룸에서 제거
+      if (partyId) {
+        removeFromPartyRoom(spaceId, partyId, socket.id)
+
+        if (IS_DEV) {
+          console.log(`[Socket] ${nickname} disconnected from party zone ${partyName} (${partyId})`)
+        }
+      }
 
       // 📊 EXIT 이벤트 로깅 (비동기, 실패해도 disconnect 처리는 계속)
       if (sessionToken) {

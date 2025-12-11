@@ -24,7 +24,9 @@ import { useChatDrag } from "../../hooks/useChatDrag"
 import { useFullscreen } from "../../hooks/useFullscreen"
 import { ChatMessageList, type ChatMessageListHandle } from "./ChatMessageList"
 import { ChatInputArea } from "./ChatInputArea"
-import type { ChatMessage, ReactionType } from "../../types/space.types"
+import { ChatTabs } from "./ChatTabs"
+import { filterMessagesByTab, calculateUnreadCounts } from "../../utils/chatFilter"
+import type { ChatMessage, ReactionType, ChatTab } from "../../types/space.types"
 
 // ============================================
 // FloatingChatOverlay Props
@@ -32,6 +34,7 @@ import type { ChatMessage, ReactionType } from "../../types/space.types"
 interface FloatingChatOverlayProps {
   messages: ChatMessage[]
   onSendMessage: (content: string) => void
+  onSendWhisper?: (targetNickname: string, content: string) => void  // 📬 귓속말 전송
   onReact?: (messageId: string, type: ReactionType) => void
   currentUserId: string
   isVisible?: boolean
@@ -43,6 +46,7 @@ interface FloatingChatOverlayProps {
 export function FloatingChatOverlay({
   messages,
   onSendMessage,
+  onSendWhisper,
   onReact,
   currentUserId,
   isVisible = true,
@@ -51,6 +55,16 @@ export function FloatingChatOverlay({
   const { position, size, isDragging, isResizing, handleMoveStart, handleResizeStart } = useChatDrag()
   const { isFullscreen, fullscreenElement } = useFullscreen()
   const messageListRef = useRef<ChatMessageListHandle>(null)
+
+  // 📬 탭 상태
+  const [activeTab, setActiveTab] = useState<ChatTab>("all")
+  // 마지막으로 읽은 시간 (탭별)
+  const [lastReadTimestamps, setLastReadTimestamps] = useState<Record<ChatTab, Date>>({
+    all: new Date(),
+    party: new Date(),
+    whisper: new Date(),
+    system: new Date(),
+  })
 
   // 헤더 표시 상태 (활성화 중 + 비활성화 후 5초간만 표시)
   const [showHeader, setShowHeader] = useState(true)
@@ -87,6 +101,23 @@ export function FloatingChatOverlay({
     messageListRef.current?.scrollToBottom()
     deactivate()
   }, [deactivate])
+
+  // 📬 탭 변경 핸들러 (변경 시 해당 탭의 읽음 시간 업데이트)
+  const handleTabChange = useCallback((tab: ChatTab) => {
+    setActiveTab(tab)
+    setLastReadTimestamps((prev) => ({
+      ...prev,
+      [tab]: new Date(),
+    }))
+    // 탭 변경 시 스크롤을 최하단으로
+    messageListRef.current?.scrollToBottom()
+  }, [])
+
+  // 📬 읽지 않은 메시지 카운트 계산 (SSOT: chatFilter.ts)
+  const unreadCounts = useMemo(
+    () => calculateUnreadCounts(messages, lastReadTimestamps, currentUserId),
+    [messages, lastReadTimestamps, currentUserId]
+  )
 
   // 로컬 리액션 상태 (낙관적 UI 업데이트용)
   const [localReactions, setLocalReactions] = useState<
@@ -136,15 +167,24 @@ export function FloatingChatOverlay({
     reactions: [],
   }), [])
 
-  // 메시지에 로컬 리액션 적용 + 안내 메시지 추가
+  // 📬 탭별 필터링 + 로컬 리액션 적용 + 안내 메시지 추가
   const displayMessages = useMemo(() => {
-    const messagesWithReactions = messages.map((msg) => ({
+    // 1. 탭에 따라 메시지 필터링
+    const filteredMessages = filterMessagesByTab(messages, activeTab, currentUserId)
+
+    // 2. 로컬 리액션 적용
+    const messagesWithReactions = filteredMessages.map((msg) => ({
       ...msg,
       reactions: localReactions[msg.id] || msg.reactions || [],
     }))
-    // 안내 메시지를 맨 앞에 추가
-    return [GUIDE_MESSAGE, ...messagesWithReactions]
-  }, [messages, localReactions, GUIDE_MESSAGE])
+
+    // 3. 안내 메시지를 맨 앞에 추가 (전체 탭에서만)
+    if (activeTab === "all") {
+      return [GUIDE_MESSAGE, ...messagesWithReactions]
+    }
+
+    return messagesWithReactions
+  }, [messages, localReactions, GUIDE_MESSAGE, activeTab, currentUserId])
 
   // 전역 Enter 키 리스너 (전체화면 모드에서도 작동)
   useEffect(() => {
@@ -178,9 +218,10 @@ export function FloatingChatOverlay({
 
   if (!isVisible) return null
 
-  // 메시지 영역 높이 계산 (전체 높이 - 헤더(조건부) - 입력창 여유)
+  // 메시지 영역 높이 계산 (전체 높이 - 헤더(조건부) - 탭(조건부) - 입력창 여유)
   const headerHeight = showHeader ? 28 : 0
-  const messageAreaHeight = size.height - headerHeight - (isActive ? 50 : 0)
+  const tabsHeight = isActive ? 28 : 0  // 탭 높이 (활성화 시에만)
+  const messageAreaHeight = size.height - headerHeight - tabsHeight - (isActive ? 50 : 0)
 
   // 채팅 오버레이 콘텐츠
   // 🔧 전체화면 내부에서는 absolute 사용 (fixed는 fullscreen 컨텍스트에서 예상대로 작동하지 않을 수 있음)
@@ -219,6 +260,17 @@ export function FloatingChatOverlay({
         </div>
       )}
 
+      {/* 📬 채팅 탭 (활성화 시에만 표시) */}
+      {isActive && (
+        <ChatTabs
+          activeTab={activeTab}
+          onTabChange={handleTabChange}
+          unreadCounts={unreadCounts}
+          onDeactivate={handleDeactivate}
+          className="bg-black/30 backdrop-blur-sm"
+        />
+      )}
+
       {/* 메시지 목록 - 동적 높이 */}
       <div
         className="flex-1 flex flex-col justify-end min-h-0 overflow-hidden"
@@ -237,6 +289,7 @@ export function FloatingChatOverlay({
       {/* 입력 영역 - 활성화 시만 표시 */}
       <ChatInputArea
         onSend={onSendMessage}
+        onSendWhisper={onSendWhisper}
         onDeactivate={handleDeactivate}
         isActive={isActive}
       />

@@ -4,3 +4,4 @@
 export { FloatingChatOverlay } from "./FloatingChatOverlay"
 export { ChatMessageList } from "./ChatMessageList"
 export { ChatInputArea } from "./ChatInputArea"
+export { ChatTabs } from "./ChatTabs"

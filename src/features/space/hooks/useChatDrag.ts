@@ -127,6 +127,9 @@ export function useChatDrag() {
     e.preventDefault()
     e.stopPropagation()
 
+    // 🔧 클릭 시점의 마우스 위치로 초기화 (클릭 시 점프 방지)
+    lastMouseRef.current = { x: e.clientX, y: e.clientY }
+
     // 현재 state를 직접 읽어서 오프셋 계산 (ref 동기화 이슈 방지)
     setState((currentState) => {
       dragOffsetRef.current = {
@@ -143,6 +146,9 @@ export function useChatDrag() {
   const handleResizeStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
+
+    // 🔧 클릭 시점의 마우스 위치로 초기화 (클릭 시 점프 방지)
+    lastMouseRef.current = { x: e.clientX, y: e.clientY }
 
     setState((currentState) => {
       dragStartRef.current = {
