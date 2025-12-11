@@ -4,7 +4,7 @@ import { useState, useCallback, useMemo, useEffect } from "react"
 
 import { SpaceHeader } from "./SpaceHeader"
 import { FloatingChatOverlay } from "./chat"
-import { ParticipantPanel } from "./video/ParticipantPanel"
+import { ParticipantPanel, type ParticipantViewMode } from "./video/ParticipantPanel"
 import { ScreenShareOverlay } from "./video/ScreenShare"
 import { ControlBar } from "./controls/ControlBar"
 import { GameCanvas } from "./game/GameCanvas"
@@ -89,6 +89,9 @@ function SpaceLayoutContent({
   // Panel visibility
   const [isChatOpen, setIsChatOpen] = useState(true)
   const [isParticipantsOpen, setIsParticipantsOpen] = useState(true)
+
+  // 🎬 참가자 패널 뷰 모드 (sidebar | grid | hidden)
+  const [participantViewMode, setParticipantViewMode] = useState<ParticipantViewMode>("sidebar")
 
   // Settings modal
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
@@ -274,6 +277,15 @@ function SpaceLayoutContent({
 
   const handleToggleParticipants = useCallback(() => {
     setIsParticipantsOpen((prev) => !prev)
+    // 참가자 패널이 꺼지면 뷰 모드를 hidden으로, 켜지면 sidebar로
+    setParticipantViewMode((prev) => prev === "hidden" ? "sidebar" : prev)
+  }, [])
+
+  // 🎬 뷰 모드 변경 핸들러
+  const handleViewModeChange = useCallback((mode: ParticipantViewMode) => {
+    setParticipantViewMode(mode)
+    // hidden 모드면 패널도 닫기, 그 외에는 패널 열기
+    setIsParticipantsOpen(mode !== "hidden")
   }, [])
 
   const handleOpenSettings = useCallback(() => {
@@ -346,12 +358,27 @@ function SpaceLayoutContent({
           isVisible={isChatOpen}
         />
 
-        {/* 플로팅 참가자 비디오 (우측) */}
-        {isParticipantsOpen && (
+        {/* 플로팅 참가자 비디오 - 뷰 모드에 따라 다르게 렌더링 */}
+        {isParticipantsOpen && participantViewMode === "sidebar" && (
           <div className="pointer-events-auto absolute right-2 top-2 z-20 w-44 max-h-[calc(100%-80px)] overflow-y-auto">
             <ParticipantPanel
               participantTracks={allParticipantTracks}
               localParticipantId={resolvedUserId}
+              viewMode={participantViewMode}
+              onViewModeChange={handleViewModeChange}
+            />
+          </div>
+        )}
+
+        {/* 그리드 모드 - 전체 화면 오버레이 */}
+        {isParticipantsOpen && participantViewMode === "grid" && (
+          <div className="pointer-events-auto absolute inset-0 z-30 bg-black/90 backdrop-blur-sm">
+            <ParticipantPanel
+              participantTracks={allParticipantTracks}
+              localParticipantId={resolvedUserId}
+              viewMode={participantViewMode}
+              onViewModeChange={handleViewModeChange}
+              className="h-full"
             />
           </div>
         )}

@@ -376,7 +376,11 @@ export function ControlBar({
         <Button
           variant="outline"
           size="icon"
-          onClick={onToggleChat}
+          onClick={() => {
+            onToggleChat()
+            // 클릭 후 포커스 해제 (스페이스바로 재토글 방지)
+            ;(document.activeElement as HTMLElement)?.blur()
+          }}
           className="border-white/30 text-white bg-transparent hover:bg-white/10 focus-visible:ring-0 focus-visible:ring-offset-0"
           aria-label={isChatOpen ? "채팅 닫기" : "채팅 열기"}
         >
@@ -387,7 +391,11 @@ export function ControlBar({
         <Button
           variant="outline"
           size="icon"
-          onClick={onToggleParticipants}
+          onClick={() => {
+            onToggleParticipants()
+            // 클릭 후 포커스 해제 (스페이스바로 재토글 방지)
+            ;(document.activeElement as HTMLElement)?.blur()
+          }}
           className="border-white/30 text-white bg-transparent hover:bg-white/10 focus-visible:ring-0 focus-visible:ring-offset-0"
           aria-label={isParticipantsOpen ? "참가자 목록 닫기" : "참가자 목록 열기"}
         >
