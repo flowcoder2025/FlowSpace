@@ -201,6 +201,7 @@ function SpaceLayoutContent({
 
   // Ensure local participant is in tracks (fallback if LiveKit not connected)
   // 🔒 resolvedUserId 사용 (서버 파생 ID)
+  // 🎨 avatarColor를 players에서 가져와서 추가
   const allParticipantTracks = useMemo(() => {
     const tracks = new Map(participantTracks)
 
@@ -210,22 +211,34 @@ function SpaceLayoutContent({
         participantId: resolvedUserId,
         participantName: currentNickname, // 🔄 로컬 상태 사용
         isSpeaking: false,
+        avatarColor: currentAvatarColor, // 🎨 로컬 유저 아바타 색상
       })
+    } else {
+      // 기존 트랙에 avatarColor 추가
+      const existingTrack = tracks.get(resolvedUserId)!
+      tracks.set(resolvedUserId, { ...existingTrack, avatarColor: currentAvatarColor })
     }
 
     // Add socket players that might not have LiveKit tracks yet
+    // 또는 기존 트랙에 avatarColor 추가
     players.forEach((player) => {
-      if (!tracks.has(player.id)) {
+      const existingTrack = tracks.get(player.id)
+      if (existingTrack) {
+        // 기존 트랙에 avatarColor 추가
+        tracks.set(player.id, { ...existingTrack, avatarColor: player.avatarColor || "default" })
+      } else {
+        // 새 트랙 생성
         tracks.set(player.id, {
           participantId: player.id,
           participantName: player.nickname,
           isSpeaking: false,
+          avatarColor: player.avatarColor || "default",
         })
       }
     })
 
     return tracks
-  }, [participantTracks, players, resolvedUserId, currentNickname])
+  }, [participantTracks, players, resolvedUserId, currentNickname, currentAvatarColor])
 
   // Find active screen share (first participant with screenTrack)
   const activeScreenShare = useMemo(() => {

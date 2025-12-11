@@ -31,4 +31,6 @@ export interface ParticipantTrack {
   isScreenMuted?: boolean
   /** 🔧 트랙 상태 변경 시 React 재렌더링 트리거용 revision 카운터 */
   revision?: number
+  /** 🎨 아바타 색상 (VideoTile 플레이스홀더에서 캐릭터 스프라이트 표시용) */
+  avatarColor?: string
 }

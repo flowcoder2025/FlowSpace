@@ -329,7 +329,7 @@ export function VideoTile({ track, isLocal = false, isScreenShare = false, class
     <div
       ref={containerRef}
       className={cn(
-        "group relative aspect-video rounded-lg bg-muted",
+        "group relative aspect-video rounded-lg bg-black",
         // 전체화면이 아닐 때만 overflow-hidden (Portal이 잘리지 않도록)
         !isFullscreen && "overflow-hidden",
         track.isSpeaking && "ring-2 ring-primary ring-offset-2",
@@ -354,14 +354,15 @@ export function VideoTile({ track, isLocal = false, isScreenShare = false, class
         )}
       />
 
-      {/* Placeholder - 비디오가 없을 때만 표시 */}
+      {/* Placeholder - 비디오가 없을 때만 표시 (캐릭터 스프라이트) */}
       {!shouldShowVideo && (
-        <div className="flex size-full items-center justify-center bg-muted">
-          <div className="flex size-12 items-center justify-center rounded-full bg-muted-foreground/20">
-            <Text size="lg" weight="semibold" className="text-muted-foreground">
-              {track.participantName.charAt(0).toUpperCase()}
-            </Text>
-          </div>
+        <div className="flex size-full items-center justify-center bg-black">
+          <img
+            src={`/assets/game/sprites/character-${track.avatarColor || "default"}.png`}
+            alt={track.participantName}
+            className="size-16 object-contain pixelated"
+            style={{ imageRendering: "pixelated" }}
+          />
         </div>
       )}
 
