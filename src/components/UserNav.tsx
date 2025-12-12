@@ -1,12 +1,34 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { signOut, useSession } from "next-auth/react"
 import Link from "next/link"
 import { Button, HStack, Text } from "@/components/ui"
 import { getText } from "@/lib/text-config"
 
+interface NavRoles {
+  isSuperAdmin: boolean
+  hasManageableSpaces: boolean
+  hasAnySpaces: boolean
+}
+
 export function UserNav() {
   const { data: session, status } = useSession()
+  const [navRoles, setNavRoles] = useState<NavRoles | null>(null)
+
+  // 로그인 시 역할 정보 조회
+  useEffect(() => {
+    if (session?.user) {
+      fetch("/api/users/me/nav")
+        .then((res) => res.json())
+        .then((data) => {
+          if (!data.error) {
+            setNavRoles(data)
+          }
+        })
+        .catch(console.error)
+    }
+  }, [session])
 
   // 로딩 중
   if (status === "loading") {
@@ -40,10 +62,24 @@ export function UserNav() {
           </Text>
         </HStack>
 
-        {/* 대시보드 버튼 */}
-        <Button variant="outline" size="sm" asChild>
-          <Link href="/admin">{getText("BTN.NAV.DASHBOARD")}</Link>
+        {/* 내 공간 (모든 로그인 사용자) */}
+        <Button variant="ghost" size="sm" asChild>
+          <Link href="/my-spaces">내 공간</Link>
         </Button>
+
+        {/* 공간 관리 (OWNER/STAFF 있는 경우) */}
+        {navRoles?.hasManageableSpaces && (
+          <Button variant="ghost" size="sm" asChild>
+            <Link href="/dashboard">공간 관리</Link>
+          </Button>
+        )}
+
+        {/* 관리자 (SuperAdmin만) */}
+        {navRoles?.isSuperAdmin && (
+          <Button variant="outline" size="sm" asChild>
+            <Link href="/admin">{getText("BTN.NAV.DASHBOARD")}</Link>
+          </Button>
+        )}
 
         {/* 공간 만들기 버튼 */}
         <Button size="sm" asChild>

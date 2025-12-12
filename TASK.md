@@ -157,11 +157,13 @@
 
 ### 5.1 구현 체크리스트
 
-- [ ] 헤더에 역할별 네비게이션 링크
-  - SuperAdmin: /admin 링크 표시
-  - Owner/Staff: /dashboard 링크 표시
-  - 모든 사용자: /my-spaces 링크 표시
-- [ ] 로그인/로그아웃 상태에 따른 메뉴 변경
+- [x] 헤더에 역할별 네비게이션 링크 ✅
+  - SuperAdmin: /admin 링크 표시 ✅
+  - Owner/Staff: /dashboard 링크 표시 ✅
+  - 모든 사용자: /my-spaces 링크 표시 ✅
+- [x] 로그인/로그아웃 상태에 따른 메뉴 변경 ✅
+- [x] /api/users/me/nav API: 역할 기반 네비게이션 정보 ✅
+- [x] UserNav 컴포넌트 업데이트 ✅
 
 ---
 
@@ -173,7 +175,7 @@
 | Phase 2: SuperAdmin /admin | ✅ 완료 | 2025-12-12 |
 | Phase 3: Owner /dashboard | ✅ 완료 | 2025-12-12 |
 | Phase 4: Member /my-spaces | ✅ 완료 | 2025-12-12 |
-| Phase 5: 네비게이션 통합 | ⏳ 대기 | - |
+| Phase 5: 네비게이션 통합 | ✅ 완료 | 2025-12-12 |
 
 ---
 
@@ -209,6 +211,7 @@
 
 | 날짜 | 내용 |
 |-----|------|
+| 2025-12-12 | Phase 5 구현 - 역할별 네비게이션 통합 (UserNav 업데이트) |
 | 2025-12-12 | Phase 4 구현 - Member용 /my-spaces + 참여 공간 목록 API |
 | 2025-12-12 | Phase 3 구현 - Owner/Staff용 /dashboard + 공간별 통계 API |
 | 2025-12-12 | Phase 2 구현 - SuperAdmin 전용 /admin 레이아웃 + API 권한 검증 |
