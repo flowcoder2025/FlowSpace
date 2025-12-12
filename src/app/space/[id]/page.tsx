@@ -40,8 +40,10 @@ interface RoleResponse {
   role: SpaceRole
   isOwner: boolean
   isStaff: boolean
+  isSuperAdmin: boolean   // 플랫폼 관리자
   canManageChat: boolean
   canManageSpace: boolean
+  canManageMembers: boolean
 }
 
 interface GuestSession {
@@ -207,6 +209,8 @@ export default function SpacePage() {
   const [verifiedUser, setVerifiedUser] = useState<VerifiedUser | null>(null)
   // 🛡️ 사용자 역할 (OWNER/STAFF/PARTICIPANT)
   const [userRole, setUserRole] = useState<SpaceRole | null>(null)
+  // 🌟 플랫폼 관리자 (SuperAdmin)
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   // 🔑 로그인 필요 상태 (게스트 세션 없고 로그인도 안 된 경우)
@@ -472,9 +476,10 @@ export default function SpacePage() {
   useEffect(() => {
     if (!session || !spaceId) return
 
-    // Dev mode: 테스트용 OWNER 역할 부여
+    // Dev mode: 테스트용 OWNER 역할 + SuperAdmin 부여
     if (devMode) {
       setUserRole("OWNER" as SpaceRole)
+      setIsSuperAdmin(true)
       return
     }
 
@@ -488,7 +493,8 @@ export default function SpacePage() {
         }
         const data: RoleResponse = await res.json()
         setUserRole(data.role)
-        console.log("[SpacePage] User role:", data.role, { canManageChat: data.canManageChat })
+        setIsSuperAdmin(data.isSuperAdmin)
+        console.log("[SpacePage] User role:", data.role, { isSuperAdmin: data.isSuperAdmin, canManageChat: data.canManageChat })
       } catch (err) {
         console.error("[SpacePage] fetchRole error:", err)
         // 에러 시 기본값 PARTICIPANT
@@ -728,6 +734,7 @@ export default function SpacePage() {
       userId={verifiedUser.participantId}
       userAvatarColor={verifiedUser.avatar as LocalAvatarColor}
       userRole={userRole ?? undefined}
+      isSuperAdmin={isSuperAdmin}
       sessionToken={session.sessionToken}
       onExit={handleExit}
       onNicknameChange={handleNicknameChange}

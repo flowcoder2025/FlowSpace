@@ -24,7 +24,7 @@ import {
   Divider,
 } from "@/components/ui"
 import { getText } from "@/lib/text-config"
-import { StaffManagement } from "@/components/space/StaffManagement"
+import { MemberList } from "@/components/space"
 
 // ============================================
 // Types
@@ -94,6 +94,10 @@ export default function SpaceManagePage() {
   const [copied, setCopied] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // 사용자 권한 상태
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false)
+  const [isOwner, setIsOwner] = useState(false)
+
   // Form state
   const [formData, setFormData] = useState({
     name: "",
@@ -105,15 +109,21 @@ export default function SpaceManagePage() {
     primaryColor: "",
   })
 
-  // Fetch space data
+  // Fetch space data and user role
   useEffect(() => {
-    async function fetchSpace() {
+    async function fetchData() {
       try {
-        const res = await fetch(`/api/spaces/${spaceId}`)
-        if (!res.ok) {
+        // 공간 정보 및 사용자 역할 병렬 조회
+        const [spaceRes, roleRes] = await Promise.all([
+          fetch(`/api/spaces/${spaceId}`),
+          fetch(`/api/spaces/${spaceId}/my-role`),
+        ])
+
+        if (!spaceRes.ok) {
           throw new Error("Failed to fetch space")
         }
-        const data = await res.json()
+
+        const data = await spaceRes.json()
         setSpace(data)
         setFormData({
           name: data.name || "",
@@ -124,6 +134,13 @@ export default function SpaceManagePage() {
           loadingMessage: data.loadingMessage || "",
           primaryColor: data.primaryColor || "",
         })
+
+        // 사용자 역할 설정
+        if (roleRes.ok) {
+          const roleData = await roleRes.json()
+          setIsSuperAdmin(roleData.isSuperAdmin || false)
+          setIsOwner(roleData.isOwner || roleData.role === "OWNER" || false)
+        }
       } catch (err) {
         setError("공간을 불러올 수 없습니다")
         console.error(err)
@@ -132,7 +149,7 @@ export default function SpaceManagePage() {
       }
     }
 
-    fetchSpace()
+    fetchData()
   }, [spaceId])
 
   // Copy invite link
@@ -527,16 +544,24 @@ export default function SpaceManagePage() {
               </GridItem>
             </Grid>
 
-            {/* Staff Management */}
+            {/* Member Management */}
             <Card>
               <CardHeader>
-                <CardTitle>스태프 관리</CardTitle>
+                <CardTitle>멤버 관리</CardTitle>
                 <CardDescription>
-                  스태프에게 채팅 관리 권한을 부여할 수 있습니다
+                  {isSuperAdmin
+                    ? "SuperAdmin: OWNER 및 STAFF를 관리할 수 있습니다"
+                    : isOwner
+                      ? "OWNER: STAFF를 관리할 수 있습니다"
+                      : "공간의 멤버 목록을 확인합니다"}
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <StaffManagement spaceId={spaceId} />
+                <MemberList
+                  spaceId={spaceId}
+                  isSuperAdmin={isSuperAdmin}
+                  isOwner={isOwner}
+                />
               </CardContent>
             </Card>
 

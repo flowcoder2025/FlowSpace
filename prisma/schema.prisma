@@ -449,6 +449,7 @@ model SpaceMember {
   userId           String?         // 인증된 사용자
   guestSessionId   String?         // 게스트 세션 ID
 
+  displayName      String?         // 공간 내 표시 이름 (닉네임)
   role             SpaceRole       @default(PARTICIPANT)
   restriction      ChatRestriction @default(NONE)
   restrictedUntil  DateTime?       // 일시적 음소거 종료 시간

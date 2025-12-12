@@ -9,6 +9,7 @@ import { ScreenShareOverlay } from "./video/ScreenShare"
 import { ControlBar } from "./controls/ControlBar"
 import { GameCanvas } from "./game/GameCanvas"
 import { SpaceSettingsModal } from "./SpaceSettingsModal"
+import { MemberPanel } from "./MemberPanel"
 import { useSocket } from "../socket"
 import { LiveKitRoomProvider, useLiveKitMedia } from "../livekit"
 import { useNotificationSound, useChatStorage } from "../hooks"
@@ -28,6 +29,7 @@ interface SpaceLayoutProps {
   userId: string
   userAvatarColor?: AvatarColor
   userRole?: SpaceRole // 🛡️ 사용자 역할 (OWNER/STAFF/PARTICIPANT)
+  isSuperAdmin?: boolean // 🌟 플랫폼 관리자 (모든 공간에서 관리 권한)
   sessionToken?: string // 게스트 세션 토큰 (LiveKit 인증용)
   onExit: () => void
   onNicknameChange?: (nickname: string, avatar: string) => void // 닉네임 변경 콜백
@@ -85,6 +87,7 @@ function SpaceLayoutContent({
   userId,
   userAvatarColor = "default",
   userRole,
+  isSuperAdmin = false,
   sessionToken,
   onExit,
   onNicknameChange,
@@ -92,6 +95,7 @@ function SpaceLayoutContent({
   // Panel visibility
   const [isChatOpen, setIsChatOpen] = useState(true)
   const [isParticipantsOpen, setIsParticipantsOpen] = useState(true)
+  const [isMemberPanelOpen, setIsMemberPanelOpen] = useState(false)
 
   // 🎬 참가자 패널 뷰 모드 (sidebar | grid | hidden)
   const [participantViewMode, setParticipantViewMode] = useState<ParticipantViewMode>("sidebar")
@@ -308,6 +312,14 @@ function SpaceLayoutContent({
     return tracks
   }, [participantTracks, players, resolvedUserId, currentNickname, currentAvatarColor])
 
+  // 🧑‍🤝‍🧑 온라인 사용자 ID 목록 (Socket.io players에서 추출)
+  const onlineUserIds = useMemo(() => {
+    return Array.from(players.keys())
+  }, [players])
+
+  // 🛡️ OWNER 여부 확인 (userRole prop 기반)
+  const isOwner = userRole === "OWNER"
+
   // Find active screen share (first participant with screenTrack)
   const activeScreenShare = useMemo(() => {
     for (const track of allParticipantTracks.values()) {
@@ -485,6 +497,11 @@ function SpaceLayoutContent({
     setParticipantViewMode((prev) => prev === "hidden" ? "sidebar" : prev)
   }, [])
 
+  // 🧑‍🤝‍🧑 멤버 패널 토글
+  const handleToggleMemberPanel = useCallback(() => {
+    setIsMemberPanelOpen((prev) => !prev)
+  }, [])
+
   // 🎬 뷰 모드 변경 핸들러
   const handleViewModeChange = useCallback((mode: ParticipantViewMode) => {
     setParticipantViewMode(mode)
@@ -593,6 +610,19 @@ function SpaceLayoutContent({
           </div>
         )}
 
+        {/* 🧑‍🤝‍🧑 플로팅 멤버 패널 (좌측 상단, 채팅 위) */}
+        {isMemberPanelOpen && (
+          <div className="pointer-events-auto absolute left-2 top-2 z-20 w-64 max-h-[calc(100%-80px)]">
+            <MemberPanel
+              spaceId={spaceId}
+              isSuperAdmin={isSuperAdmin}
+              isOwner={isOwner}
+              onlineUserIds={onlineUserIds}
+              onClose={handleToggleMemberPanel}
+            />
+          </div>
+        )}
+
         {/* 플로팅 컨트롤 바 (하단 중앙) */}
         <ControlBar
           isMicOn={mediaState.isMicrophoneEnabled}
@@ -600,12 +630,14 @@ function SpaceLayoutContent({
           isScreenSharing={mediaState.isScreenShareEnabled}
           isChatOpen={isChatOpen}
           isParticipantsOpen={isParticipantsOpen}
+          isMemberPanelOpen={isMemberPanelOpen}
           mediaError={displayError}
           onToggleMic={handleToggleMic}
           onToggleCamera={handleToggleCamera}
           onToggleScreenShare={handleToggleScreenShare}
           onToggleChat={handleToggleChat}
           onToggleParticipants={handleToggleParticipants}
+          onToggleMemberPanel={handleToggleMemberPanel}
           onOpenSettings={handleOpenSettings}
           onDismissError={handleDismissError}
         />
