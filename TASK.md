@@ -111,10 +111,11 @@
 
 ### 3.2 구현 체크리스트
 
-- [ ] `/api/dashboard/spaces` - 본인이 OWNER/STAFF인 공간 목록
-- [ ] `/dashboard` 페이지 - 관리 공간 목록 표시
-- [ ] `/dashboard/spaces/[id]` - 개별 공간 상세 관리
-- [ ] 공간별 통계 (방문자, 채팅 수, 멤버 수)
+- [x] `/api/dashboard/spaces` - 본인이 OWNER/STAFF인 공간 목록 ✅
+- [x] `/dashboard` 페이지 - 관리 공간 목록 표시 ✅
+- [x] `/dashboard/spaces/[id]` - 개별 공간 상세 관리 ✅
+- [x] 공간별 통계 (방문자, 채팅 수, 멤버 수) ✅
+- [x] `canManageSpace()` 권한 헬퍼 함수 추가 ✅
 
 ### 3.3 검증 항목
 
@@ -169,7 +170,7 @@
 |-------|------|-------|
 | Phase 1: 자동 멤버십 | ✅ 완료 | 2025-12-12 |
 | Phase 2: SuperAdmin /admin | ✅ 완료 | 2025-12-12 |
-| Phase 3: Owner /dashboard | ⏳ 대기 | - |
+| Phase 3: Owner /dashboard | ✅ 완료 | 2025-12-12 |
 | Phase 4: Member /my-spaces | ⏳ 대기 | - |
 | Phase 5: 네비게이션 통합 | ⏳ 대기 | - |
 
@@ -207,6 +208,7 @@
 
 | 날짜 | 내용 |
 |-----|------|
+| 2025-12-12 | Phase 3 구현 - Owner/Staff용 /dashboard + 공간별 통계 API |
 | 2025-12-12 | Phase 2 구현 - SuperAdmin 전용 /admin 레이아웃 + API 권한 검증 |
 | 2025-12-12 | Phase 1 API 구현 - `/api/spaces/[id]/join` + page.tsx 연동 |
 | 2025-12-12 | Phase 7 계획 수립 - 멤버십 시스템 개선 |

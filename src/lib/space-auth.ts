@@ -303,3 +303,42 @@ export async function ensureSpaceParticipant(
   // 새 참가자로 추가
   return addOrUpdateSpaceMember(spaceId, userId, guestSessionId, "PARTICIPANT")
 }
+
+// ============================================
+// 간편 권한 확인 함수
+// ============================================
+
+/**
+ * 사용자가 공간을 관리할 수 있는지 확인 (OWNER 또는 STAFF)
+ * Dashboard API 등에서 간단한 권한 확인에 사용
+ */
+export async function canManageSpace(
+  userId: string,
+  spaceId: string
+): Promise<boolean> {
+  // 1. SuperAdmin은 모든 공간 관리 가능
+  if (await isSuperAdmin(userId)) {
+    return true
+  }
+
+  // 2. 공간 소유자 확인
+  const space = await prisma.space.findUnique({
+    where: { id: spaceId },
+    select: { ownerId: true },
+  })
+
+  if (space?.ownerId === userId) {
+    return true
+  }
+
+  // 3. SpaceMember에서 OWNER 또는 STAFF 역할 확인
+  const membership = await prisma.spaceMember.findFirst({
+    where: {
+      spaceId,
+      userId,
+      role: { in: ["OWNER", "STAFF"] },
+    },
+  })
+
+  return !!membership
+}
