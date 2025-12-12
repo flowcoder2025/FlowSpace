@@ -26,7 +26,7 @@ import { ChatMessageList, type ChatMessageListHandle } from "./ChatMessageList"
 import { ChatInputArea, type AdminCommandResult } from "./ChatInputArea"
 import { ChatTabs } from "./ChatTabs"
 import { filterMessagesByTab, calculateUnreadCounts } from "../../utils/chatFilter"
-import type { ChatMessage, ReactionType, ChatTab, ReplyTo } from "../../types/space.types"
+import type { ChatMessage, ReactionType, ChatTab, ReplyTo, ChatFontSize } from "../../types/space.types"
 import type { ReplyToData, PlayerPosition } from "../../socket/types"
 import type { SpaceRole } from "@prisma/client"
 import { StaffManagement } from "@/components/space/StaffManagement"
@@ -71,9 +71,29 @@ export function FloatingChatOverlay({
   const { isFullscreen, fullscreenElement } = useFullscreen()
   const messageListRef = useRef<ChatMessageListHandle>(null)
 
-  // ⚙️ OWNER 여부 및 설정 패널 상태
-  const isOwner = userRole === "OWNER"
+  // ⚙️ 채팅 관리 권한 여부 (OWNER 또는 STAFF) 및 설정 패널 상태
+  const canManageChat = userRole === "OWNER" || userRole === "STAFF"
   const [showSettings, setShowSettings] = useState(false)
+
+  // 🔤 글씨 크기 상태 (localStorage 연동)
+  const [chatFontSize, setChatFontSize] = useState<ChatFontSize>("medium")
+
+  // 🔤 초기 로드 시 localStorage에서 글씨 크기 불러오기
+  // 컴포넌트 마운트 시 한 번만 실행되는 초기화 로직
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    const saved = localStorage.getItem("flowspace-chat-font-size")
+    if (saved && ["small", "medium", "large", "xlarge"].includes(saved)) {
+      setChatFontSize(saved as ChatFontSize)
+    }
+  }, [])
+  /* eslint-enable react-hooks/set-state-in-effect */
+
+  // 🔤 글씨 크기 변경 핸들러 (localStorage 저장)
+  const handleFontSizeChange = useCallback((size: ChatFontSize) => {
+    setChatFontSize(size)
+    localStorage.setItem("flowspace-chat-font-size", size)
+  }, [])
 
   // ⚙️ 설정 패널 열기/닫기
   const handleOpenSettings = useCallback(() => {
@@ -132,6 +152,17 @@ export function FloatingChatOverlay({
     messageListRef.current?.scrollToBottom()
     deactivate()
   }, [deactivate])
+
+  // 🔧 활성화 시 최신 메시지로 스크롤 (입력창이 나타나면서 메시지가 가려지는 문제 해결)
+  useEffect(() => {
+    if (isActive) {
+      // 약간의 지연 후 스크롤 (레이아웃 변경 완료 대기)
+      const timer = setTimeout(() => {
+        messageListRef.current?.scrollToBottom()
+      }, 50)
+      return () => clearTimeout(timer)
+    }
+  }, [isActive])
 
   // 💬 답장 버튼 클릭 핸들러
   const handleReply = useCallback((message: ChatMessage) => {
@@ -372,8 +403,10 @@ export function FloatingChatOverlay({
           unreadCounts={unreadCounts}
           onDeactivate={handleDeactivate}
           className="bg-black/30 backdrop-blur-sm"
-          isOwner={isOwner}
+          canManageChat={canManageChat}
           onOpenSettings={spaceId ? handleOpenSettings : undefined}
+          fontSize={chatFontSize}
+          onFontSizeChange={handleFontSizeChange}
         />
       )}
 
@@ -410,6 +443,7 @@ export function FloatingChatOverlay({
           currentUserId={currentUserId}
           isActive={isActive}
           userRole={userRole}
+          fontSize={chatFontSize}
           onReact={handleReact}
           onReply={handleReply}
           onDeleteMessage={onDeleteMessage}

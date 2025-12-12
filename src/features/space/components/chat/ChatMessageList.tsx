@@ -15,7 +15,8 @@
  */
 import { useRef, useState, useEffect, useCallback, useImperativeHandle, forwardRef, useMemo } from "react"
 import { cn } from "@/lib/utils"
-import type { ChatMessage, ReactionType, MessageReaction, ReplyTo } from "../../types/space.types"
+import type { ChatMessage, ReactionType, MessageReaction, ReplyTo, ChatFontSize } from "../../types/space.types"
+import { CHAT_FONT_SIZES } from "../../types/space.types"
 import type { PlayerPosition } from "../../socket/types"
 import { parseContentWithUrls, type ContentSegment } from "../../utils/chatFilter"
 import { hasPermission } from "@/lib/space-permissions"
@@ -313,6 +314,7 @@ interface ChatMessageItemProps {
   isOwn: boolean
   currentUserId: string
   resolveNickname: (senderId: string | undefined, fallback: string) => string  // 🔄 SSOT
+  fontSize: number  // 🔤 글씨 크기 (px)
   onReact: (messageId: string, type: ReactionType) => void
   onReply?: (message: ChatMessage) => void
   onDelete?: (messageId: string) => void
@@ -325,6 +327,7 @@ function ChatMessageItem({
   isOwn,
   currentUserId,
   resolveNickname,
+  fontSize,
   onReact,
   onReply,
   onDelete,
@@ -350,7 +353,7 @@ function ChatMessageItem({
   if (isSystem) {
     return (
       <div className="py-0.5 px-2">
-        <span className="text-[11px] text-yellow-400/90">
+        <span className="text-yellow-400/90" style={{ fontSize: `${fontSize}px` }}>
           <span className="text-white/40 mr-1">[{timeStr}]</span>
           <LinkifiedContent content={message.content} />
         </span>
@@ -380,7 +383,7 @@ function ChatMessageItem({
         {message.replyTo && (
           <ReplyQuote replyTo={message.replyTo} onClick={handleQuoteClick} />
         )}
-        <span className="text-[11px] leading-relaxed">
+        <span className="leading-relaxed" style={{ fontSize: `${fontSize}px` }}>
           {/* 타임스탬프 */}
           <span className="text-white/40 mr-1">[{timeStr}]</span>
           {/* 귓속말 라벨 */}
@@ -424,7 +427,7 @@ function ChatMessageItem({
       {message.replyTo && (
         <ReplyQuote replyTo={message.replyTo} onClick={handleQuoteClick} />
       )}
-      <span className="text-[11px] leading-relaxed">
+      <span className="leading-relaxed" style={{ fontSize: `${fontSize}px` }}>
         {/* 타임스탬프 */}
         <span className="text-white/40 mr-1">[{timeStr}]</span>
         {/* 🔄 SSOT: 닉네임 (현재 이름으로 표시) */}
@@ -450,7 +453,7 @@ function ChatMessageItem({
       </span>
       {/* 기존 리액션 표시 */}
       {message.reactions && message.reactions.length > 0 && (
-        <div className="pl-12 text-[10px] text-white/60">
+        <div className="pl-12 text-white/60" style={{ fontSize: `${Math.max(fontSize - 1, 9)}px` }}>
           {(Object.keys(REACTION_EMOJI) as ReactionType[]).map((type) => {
             const count = message.reactions!.filter((r) => r.type === type).length
             if (count === 0) return null
@@ -475,6 +478,7 @@ interface ChatMessageListProps {
   currentUserId: string
   isActive: boolean
   userRole?: SpaceRole  // 사용자 역할 (OWNER/STAFF/PARTICIPANT)
+  fontSize?: ChatFontSize  // 🔤 글씨 크기
   onReact?: (messageId: string, type: ReactionType) => void
   onReply?: (message: ChatMessage) => void  // 답장 콜백
   onDeleteMessage?: (messageId: string) => void  // 메시지 삭제 콜백
@@ -493,7 +497,9 @@ export interface ChatMessageListHandle {
 const SCROLL_STEP = 40
 
 export const ChatMessageList = forwardRef<ChatMessageListHandle, ChatMessageListProps>(
-  function ChatMessageList({ messages, players, currentUserId, isActive, userRole, onReact, onReply, onDeleteMessage, onDeactivate }, ref) {
+  function ChatMessageList({ messages, players, currentUserId, isActive, userRole, fontSize = "medium", onReact, onReply, onDeleteMessage, onDeactivate }, ref) {
+    // 🔤 폰트 크기 픽셀 값
+    const fontSizePx = CHAT_FONT_SIZES[fontSize]
     const containerRef = useRef<HTMLDivElement>(null)
     const [userScrolled, setUserScrolled] = useState(false)
     // 새 메시지 알림용 (과거 기록 보는 중 신규 메시지 있음)
@@ -671,6 +677,7 @@ export const ChatMessageList = forwardRef<ChatMessageListHandle, ChatMessageList
                     isOwn={msg.senderId === currentUserId}
                     currentUserId={currentUserId}
                     resolveNickname={resolveNickname}
+                    fontSize={fontSizePx}
                     onReact={handleReact}
                     onReply={onReply}
                     onDelete={onDeleteMessage}

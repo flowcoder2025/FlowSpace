@@ -56,6 +56,17 @@ async function getUserId(): Promise<string | null> {
   return null
 }
 
+/**
+ * SuperAdmin 여부 확인
+ */
+async function checkIsSuperAdmin(userId: string): Promise<boolean> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { isSuperAdmin: true },
+  })
+  return user?.isSuperAdmin || false
+}
+
 // ============================================
 // GET /api/spaces/[id] - 공간 상세 조회
 // ============================================
@@ -163,8 +174,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: "Space not found" }, { status: 404 })
     }
 
-    // 6. 소유자 권한 확인
-    if (space.ownerId !== userId) {
+    // 6. 소유자 또는 SuperAdmin 권한 확인
+    const isSuperAdmin = await checkIsSuperAdmin(userId)
+    if (space.ownerId !== userId && !isSuperAdmin) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
@@ -234,8 +246,9 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: "Space not found" }, { status: 404 })
     }
 
-    // 4. 소유자 권한 확인
-    if (space.ownerId !== userId) {
+    // 4. 소유자 또는 SuperAdmin 권한 확인
+    const isSuperAdmin = await checkIsSuperAdmin(userId)
+    if (space.ownerId !== userId && !isSuperAdmin) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 

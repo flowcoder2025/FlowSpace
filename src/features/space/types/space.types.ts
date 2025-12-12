@@ -123,3 +123,30 @@ export interface PanelVisibility {
   chat: boolean
   participants: boolean
 }
+
+// ============================================
+// Chat Font Size Types
+// ============================================
+/**
+ * 채팅 글씨 크기 옵션
+ * - small: 10px (작게)
+ * - medium: 11px (기본)
+ * - large: 13px (크게)
+ * - xlarge: 15px (매우 크게)
+ */
+export type ChatFontSize = "small" | "medium" | "large" | "xlarge"
+
+/**
+ * 채팅 글씨 크기별 픽셀 값
+ */
+export const CHAT_FONT_SIZES: Record<ChatFontSize, number> = {
+  small: 10,
+  medium: 11,
+  large: 13,
+  xlarge: 15,
+}
+
+/**
+ * 채팅 글씨 크기 순서 (조절용)
+ */
+export const CHAT_FONT_SIZE_ORDER: ChatFontSize[] = ["small", "medium", "large", "xlarge"]

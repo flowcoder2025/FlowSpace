@@ -43,9 +43,15 @@ export function extractUrls(content: string): string[] {
  *
  * @param message 메시지
  * @returns URL 포함 여부
+ *
+ * 🔧 2025-12-12: 전역 플래그(g) 문제 해결
+ * - 전역 regex의 .test()는 lastIndex를 업데이트하여 재사용 시 문제 발생
+ * - 새 정규식 인스턴스를 생성하여 매번 lastIndex=0부터 시작
  */
 export function hasUrl(message: ChatMessage): boolean {
-  return URL_REGEX.test(message.content)
+  // 새 정규식 인스턴스 생성 (lastIndex 초기화 보장)
+  const regex = new RegExp(URL_REGEX.source, "gi")
+  return regex.test(message.content)
 }
 
 /**

@@ -98,6 +98,10 @@ export default function SpaceManagePage() {
   const [isSuperAdmin, setIsSuperAdmin] = useState(false)
   const [isOwner, setIsOwner] = useState(false)
 
+  // 새로고침 상태
+  const [refreshKey, setRefreshKey] = useState(0)
+  const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date())
+
   // Form state
   const [formData, setFormData] = useState({
     name: "",
@@ -141,6 +145,8 @@ export default function SpaceManagePage() {
           setIsSuperAdmin(roleData.isSuperAdmin || false)
           setIsOwner(roleData.isOwner || roleData.role === "OWNER" || false)
         }
+
+        setLastRefreshed(new Date())
       } catch (err) {
         setError("공간을 불러올 수 없습니다")
         console.error(err)
@@ -150,7 +156,13 @@ export default function SpaceManagePage() {
     }
 
     fetchData()
-  }, [spaceId])
+  }, [spaceId, refreshKey])
+
+  // 수동 새로고침
+  const handleRefresh = () => {
+    setLoading(true)
+    setRefreshKey((prev) => prev + 1)
+  }
 
   // Copy invite link
   const copyInviteLink = async () => {
@@ -326,6 +338,29 @@ export default function SpaceManagePage() {
                 <Text tone="muted">
                   {space.template.name} 템플릿 · 생성일{" "}
                   {new Date(space.createdAt).toLocaleDateString("ko-KR")}
+                </Text>
+              </VStack>
+              <VStack gap="xs" align="end">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRefresh}
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <svg className="animate-spin size-4 mr-2" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                  ) : (
+                    <svg className="size-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                  )}
+                  새로고침
+                </Button>
+                <Text size="sm" tone="muted">
+                  마지막 업데이트: {lastRefreshed.toLocaleTimeString("ko-KR")}
                 </Text>
               </VStack>
             </HStack>
@@ -561,6 +596,7 @@ export default function SpaceManagePage() {
                   spaceId={spaceId}
                   isSuperAdmin={isSuperAdmin}
                   isOwner={isOwner}
+                  refreshTrigger={refreshKey}
                 />
               </CardContent>
             </Card>

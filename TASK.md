@@ -1,152 +1,185 @@
-# TASK: 멤버 관리 시스템 전체 구현
+# TASK: 버그 수정 및 기능 개선 (다중 이슈)
 
-> **상태**: ✅ 완료
+> **상태**: 🔄 진행 중
 > **시작일**: 2025-12-12
-> **완료일**: 2025-12-12
-> **범위**: 전체 구현 (데이터 모델 + API + UI)
+> **범위**: 어드민/채팅/권한/UI 전반 이슈 수정
 
 ---
 
-## 📋 요구사항 요약
+## 📋 이슈 요약 (9건)
 
-### 핵심 기능
-1. **SuperAdmin → OWNER 임명** (복수 OWNER 지원)
-2. **OWNER 양도** 가능
-3. **멤버 검색** (이메일 + 공간 내 이름)
-4. **전체 멤버 목록** (OWNER/STAFF/PARTICIPANT)
-5. **오프라인/온라인 구분 표시**
-6. **3곳의 멤버 UI**:
-   - Dashboard 공간 관리 페이지
-   - Space 내부 멤버 패널
-   - 실제 공간 내 스태프 임명
-
-### 표시 정보
-- 구글 계정 (이메일, 프로필 이미지)
-- 공간 내 이름 (displayName)
-- 역할 (OWNER/STAFF/PARTICIPANT)
-- 온라인/오프라인 상태
+| # | 영역 | 이슈 | 우선순위 |
+|---|------|------|----------|
+| 1 | Admin | 어드민 페이지 데이터 동기화 안됨 | 🔴 높음 |
+| 2 | Admin | SuperAdmin 공간 삭제 불가 (123 공간들) | 🔴 높음 |
+| 3 | Chat | Staff 권한으로 명령어/채팅관리 불가 | 🔴 높음 |
+| 4 | Member | Owner 임명 시 핫리로드 안됨 | 🟡 중간 |
+| 5 | Admin | 이벤트 로그 동기화 안됨 | 🟡 중간 |
+| 6 | Chat | 메시지+링크 혼합 시 링크탭 인식 불가 | 🟡 중간 |
+| 7 | Chat | 글씨 크기 조절 기능 필요 | 🟢 낮음 |
+| 8 | Video | 그리드 보기 필터/정렬 동작 안함 | 🟡 중간 |
+| 9 | Chat | 활성화 시 입력창이 최신 메시지 가림 | 🔴 높음 |
 
 ---
 
-## 📁 Phase 1: 데이터 모델 보강
+## 📁 Phase 1: 권한 및 채팅 관리 (Staff 권한)
 
-> **목표**: SpaceMember에 displayName 필드 추가
+> **목표**: Staff가 명령어 및 채팅 관리 기능 사용 가능하도록
 
-### 1.1 수정할 파일
+### 1.1 분석 대상 파일
 
-| 파일 | 변경 내용 |
-|-----|----------|
-| `prisma/schema.prisma` | SpaceMember에 displayName 추가 |
-| DB 마이그레이션 | `npx prisma db push` |
+| 파일 | 역할 |
+|-----|------|
+| `src/features/space/components/chat/ChatInputArea.tsx` | 명령어 입력 처리 |
+| `src/features/space/components/chat/FloatingChatOverlay.tsx` | 명령어 실행 로직 |
+| `server/socket-server.ts` | 서버 권한 검증 |
 
 ### 1.2 구현 체크리스트
 
-- [x] SpaceMember.displayName 필드 추가 (nullable)
-- [x] Prisma 스키마 업데이트
-- [x] DB 마이그레이션 실행
+- [ ] Staff 권한에 명령어 사용 허용 (isStaff 체크 추가)
+- [ ] 채팅 삭제/공지 등 관리 기능 Staff에게 허용
+- [ ] 서버 측 권한 검증 로직 업데이트
 
 ---
 
-## 📁 Phase 2: API 보강
+## 📁 Phase 2: 어드민 데이터 동기화
 
-> **목표**: 전체 멤버 조회 + 역할 변경 API
+> **목표**: 어드민 페이지 데이터 실시간 동기화
 
-### 2.1 수정/생성할 파일
+### 2.1 분석 대상 파일
 
-| 파일 | 변경 내용 |
-|-----|----------|
-| `/api/spaces/[id]/members/route.ts` | GET: 전체 멤버 조회 (OWNER/STAFF/PARTICIPANT) |
-| `/api/spaces/[id]/members/route.ts` | PATCH: 역할 변경 (SuperAdmin→OWNER, OWNER→STAFF) |
-| `/api/spaces/[id]/members/[userId]/route.ts` | 🆕 개별 멤버 관리 API |
-| `/api/users/search/route.ts` | 이메일 + 이름 검색 보강 |
+| 파일 | 역할 |
+|-----|------|
+| `src/app/admin/spaces/[id]/page.tsx` | 공간 상세 페이지 |
+| `src/app/admin/logs/page.tsx` | 이벤트 로그 페이지 |
+| API 라우트들 | 데이터 소스 |
 
 ### 2.2 구현 체크리스트
 
-- [x] GET /api/spaces/[id]/members - 전체 멤버 조회 (역할별 필터)
-- [x] PATCH /api/spaces/[id]/members - 역할 변경
-- [x] SuperAdmin만 OWNER 임명 가능 검증
-- [x] OWNER 복수 지원
-- [x] /api/users/search - 이메일 OR 이름 검색
+- [ ] 어드민 페이지 데이터 fetch 로직 검증
+- [ ] 이벤트 로그 조회 API 연결 확인
+- [ ] SWR/폴링 기반 실시간 업데이트 구현
 
 ---
 
-## 📁 Phase 3: Dashboard 멤버 관리 UI
+## 📁 Phase 3: SuperAdmin 공간 삭제
 
-> **목표**: /dashboard/spaces/[id] 페이지에 전체 멤버 관리 UI
+> **목표**: SuperAdmin이 모든 공간 삭제 가능하도록
 
-### 3.1 수정/생성할 파일
+### 3.1 분석 대상 파일
 
-| 파일 | 변경 내용 |
-|-----|----------|
-| `/src/components/space/MemberList.tsx` | 🆕 공용 멤버 목록 컴포넌트 |
-| `/src/components/space/MemberSearchInput.tsx` | 🆕 멤버 검색 (이메일/이름) |
-| `/src/components/space/RoleBadge.tsx` | 🆕 역할 뱃지 컴포넌트 |
-| `/src/app/dashboard/spaces/[id]/page.tsx` | MemberList 통합 |
+| 파일 | 역할 |
+|-----|------|
+| `src/app/api/spaces/[id]/route.ts` | 공간 삭제 API |
+| 관련 컴포넌트 | 삭제 버튼 UI |
 
 ### 3.2 구현 체크리스트
 
-- [x] MemberList: 역할별 그룹핑 (OWNER/STAFF/PARTICIPANT)
-- [x] MemberList: 온라인/오프라인 구분 표시
-- [x] MemberSearchInput: 이메일 + 이름 검색
-- [x] RoleBadge: 역할별 색상 뱃지
-- [x] SuperAdmin용 OWNER 임명 버튼
-- [x] OWNER용 STAFF 임명/해제 버튼
-- [x] Dashboard 페이지 통합
+- [ ] 삭제 API에서 SuperAdmin 권한 체크
+- [ ] 프론트엔드 삭제 버튼 활성화 조건 확인
+- [ ] 삭제 실패 원인 디버깅
 
 ---
 
-## 📁 Phase 4: Space 내부 멤버 패널
+## 📁 Phase 4: Owner 임명 핫리로드
 
-> **목표**: 실제 공간(/space/[id]) 내에서 멤버 표시 및 관리
+> **목표**: Owner 임명 후 페이지 새로고침 없이 즉시 반영
 
-### 4.1 수정/생성할 파일
+### 4.1 분석 대상 파일
 
-| 파일 | 변경 내용 |
-|-----|----------|
-| `/src/features/space/components/MemberPanel.tsx` | 🆕 공간 내 멤버 패널 |
-| `/src/features/space/components/SpaceLayout.tsx` | MemberPanel 통합 |
-| `FloatingChatOverlay.tsx` 또는 별도 UI | 스태프 임명 UI |
+| 파일 | 역할 |
+|-----|------|
+| `src/components/space/MemberList.tsx` | 멤버 목록 컴포넌트 |
+| 관련 API | 역할 변경 API |
 
 ### 4.2 구현 체크리스트
 
-- [x] MemberPanel: Socket 연동 온라인 상태
-- [x] MemberPanel: DB 멤버십 데이터 병합 (MemberList 재사용)
-- [x] MemberPanel: 역할 뱃지 + 프로필 표시
-- [x] 스태프 임명 UI (OWNER 전용)
-- [x] SpaceLayout에 MemberPanel 토글 추가
-- [x] ControlBar에 멤버 관리 버튼 추가
+- [ ] 역할 변경 후 상태 업데이트 로직 추가
+- [ ] API 응답 후 로컬 상태 즉시 갱신
+- [ ] 필요시 SWR mutate 호출
 
 ---
 
-## 📁 Phase 5: 온라인/오프라인 연동
+## 📁 Phase 5: 채팅 링크 인식 개선
 
-> **목표**: Socket.io 접속자와 DB 멤버십 병합
+> **목표**: 메시지+링크 혼합 시에도 링크탭에서 인식
 
-### 5.1 수정할 파일
+### 5.1 분석 대상 파일
 
-| 파일 | 변경 내용 |
-|-----|----------|
-| `server/socket-server.ts` | 접속자 목록 브로드캐스트 보강 |
-| `/api/spaces/[id]/online/route.ts` | 🆕 현재 접속자 API |
-| `useSocket.ts` | 온라인 멤버 목록 상태 |
+| 파일 | 역할 |
+|-----|------|
+| `src/features/space/utils/chatParser.ts` | 채팅 파싱 유틸 |
+| `src/features/space/components/chat/ChatTabs.tsx` | 탭 필터링 |
 
 ### 5.2 구현 체크리스트
 
-- [x] Socket: 접속자 userId/playerId 목록 관리 (기존 players Map 활용)
-- [x] 프론트: 온라인/오프라인 상태 병합 (onlineUserIds props 전달)
-- [ ] API: 현재 온라인 멤버 조회 (선택적 - 현재 Socket 기반 충분)
+- [ ] 링크 추출 정규식 개선
+- [ ] 메시지 내 링크 포함 여부 판단 로직 수정
+- [ ] 링크탭 필터링 조건 완화
+
+---
+
+## 📁 Phase 6: 채팅 입력창 레이아웃
+
+> **목표**: 입력창 활성화 시 최신 메시지가 가려지지 않도록
+
+### 6.1 분석 대상 파일
+
+| 파일 | 역할 |
+|-----|------|
+| `src/features/space/components/chat/FloatingChatOverlay.tsx` | 채팅 오버레이 |
+| `src/features/space/components/chat/ChatMessageList.tsx` | 메시지 목록 |
+
+### 6.2 구현 체크리스트
+
+- [ ] 입력창 활성화 시 스크롤 조정
+- [ ] 메시지 목록 하단 패딩 동적 조정
+- [ ] 최신 메시지 가시성 확보
+
+---
+
+## 📁 Phase 7: 채팅 글씨 크기 조절
+
+> **목표**: 사용자가 채팅 글씨 크기 조절 가능
+
+### 7.1 구현 체크리스트
+
+- [ ] 글씨 크기 상태 관리 (localStorage 저장)
+- [ ] 크기 조절 UI (설정 또는 +/- 버튼)
+- [ ] 실시간 적용
+
+---
+
+## 📁 Phase 8: 그리드 필터/정렬
+
+> **목표**: 참가자 그리드 뷰에서 필터/정렬 동작
+
+### 8.1 분석 대상 파일
+
+| 파일 | 역할 |
+|-----|------|
+| `src/features/space/components/video/ParticipantPanel.tsx` | 참가자 패널 |
+
+### 8.2 구현 체크리스트
+
+- [ ] 필터/정렬 상태 바인딩 확인
+- [ ] 그리드 모드에서 필터 적용 로직 검증
+- [ ] 정렬 기능 동작 확인
 
 ---
 
 ## 📊 진행 상태
 
 | Phase | 상태 | 완료일 |
-|-------|------|-------|
-| Phase 1: 데이터 모델 | ✅ 완료 | 2025-12-12 |
-| Phase 2: API 보강 | ✅ 완료 | 2025-12-12 |
-| Phase 3: Dashboard UI | ✅ 완료 | 2025-12-12 |
-| Phase 4: Space 내 패널 | ✅ 완료 | 2025-12-12 |
-| Phase 5: 온라인 연동 | ✅ 완료 | 2025-12-12 |
+|-------|------|--------|
+| Phase 1: Staff 권한 | ⏳ 대기 | - |
+| Phase 2: 어드민 동기화 | ⏳ 대기 | - |
+| Phase 3: 공간 삭제 | ⏳ 대기 | - |
+| Phase 4: Owner 핫리로드 | ⏳ 대기 | - |
+| Phase 5: 링크 인식 | ⏳ 대기 | - |
+| Phase 6: 입력창 레이아웃 | ⏳ 대기 | - |
+| Phase 7: 글씨 크기 | ⏳ 대기 | - |
+| Phase 8: 그리드 필터 | ⏳ 대기 | - |
 
 ---
 
@@ -154,5 +187,4 @@
 
 | 날짜 | 내용 |
 |-----|------|
-| 2025-12-12 | TASK.md 초기화 - 멤버 관리 시스템 전체 구현 계획 |
-| 2025-12-12 | Phase 1-5 전체 완료 - 멤버 관리 시스템 구현 완료 |
+| 2025-12-12 | TASK.md 초기화 - 9건 버그/개선 사항 계획 수립 |

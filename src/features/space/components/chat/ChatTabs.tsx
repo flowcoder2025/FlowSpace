@@ -14,7 +14,8 @@
  * - 활성 탭 하이라이트
  */
 import { cn } from "@/lib/utils"
-import type { ChatTab } from "../../types/space.types"
+import type { ChatTab, ChatFontSize } from "../../types/space.types"
+import { CHAT_FONT_SIZE_ORDER } from "../../types/space.types"
 
 // ============================================
 // 탭 설정
@@ -43,10 +44,14 @@ interface ChatTabsProps {
   unreadCounts: Record<ChatTab, number>
   onDeactivate?: () => void  // Enter 키 누를 시 채팅 비활성화
   className?: string
-  /** OWNER 권한 여부 (설정 버튼 표시) */
-  isOwner?: boolean
+  /** 채팅 관리 권한 여부 - OWNER 또는 STAFF (설정 버튼 표시) */
+  canManageChat?: boolean
   /** 설정 패널 열기 콜백 */
   onOpenSettings?: () => void
+  /** 현재 글씨 크기 */
+  fontSize?: ChatFontSize
+  /** 글씨 크기 변경 콜백 */
+  onFontSizeChange?: (size: ChatFontSize) => void
 }
 
 // ============================================
@@ -58,9 +63,33 @@ export function ChatTabs({
   unreadCounts,
   onDeactivate,
   className,
-  isOwner = false,
+  canManageChat = false,
   onOpenSettings,
+  fontSize = "medium",
+  onFontSizeChange,
 }: ChatTabsProps) {
+  // 글씨 크기 증가/감소 핸들러
+  const handleFontSizeIncrease = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!onFontSizeChange) return
+    const currentIndex = CHAT_FONT_SIZE_ORDER.indexOf(fontSize)
+    if (currentIndex < CHAT_FONT_SIZE_ORDER.length - 1) {
+      onFontSizeChange(CHAT_FONT_SIZE_ORDER[currentIndex + 1])
+    }
+  }
+
+  const handleFontSizeDecrease = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!onFontSizeChange) return
+    const currentIndex = CHAT_FONT_SIZE_ORDER.indexOf(fontSize)
+    if (currentIndex > 0) {
+      onFontSizeChange(CHAT_FONT_SIZE_ORDER[currentIndex - 1])
+    }
+  }
+
+  // 현재 크기가 최소/최대인지 확인
+  const isMinSize = fontSize === CHAT_FONT_SIZE_ORDER[0]
+  const isMaxSize = fontSize === CHAT_FONT_SIZE_ORDER[CHAT_FONT_SIZE_ORDER.length - 1]
   // 탭에서 Enter 키 누르면 채팅 비활성화
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && onDeactivate) {
@@ -127,8 +156,42 @@ export function ChatTabs({
       })}
       </div>
 
-      {/* ⚙️ 설정 버튼 (OWNER만 표시) */}
-      {isOwner && onOpenSettings && (
+      {/* 🔤 글씨 크기 조절 버튼 */}
+      {onFontSizeChange && (
+        <div className="flex items-center gap-0.5 mr-1">
+          <button
+            onClick={handleFontSizeDecrease}
+            disabled={isMinSize}
+            className={cn(
+              "px-1 py-0.5 rounded transition-all text-[10px] font-medium",
+              "outline-none focus:outline-none",
+              isMinSize
+                ? "text-white/30 cursor-not-allowed"
+                : "text-white/60 hover:text-white/80 hover:bg-white/10"
+            )}
+            title="글씨 작게"
+          >
+            A-
+          </button>
+          <button
+            onClick={handleFontSizeIncrease}
+            disabled={isMaxSize}
+            className={cn(
+              "px-1 py-0.5 rounded transition-all text-[10px] font-medium",
+              "outline-none focus:outline-none",
+              isMaxSize
+                ? "text-white/30 cursor-not-allowed"
+                : "text-white/60 hover:text-white/80 hover:bg-white/10"
+            )}
+            title="글씨 크게"
+          >
+            A+
+          </button>
+        </div>
+      )}
+
+      {/* ⚙️ 설정 버튼 (OWNER 또는 STAFF만 표시) */}
+      {canManageChat && onOpenSettings && (
         <button
           onClick={(e) => {
             e.stopPropagation()

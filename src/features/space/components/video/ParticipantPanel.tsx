@@ -170,18 +170,19 @@ export function ParticipantPanel({
             }
           }}>
             <DropdownMenuTrigger asChild>
-              <div
-                role="button"
-                className="inline-flex items-center justify-center h-6 px-1.5 text-white/70 hover:text-white hover:bg-white/10 rounded-md cursor-pointer select-none"
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 px-1.5 text-white/70 hover:text-white hover:bg-white/10"
               >
                 <SidebarIcon />
                 <ChevronDownIcon />
-              </div>
+              </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" side="bottom" className="w-40">
               <DropdownMenuLabel className="text-xs">보기 방식</DropdownMenuLabel>
               <DropdownMenuItem
-                onClick={() => handleViewModeChange("sidebar")}
+                onSelect={() => handleViewModeChange("sidebar")}
                 className="flex items-center justify-between"
               >
                 <span className="flex items-center gap-2">
@@ -192,7 +193,7 @@ export function ParticipantPanel({
                 <CheckIcon />
               </DropdownMenuItem>
               <DropdownMenuItem
-                onClick={() => handleViewModeChange("grid")}
+                onSelect={() => handleViewModeChange("grid")}
                 className="flex items-center justify-between"
               >
                 <span className="flex items-center gap-2">
@@ -206,7 +207,7 @@ export function ParticipantPanel({
 
               <DropdownMenuLabel className="text-xs">정렬</DropdownMenuLabel>
               <DropdownMenuItem
-                onClick={() => setSortOrder("name-asc")}
+                onSelect={() => setSortOrder("name-asc")}
                 className="flex items-center justify-between"
               >
                 <span className="flex items-center gap-2">
@@ -216,7 +217,7 @@ export function ParticipantPanel({
                 {sortOrder === "name-asc" && <CheckIcon />}
               </DropdownMenuItem>
               <DropdownMenuItem
-                onClick={() => setSortOrder("name-desc")}
+                onSelect={() => setSortOrder("name-desc")}
                 className="flex items-center justify-between"
               >
                 <span className="flex items-center gap-2">
@@ -277,18 +278,19 @@ export function ParticipantPanel({
           }
         }}>
           <DropdownMenuTrigger asChild>
-            <div
-              role="button"
-              className="inline-flex items-center justify-center h-7 px-2 text-white/80 hover:text-white hover:bg-white/10 rounded-md cursor-pointer select-none"
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-white/80 hover:text-white hover:bg-white/10"
             >
               <GridIcon />
               <ChevronDownIcon />
-            </div>
+            </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" side="bottom" className="w-40">
             <DropdownMenuLabel className="text-xs">보기 방식</DropdownMenuLabel>
             <DropdownMenuItem
-              onClick={() => handleViewModeChange("sidebar")}
+              onSelect={() => handleViewModeChange("sidebar")}
               className="flex items-center justify-between"
             >
               <span className="flex items-center gap-2">
@@ -298,7 +300,7 @@ export function ParticipantPanel({
               {/* grid 블록이므로 sidebar는 체크 없음 */}
             </DropdownMenuItem>
             <DropdownMenuItem
-              onClick={() => handleViewModeChange("grid")}
+              onSelect={() => handleViewModeChange("grid")}
               className="flex items-center justify-between"
             >
               <span className="flex items-center gap-2">
@@ -313,7 +315,7 @@ export function ParticipantPanel({
 
             <DropdownMenuLabel className="text-xs">정렬</DropdownMenuLabel>
             <DropdownMenuItem
-              onClick={() => setSortOrder("name-asc")}
+              onSelect={() => setSortOrder("name-asc")}
               className="flex items-center justify-between"
             >
               <span className="flex items-center gap-2">
@@ -323,7 +325,7 @@ export function ParticipantPanel({
               {sortOrder === "name-asc" && <CheckIcon />}
             </DropdownMenuItem>
             <DropdownMenuItem
-              onClick={() => setSortOrder("name-desc")}
+              onSelect={() => setSortOrder("name-desc")}
               className="flex items-center justify-between"
             >
               <span className="flex items-center gap-2">

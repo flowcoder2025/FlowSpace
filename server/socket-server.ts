@@ -649,6 +649,17 @@ io.on("connection", (socket) => {
 
       const userId = sessionToken.replace("auth-", "")
 
+      // 🌟 SuperAdmin 체크 (모든 공간에서 관리 권한)
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { isSuperAdmin: true },
+      })
+
+      if (user?.isSuperAdmin) {
+        console.log(`[Socket] SuperAdmin ${userId} granted ${action} permission`)
+        return { valid: true, userId, role: "OWNER" } // SuperAdmin은 OWNER 권한으로 처리
+      }
+
       // Prisma로 직접 SpaceMember 조회
       const member = await prisma.spaceMember.findUnique({
         where: {
