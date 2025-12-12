@@ -424,6 +424,50 @@ export default function SpacePage() {
     fetchSpace()
   }, [spaceId, session, devMode])
 
+  // 🎫 멤버십 자동 생성 (공간 입장 시)
+  useEffect(() => {
+    if (!session || !spaceId) return
+
+    // Dev mode: 스킵
+    if (devMode) return
+
+    async function joinSpace() {
+      try {
+        // 인증된 사용자 vs 게스트 분기
+        // auth-: 로그인 사용자, dev-: 개발 모드 (스킵됨), 그 외: 게스트
+        const isGuest = !session!.sessionToken.startsWith("dev-") &&
+                        !session!.sessionToken.startsWith("auth-")
+
+        const body = isGuest
+          ? { guestSessionToken: session!.sessionToken } // 게스트: sessionToken 전달
+          : {} // 인증된 사용자: 쿠키에서 자동 인증
+
+        const res = await fetchWithRetry(`/api/spaces/${spaceId}/join`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        })
+
+        if (res.ok) {
+          const data = await res.json()
+          console.log("[SpacePage] Membership ensured:", {
+            memberId: data.membership.id,
+            role: data.membership.role,
+            isNew: data.membership.isNew,
+          })
+        } else {
+          // 멤버십 생성 실패해도 입장은 계속 진행
+          console.warn("[SpacePage] Join API failed, but continuing:", await res.text())
+        }
+      } catch (err) {
+        // 멤버십 생성 실패해도 입장은 계속 진행 (비동기 처리)
+        console.warn("[SpacePage] Join API error, but continuing:", err)
+      }
+    }
+
+    joinSpace()
+  }, [spaceId, session, devMode])
+
   // 🛡️ 사용자 역할 조회
   useEffect(() => {
     if (!session || !spaceId) return

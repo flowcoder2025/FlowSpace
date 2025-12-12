@@ -223,12 +223,15 @@ export function useSocket({
       setEffectivePlayerId(serverPlayerId)
       console.log("[Socket] Joined room:", data.spaceId, "Players:", data.players.length, "YourPlayerId:", serverPlayerId, "GameReady:", gameReadyRef.current)
 
-      // Initialize players map (🔒 서버 파생 ID로 자신 필터링)
+      // 🔄 SSOT: 모든 플레이어를 Map에 추가 (로컬 사용자 포함)
+      // 로컬 사용자도 Map에 포함시켜 닉네임 변경 시 일관된 SSOT 유지
       const playersMap = new Map<string, PlayerPosition>()
       data.players.forEach((player) => {
-        if (player.id !== serverPlayerId) {
-          playersMap.set(player.id, player)
+        // 🔄 모든 플레이어를 Map에 추가 (SSOT)
+        playersMap.set(player.id, player)
 
+        // 게임 이벤트는 다른 플레이어에게만 전달 (로컬 플레이어는 게임이 자체 관리)
+        if (player.id !== serverPlayerId) {
           // If game is ready, emit immediately; otherwise queue for later
           if (gameReadyRef.current) {
             if (IS_DEV) {
@@ -556,10 +559,27 @@ export function useSocket({
 
   // 🔄 Update profile (nickname/avatar) without reconnection
   const updateProfile = useCallback((data: ProfileUpdateData) => {
-    if (socketRef.current && isConnected) {
+    if (socketRef.current && isConnected && effectivePlayerId) {
       // Update refs
       nicknameRef.current = data.nickname
       avatarColorRef.current = data.avatarColor
+
+      // 🔄 SSOT: players Map에서 로컬 사용자 정보도 즉시 업데이트
+      setPlayers((prev) => {
+        const next = new Map(prev)
+        const localPlayer = next.get(effectivePlayerId)
+        if (localPlayer) {
+          next.set(effectivePlayerId, {
+            ...localPlayer,
+            nickname: data.nickname,
+            avatarColor: data.avatarColor,
+          })
+          if (IS_DEV) {
+            console.log("[Socket] SSOT: Local player updated in players Map:", effectivePlayerId, data.nickname)
+          }
+        }
+        return next
+      })
 
       // Send to server
       socketRef.current.emit("player:updateProfile", data)
@@ -571,7 +591,7 @@ export function useSocket({
         console.log("[Socket] Profile updated:", data.nickname, data.avatarColor)
       }
     }
-  }, [isConnected])
+  }, [isConnected, effectivePlayerId])
 
   // ============================================
   // Phase 6: 관리 명령어 (닉네임 기반)
