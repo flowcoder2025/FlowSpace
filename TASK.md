@@ -138,10 +138,11 @@
 
 ### 4.2 구현 체크리스트
 
-- [ ] `/api/my-spaces` - SpaceMember로 연결된 공간 목록
-- [ ] `/my-spaces` 페이지 - 참여 공간 카드 목록
-- [ ] 각 공간 카드에서 바로 입장 가능
-- [ ] 역할별 뱃지 표시 (Owner/Staff/Member)
+- [x] `/api/my-spaces` - SpaceMember로 연결된 공간 목록 ✅
+- [x] `/my-spaces` 페이지 - 참여 공간 카드 목록 ✅
+- [x] 각 공간 카드에서 바로 입장 가능 ✅
+- [x] 역할별 뱃지 표시 (Owner/Staff/Member) ✅
+- [x] 관리 중인 공간 / 참여 중인 공간 분리 표시 ✅
 
 ### 4.3 검증 항목
 
@@ -171,7 +172,7 @@
 | Phase 1: 자동 멤버십 | ✅ 완료 | 2025-12-12 |
 | Phase 2: SuperAdmin /admin | ✅ 완료 | 2025-12-12 |
 | Phase 3: Owner /dashboard | ✅ 완료 | 2025-12-12 |
-| Phase 4: Member /my-spaces | ⏳ 대기 | - |
+| Phase 4: Member /my-spaces | ✅ 완료 | 2025-12-12 |
 | Phase 5: 네비게이션 통합 | ⏳ 대기 | - |
 
 ---
@@ -208,6 +209,7 @@
 
 | 날짜 | 내용 |
 |-----|------|
+| 2025-12-12 | Phase 4 구현 - Member용 /my-spaces + 참여 공간 목록 API |
 | 2025-12-12 | Phase 3 구현 - Owner/Staff용 /dashboard + 공간별 통계 API |
 | 2025-12-12 | Phase 2 구현 - SuperAdmin 전용 /admin 레이아웃 + API 권한 검증 |
 | 2025-12-12 | Phase 1 API 구현 - `/api/spaces/[id]/join` + page.tsx 연동 |
