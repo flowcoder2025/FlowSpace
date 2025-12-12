@@ -136,23 +136,59 @@ User ─────────┬───── Space ───────�
                 │
                 ├── SpaceHeader
                 ├── PanelGroup
-                │   ├── ChatPanel (좌측, 리사이즈)
                 │   ├── GameCanvas (중앙)
                 │   └── ParticipantPanel (우측, 리사이즈)
+                ├── FloatingChatOverlay (게임 위 오버레이)
                 ├── ControlBar (하단)
                 └── ScreenShareOverlay (조건부)
 ```
 
-### 5.2 Phaser-React 통합
+### 5.2 채팅 시스템 (Floating Overlay)
+
+```
+FloatingChatOverlay
+    ├── useChatMode() (ACTIVE/INACTIVE 토글)
+    ├── useChatDrag() (드래그 위치, localStorage 저장)
+    ├── useChatStorage() (메시지 영속성)
+    │
+    ├── ChatTabs (전체/귓속말/파티)
+    ├── ChatMessageList (스크롤, 자동스크롤)
+    └── ChatInputArea (Enter 전송, ESC 취소)
+```
+
+**채팅 타입**:
+| 타입 | 설명 |
+|-----|------|
+| message | 전체 공개 채팅 |
+| whisper | 1:1 귓속말 |
+| party | 파티원 전용 |
+| system | 시스템 알림 |
+| announcement | 공지사항 |
+
+### 5.3 Phaser-React 통합
 
 ```
 PhaserGame.tsx
     ├── Phaser.Game 인스턴스 관리
     ├── useEffect 클린업 (game.destroy)
     └── eventBridge
-            ├── React → Phaser: PLAYER_MOVE, SET_PLAYERS
+            ├── React → Phaser: PLAYER_MOVE, SET_PLAYERS, CHAT_FOCUS_CHANGED
             └── Phaser → React: PLAYER_MOVED, OBJECT_INTERACT
 ```
+
+### 5.4 비디오 타일 (VideoTile)
+
+```
+VideoTile
+    ├── LiveKit Track 렌더링
+    ├── CSS hue-rotate 아바타 색상 변환
+    ├── 마이크/카메라 상태 표시
+    └── 참가자 닉네임 오버레이
+```
+
+**아바타 색상 시스템**:
+- `AvatarColor`: default | red | green | purple | orange | pink
+- CSS `filter: hue-rotate(Xdeg)` 로 색상 변환
 
 ---
 
@@ -189,21 +225,36 @@ PhaserGame.tsx
 ### 7.1 Socket.io 이벤트
 
 **클라이언트 → 서버**:
-| 이벤트 | 페이로드 |
-|-------|---------|
-| `join:space` | `{ spaceId, playerId, nickname, avatarColor, sessionToken }` |
-| `leave:space` | - |
-| `player:move` | `PlayerPosition` |
-| `chat:message` | `{ content }` |
+| 이벤트 | 페이로드 | 설명 |
+|-------|---------|------|
+| `join:space` | `{ spaceId, playerId, nickname, avatarColor, sessionToken }` | 공간 입장 |
+| `leave:space` | - | 공간 퇴장 + EXIT 로그 |
+| `player:move` | `PlayerPosition` | 위치 업데이트 |
+| `player:jump` | `PlayerJumpData` | 점프 이벤트 |
+| `chat:message` | `{ content }` | 전체 채팅 |
+| `whisper:send` | `{ targetId, content }` | 귓속말 전송 |
+| `party:create` | - | 파티 생성 |
+| `party:invite` | `{ targetId }` | 파티 초대 |
+| `party:accept` | `{ partyId }` | 초대 수락 |
+| `party:decline` | `{ partyId }` | 초대 거절 |
+| `party:leave` | - | 파티 탈퇴 |
+| `party:message` | `{ content }` | 파티 채팅 |
 
 **서버 → 클라이언트**:
-| 이벤트 | 페이로드 |
-|-------|---------|
-| `room:joined` | `{ spaceId, players, yourPlayerId }` |
-| `player:joined` | `PlayerPosition` |
-| `player:left` | `{ id }` |
-| `player:moved` | `PlayerPosition` |
-| `chat:message` | `ChatMessageData` |
+| 이벤트 | 페이로드 | 설명 |
+|-------|---------|------|
+| `room:joined` | `{ spaceId, players, yourPlayerId }` | 입장 완료 (🔒 서버 ID) |
+| `player:joined` | `PlayerPosition` | 다른 플레이어 입장 |
+| `player:left` | `{ id }` | 플레이어 퇴장 |
+| `player:moved` | `PlayerPosition` | 위치 동기화 |
+| `player:jumped` | `PlayerJumpData` | 점프 동기화 |
+| `chat:message` | `ChatMessageData` | 채팅 수신 |
+| `chat:system` | `ChatMessageData` | 시스템 메시지 |
+| `whisper:received` | `WhisperData` | 귓속말 수신 |
+| `party:invited` | `PartyInviteData` | 초대 수신 |
+| `party:updated` | `PartyData` | 파티 상태 변경 |
+| `party:message` | `ChatMessageData` | 파티 채팅 |
+| `error` | `{ message }` | 에러 알림 |
 
 ### 7.2 LiveKit 트랙
 
@@ -255,3 +306,4 @@ http://localhost:3000/space/test?dev=true
 | 날짜 | 변경 |
 |-----|------|
 | 2025-12-08 | 초기 생성 - Phase 1-4 완료 상태 반영 |
+| 2025-12-11 | 채팅 시스템 업데이트 (Floating Overlay, 귓속말/파티), VideoTile 아바타 색상 |

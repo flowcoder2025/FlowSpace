@@ -16,7 +16,10 @@
 import { useRef, useState, useEffect, useCallback, useImperativeHandle, forwardRef, useMemo } from "react"
 import { cn } from "@/lib/utils"
 import type { ChatMessage, ReactionType, MessageReaction, ReplyTo } from "../../types/space.types"
+import type { PlayerPosition } from "../../socket/types"
 import { parseContentWithUrls, type ContentSegment } from "../../utils/chatFilter"
+import { hasPermission } from "@/lib/space-permissions"
+import type { SpaceRole } from "@prisma/client"
 
 // ============================================
 // 화살표 아이콘 컴포넌트
@@ -55,6 +58,27 @@ function ReplyIcon({ className }: { className?: string }) {
     >
       <polyline points="9 17 4 12 9 7" />
       <path d="M20 18v-2a4 4 0 0 0-4-4H4" />
+    </svg>
+  )
+}
+
+// ============================================
+// 삭제 아이콘 컴포넌트
+// ============================================
+function TrashIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
     </svg>
   )
 }
@@ -147,7 +171,7 @@ function formatTime(date: Date): string {
 }
 
 // ============================================
-// 리액션 + 답장 버튼 컴포넌트
+// 리액션 + 답장 + 삭제 버튼 컴포넌트
 // ============================================
 interface ActionButtonsProps {
   messageId: string
@@ -156,6 +180,8 @@ interface ActionButtonsProps {
   currentUserId: string
   onReact: (messageId: string, type: ReactionType) => void
   onReply?: (message: ChatMessage) => void
+  onDelete?: (messageId: string) => void
+  canDelete?: boolean  // OWNER/STAFF 권한 체크 결과
   isVisible: boolean
   showReplyButton?: boolean
 }
@@ -167,6 +193,8 @@ function ActionButtons({
   currentUserId,
   onReact,
   onReply,
+  onDelete,
+  canDelete = false,
   isVisible,
   showReplyButton = true,
 }: ActionButtonsProps) {
@@ -219,6 +247,23 @@ function ActionButtons({
           {count > 0 && <span className="ml-0.5 text-[10px]">{count}</span>}
         </button>
       ))}
+      {/* 삭제 버튼 (OWNER/STAFF만 표시) */}
+      {canDelete && onDelete && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            onDelete(messageId)
+          }}
+          className={cn(
+            "text-[11px] px-1 rounded transition-all",
+            "hover:text-red-400 active:scale-95",
+            "drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]"
+          )}
+          title="메시지 삭제"
+        >
+          <TrashIcon className="w-3 h-3 text-white/50 hover:text-red-400" />
+        </button>
+      )}
     </span>
   )
 }
@@ -267,8 +312,11 @@ interface ChatMessageItemProps {
   message: ChatMessage
   isOwn: boolean
   currentUserId: string
+  resolveNickname: (senderId: string | undefined, fallback: string) => string  // 🔄 SSOT
   onReact: (messageId: string, type: ReactionType) => void
   onReply?: (message: ChatMessage) => void
+  onDelete?: (messageId: string) => void
+  canDelete?: boolean
   onScrollToMessage?: (messageId: string) => void
 }
 
@@ -276,14 +324,20 @@ function ChatMessageItem({
   message,
   isOwn,
   currentUserId,
+  resolveNickname,
   onReact,
   onReply,
+  onDelete,
+  canDelete,
   onScrollToMessage,
 }: ChatMessageItemProps) {
   const [isHovered, setIsHovered] = useState(false)
   const isSystem = message.type === "system" || message.type === "announcement"
   const isWhisper = message.type === "whisper"
   const timeStr = formatTime(message.timestamp)
+
+  // 🔄 SSOT: 현재 닉네임으로 해석 (이름 변경 시 모든 메시지에 즉시 반영)
+  const displayNickname = resolveNickname(message.senderId, message.senderNickname)
 
   // 인용 클릭 핸들러
   const handleQuoteClick = useCallback(() => {
@@ -307,9 +361,13 @@ function ChatMessageItem({
   // 📬 귓속말 메시지 (보라색)
   if (isWhisper) {
     const isSent = message.senderId === currentUserId
+    // 🔄 SSOT: 보낸 사람/받는 사람 이름도 현재 이름으로 표시
+    const resolvedTargetNickname = message.targetId
+      ? resolveNickname(message.targetId, message.targetNickname || "")
+      : message.targetNickname || ""
     const directionLabel = isSent
-      ? `→ ${message.targetNickname}`
-      : `← ${message.senderNickname}`
+      ? `→ ${resolvedTargetNickname}`
+      : `← ${displayNickname}`
 
     return (
       <div
@@ -335,7 +393,7 @@ function ChatMessageItem({
           <span className="text-purple-300/50">: </span>
           {/* 내용 */}
           <LinkifiedContent content={message.content} className="text-purple-100" />
-          {/* 액션 버튼 (답장 + 리액션) */}
+          {/* 액션 버튼 (답장 + 리액션 + 삭제) */}
           <ActionButtons
             messageId={message.id}
             message={message}
@@ -343,6 +401,8 @@ function ChatMessageItem({
             currentUserId={currentUserId}
             onReact={onReact}
             onReply={onReply}
+            onDelete={onDelete}
+            canDelete={canDelete}
             isVisible={isHovered}
           />
         </span>
@@ -367,15 +427,15 @@ function ChatMessageItem({
       <span className="text-[11px] leading-relaxed">
         {/* 타임스탬프 */}
         <span className="text-white/40 mr-1">[{timeStr}]</span>
-        {/* 닉네임 */}
+        {/* 🔄 SSOT: 닉네임 (현재 이름으로 표시) */}
         <span className={cn("font-semibold", nicknameColor)}>
-          {message.senderNickname}
+          {displayNickname}
         </span>
         {/* 구분자 */}
         <span className="text-white/50">: </span>
         {/* 내용 */}
         <LinkifiedContent content={message.content} className="text-white/90" />
-        {/* 액션 버튼 (답장 + 리액션) */}
+        {/* 액션 버튼 (답장 + 리액션 + 삭제) */}
         <ActionButtons
           messageId={message.id}
           message={message}
@@ -383,6 +443,8 @@ function ChatMessageItem({
           currentUserId={currentUserId}
           onReact={onReact}
           onReply={onReply}
+          onDelete={onDelete}
+          canDelete={canDelete}
           isVisible={isHovered}
         />
       </span>
@@ -409,10 +471,13 @@ function ChatMessageItem({
 // ============================================
 interface ChatMessageListProps {
   messages: ChatMessage[]
+  players: Map<string, PlayerPosition>  // 🔄 SSOT: 현재 닉네임 조회용
   currentUserId: string
   isActive: boolean
+  userRole?: SpaceRole  // 사용자 역할 (OWNER/STAFF/PARTICIPANT)
   onReact?: (messageId: string, type: ReactionType) => void
   onReply?: (message: ChatMessage) => void  // 답장 콜백
+  onDeleteMessage?: (messageId: string) => void  // 메시지 삭제 콜백
   onDeactivate?: () => void  // 채팅 기록 영역에서 Enter 시 비활성화
 }
 
@@ -428,7 +493,7 @@ export interface ChatMessageListHandle {
 const SCROLL_STEP = 40
 
 export const ChatMessageList = forwardRef<ChatMessageListHandle, ChatMessageListProps>(
-  function ChatMessageList({ messages, currentUserId, isActive, onReact, onReply, onDeactivate }, ref) {
+  function ChatMessageList({ messages, players, currentUserId, isActive, userRole, onReact, onReply, onDeleteMessage, onDeactivate }, ref) {
     const containerRef = useRef<HTMLDivElement>(null)
     const [userScrolled, setUserScrolled] = useState(false)
     // 새 메시지 알림용 (과거 기록 보는 중 신규 메시지 있음)
@@ -437,6 +502,19 @@ export const ChatMessageList = forwardRef<ChatMessageListHandle, ChatMessageList
     const [prevMessageCount, setPrevMessageCount] = useState(messages.length)
     // 하이라이트된 메시지 ID (스크롤 후 잠시 표시)
     const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null)
+
+    // 🔄 SSOT: players Map에서 현재 닉네임 조회 (없으면 fallback 사용)
+    const resolveNickname = useCallback((senderId: string | undefined, fallbackNickname: string): string => {
+      if (!senderId) return fallbackNickname
+      const player = players.get(senderId)
+      return player?.nickname || fallbackNickname
+    }, [players])
+
+    // 메시지 삭제 권한 체크 (OWNER/STAFF만 가능)
+    const canDelete = useMemo(() => {
+      if (!userRole) return false
+      return hasPermission(userRole, "chat:delete")
+    }, [userRole])
 
     // 최하단 스크롤 함수
     const scrollToBottom = useCallback(() => {
@@ -592,8 +670,11 @@ export const ChatMessageList = forwardRef<ChatMessageListHandle, ChatMessageList
                     message={msg}
                     isOwn={msg.senderId === currentUserId}
                     currentUserId={currentUserId}
+                    resolveNickname={resolveNickname}
                     onReact={handleReact}
                     onReply={onReply}
+                    onDelete={onDeleteMessage}
+                    canDelete={canDelete}
                     onScrollToMessage={scrollToMessage}
                   />
                 </div>

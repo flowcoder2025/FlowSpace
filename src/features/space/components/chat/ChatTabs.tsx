@@ -43,6 +43,10 @@ interface ChatTabsProps {
   unreadCounts: Record<ChatTab, number>
   onDeactivate?: () => void  // Enter 키 누를 시 채팅 비활성화
   className?: string
+  /** OWNER 권한 여부 (설정 버튼 표시) */
+  isOwner?: boolean
+  /** 설정 패널 열기 콜백 */
+  onOpenSettings?: () => void
 }
 
 // ============================================
@@ -54,6 +58,8 @@ export function ChatTabs({
   unreadCounts,
   onDeactivate,
   className,
+  isOwner = false,
+  onOpenSettings,
 }: ChatTabsProps) {
   // 탭에서 Enter 키 누르면 채팅 비활성화
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -76,6 +82,8 @@ export function ChatTabs({
         className
       )}
     >
+      {/* 탭 버튼들 */}
+      <div className="flex items-center gap-0.5 flex-1">
       {TABS.map((tab) => {
         const isActive = activeTab === tab.id
         const unreadCount = unreadCounts[tab.id]
@@ -117,6 +125,43 @@ export function ChatTabs({
           </button>
         )
       })}
+      </div>
+
+      {/* ⚙️ 설정 버튼 (OWNER만 표시) */}
+      {isOwner && onOpenSettings && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            onOpenSettings()
+          }}
+          className={cn(
+            "p-1 rounded transition-all",
+            "hover:bg-white/10",
+            "outline-none focus:outline-none",
+            "text-white/60 hover:text-white/80"
+          )}
+          title="스태프 관리"
+        >
+          <svg
+            className="size-3.5"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            strokeWidth={2}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+            />
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+            />
+          </svg>
+        </button>
+      )}
     </div>
   )
 }

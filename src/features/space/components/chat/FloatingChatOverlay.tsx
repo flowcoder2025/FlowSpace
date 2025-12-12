@@ -23,22 +23,30 @@ import { useChatMode } from "../../hooks/useChatMode"
 import { useChatDrag } from "../../hooks/useChatDrag"
 import { useFullscreen } from "../../hooks/useFullscreen"
 import { ChatMessageList, type ChatMessageListHandle } from "./ChatMessageList"
-import { ChatInputArea } from "./ChatInputArea"
+import { ChatInputArea, type AdminCommandResult } from "./ChatInputArea"
 import { ChatTabs } from "./ChatTabs"
 import { filterMessagesByTab, calculateUnreadCounts } from "../../utils/chatFilter"
 import type { ChatMessage, ReactionType, ChatTab, ReplyTo } from "../../types/space.types"
-import type { ReplyToData } from "../../socket/types"
+import type { ReplyToData, PlayerPosition } from "../../socket/types"
+import type { SpaceRole } from "@prisma/client"
+import { StaffManagement } from "@/components/space/StaffManagement"
 
 // ============================================
 // FloatingChatOverlay Props
 // ============================================
 interface FloatingChatOverlayProps {
   messages: ChatMessage[]
+  players: Map<string, PlayerPosition>  // 🔄 SSOT: 현재 닉네임 조회용
   onSendMessage: (content: string, replyTo?: ReplyToData) => void  // 답장 지원
   onSendWhisper?: (targetNickname: string, content: string, replyTo?: ReplyToData) => void  // 📬 귓속말 전송 + 답장
   onReact?: (messageId: string, type: ReactionType) => void
+  onAdminCommand?: (result: AdminCommandResult) => void  // 🛡️ 관리 명령어
+  onDeleteMessage?: (messageId: string) => void  // 🗑️ 메시지 삭제 (OWNER/STAFF)
   currentUserId: string
+  userRole?: SpaceRole  // 🛡️ 사용자 역할 (OWNER/STAFF/PARTICIPANT)
   isVisible?: boolean
+  whisperHistory?: string[]  // 📬 귓속말 히스토리 (최근 대화 상대)
+  spaceId?: string  // ⚙️ 스태프 관리용 공간 ID
 }
 
 // ============================================
@@ -46,16 +54,35 @@ interface FloatingChatOverlayProps {
 // ============================================
 export function FloatingChatOverlay({
   messages,
+  players,
   onSendMessage,
   onSendWhisper,
   onReact,
+  onAdminCommand,
+  onDeleteMessage,
   currentUserId,
+  userRole,
   isVisible = true,
+  whisperHistory = [],
+  spaceId,
 }: FloatingChatOverlayProps) {
   const { isActive, toggleMode, deactivate } = useChatMode()
   const { position, size, isDragging, isResizing, handleMoveStart, handleResizeStart } = useChatDrag()
   const { isFullscreen, fullscreenElement } = useFullscreen()
   const messageListRef = useRef<ChatMessageListHandle>(null)
+
+  // ⚙️ OWNER 여부 및 설정 패널 상태
+  const isOwner = userRole === "OWNER"
+  const [showSettings, setShowSettings] = useState(false)
+
+  // ⚙️ 설정 패널 열기/닫기
+  const handleOpenSettings = useCallback(() => {
+    setShowSettings(true)
+  }, [])
+
+  const handleCloseSettings = useCallback(() => {
+    setShowSettings(false)
+  }, [])
 
   // 📬 탭 상태
   const [activeTab, setActiveTab] = useState<ChatTab>("all")
@@ -215,7 +242,7 @@ export function FloatingChatOverlay({
     type: "system",
     senderId: "system",
     senderNickname: "시스템",
-    content: "WASD 또는 방향키로 이동 · Space로 점프 · E로 상호작용",
+    content: "WASD/방향키 이동 · Space 점프 · E 상호작용 · 명령어: @도움말(@help)",
     timestamp: new Date(0), // 항상 맨 위에 표시
     reactions: [],
   }), [])
@@ -338,14 +365,37 @@ export function FloatingChatOverlay({
       )}
 
       {/* 📬 채팅 탭 (활성화 시에만 표시) */}
-      {isActive && (
+      {isActive && !showSettings && (
         <ChatTabs
           activeTab={activeTab}
           onTabChange={handleTabChange}
           unreadCounts={unreadCounts}
           onDeactivate={handleDeactivate}
           className="bg-black/30 backdrop-blur-sm"
+          isOwner={isOwner}
+          onOpenSettings={spaceId ? handleOpenSettings : undefined}
         />
+      )}
+
+      {/* ⚙️ 설정 패널 (OWNER만, 스태프 관리) */}
+      {showSettings && spaceId && (
+        <div className="flex flex-col bg-black/40 backdrop-blur-sm border-b border-white/5">
+          <div className="flex items-center justify-between px-3 py-2 border-b border-white/10">
+            <span className="text-xs font-medium text-white/80">설정</span>
+            <button
+              onClick={handleCloseSettings}
+              className="p-1 rounded hover:bg-white/10 text-white/60 hover:text-white/80"
+              title="닫기"
+            >
+              <svg className="size-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <div className="p-2 overflow-y-auto max-h-[200px]">
+            <StaffManagement spaceId={spaceId} compact />
+          </div>
+        </div>
       )}
 
       {/* 메시지 목록 - 동적 높이 */}
@@ -356,10 +406,13 @@ export function FloatingChatOverlay({
         <ChatMessageList
           ref={messageListRef}
           messages={displayMessages}
+          players={players}
           currentUserId={currentUserId}
           isActive={isActive}
+          userRole={userRole}
           onReact={handleReact}
           onReply={handleReply}
+          onDeleteMessage={onDeleteMessage}
           onDeactivate={handleDeactivate}
         />
       </div>
@@ -368,10 +421,12 @@ export function FloatingChatOverlay({
       <ChatInputArea
         onSend={handleSendMessage}
         onSendWhisper={handleSendWhisper}
+        onAdminCommand={onAdminCommand}
         onDeactivate={handleDeactivate}
         isActive={isActive}
         replyTo={replyTo}
         onCancelReply={handleCancelReply}
+        whisperHistory={whisperHistory}
       />
 
       {/* 리사이즈 핸들 (우하단) */}

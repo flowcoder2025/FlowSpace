@@ -360,7 +360,7 @@ export function VideoTile({ track, isLocal = false, isScreenShare = false, class
           {/* 아바타 색상에 따른 hue-rotate 필터 적용 */}
           {/* 원본 이미지: 청록색(teal, ~180° hue) */}
           <img
-            src="/Game.jpeg"
+            src="/Game.png"
             alt={track.participantName}
             className="size-20 object-contain"
             style={{

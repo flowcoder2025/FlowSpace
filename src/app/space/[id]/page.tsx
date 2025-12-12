@@ -20,6 +20,8 @@ import {
 // ============================================
 // Types
 // ============================================
+import type { SpaceRole } from "@prisma/client"
+
 interface SpaceData {
   id: string
   name: string
@@ -31,6 +33,15 @@ interface SpaceData {
   logoUrl: string | null
   primaryColor: string | null
   loadingMessage: string | null
+}
+
+// 🛡️ 역할 API 응답 타입
+interface RoleResponse {
+  role: SpaceRole
+  isOwner: boolean
+  isStaff: boolean
+  canManageChat: boolean
+  canManageSpace: boolean
 }
 
 interface GuestSession {
@@ -76,6 +87,48 @@ interface VerifyResponse {
 // Dev Mode Check
 // ============================================
 const IS_DEV = process.env.NODE_ENV === "development"
+
+// ============================================
+// 🧹 게스트 세션 정리 (인증 사용자 전환 시)
+// ============================================
+/**
+ * 인증된 사용자가 공간에 입장할 때 기존 게스트 세션을 정리합니다.
+ * 이렇게 하면 LiveKit/Socket.io에서 중복 참가자 문제를 방지합니다.
+ */
+async function cleanupGuestSession(spaceId: string): Promise<string | null> {
+  try {
+    const storedSession = localStorage.getItem("guestSession")
+    if (!storedSession) return null
+
+    const parsed = JSON.parse(storedSession) as GuestSession
+    if (parsed.spaceId !== spaceId) return null
+
+    // 서버에 exit 이벤트 기록 + 세션 만료
+    await fetch("/api/guest/exit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionToken: parsed.sessionToken,
+        spaceId: parsed.spaceId,
+      }),
+    }).catch(() => {
+      // exit API 실패해도 계속 진행
+    })
+
+    // localStorage에서 제거
+    localStorage.removeItem("guestSession")
+    console.log("[SpacePage] 🧹 Cleaned up guest session for auth user transition")
+
+    return parsed.sessionToken
+  } catch (error) {
+    console.warn("[SpacePage] Failed to cleanup guest session:", error)
+    // 실패해도 localStorage는 제거 시도
+    try {
+      localStorage.removeItem("guestSession")
+    } catch {}
+    return null
+  }
+}
 
 // ============================================
 // Fetch with Timeout and Retry
@@ -152,6 +205,8 @@ export default function SpacePage() {
   const [isAuthUser, setIsAuthUser] = useState(false)
   // 🔒 서버 검증된 사용자 정보 (participantId는 서버에서 파생)
   const [verifiedUser, setVerifiedUser] = useState<VerifiedUser | null>(null)
+  // 🛡️ 사용자 역할 (OWNER/STAFF/PARTICIPANT)
+  const [userRole, setUserRole] = useState<SpaceRole | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   // 🔑 로그인 필요 상태 (게스트 세션 없고 로그인도 안 된 경우)
@@ -164,22 +219,19 @@ export default function SpacePage() {
     // NextAuth 세션 로딩 중이면 대기
     if (authStatus === "loading") return
 
-    // Dev mode: 테스트용 가상 세션 생성
-    if (devMode) {
-      const devSession: GuestSession = {
-        sessionToken: `dev-${Date.now()}`,
-        nickname: "Developer",
-        avatar: "default",
-        spaceId,
-      }
-      setSession(devSession)
-      return
-    }
-
-    // 🔐 NextAuth 로그인 사용자인 경우
+    // 🔐 NextAuth 로그인 사용자인 경우 (dev 모드여도 로그인 사용자 우선)
+    // dev 모드에서도 로그인 사용자가 있으면 로그인 사용자로 처리 (중복 참가자 방지)
     if (authSession?.user) {
       console.log("[SpacePage] NextAuth session detected, checking saved participant info")
       setIsAuthUser(true)
+
+      // 🧹 기존 게스트 세션 정리 (중복 참가자 방지)
+      // 비동기로 처리하되, 세션 설정은 동기적으로 진행
+      cleanupGuestSession(spaceId).then((cleanedToken) => {
+        if (cleanedToken) {
+          console.log("[SpacePage] 🧹 Guest session cleaned up, token was:", cleanedToken.substring(0, 20) + "...")
+        }
+      })
 
       // 🎫 저장된 참가자 정보 확인 (공간별)
       const savedParticipant = getSpaceParticipant(spaceId)
@@ -242,7 +294,21 @@ export default function SpacePage() {
         setLoading(false)
       }
     } else {
-      // 🔑 게스트 세션도 없고 로그인도 안 된 경우 → 로그인 유도
+      // 🔑 게스트 세션도 없고 로그인도 안 된 경우
+      // Dev mode: 로그인 안 된 경우에만 테스트용 가상 세션 생성
+      if (devMode) {
+        console.log("[SpacePage] Dev mode: creating test session (no auth user)")
+        const devSession: GuestSession = {
+          sessionToken: `dev-${Date.now()}`,
+          nickname: "Developer",
+          avatar: "default",
+          spaceId,
+        }
+        setSession(devSession)
+        return
+      }
+
+      // 로그인 유도
       console.log("[SpacePage] No session found, prompting login")
       setNeedsLogin(true)
       setLoading(false)
@@ -356,6 +422,37 @@ export default function SpacePage() {
     }
 
     fetchSpace()
+  }, [spaceId, session, devMode])
+
+  // 🛡️ 사용자 역할 조회
+  useEffect(() => {
+    if (!session || !spaceId) return
+
+    // Dev mode: 테스트용 OWNER 역할 부여
+    if (devMode) {
+      setUserRole("OWNER" as SpaceRole)
+      return
+    }
+
+    async function fetchRole() {
+      try {
+        const res = await fetchWithRetry(`/api/spaces/${spaceId}/my-role`)
+        if (!res.ok) {
+          console.warn("[SpacePage] Failed to fetch role, defaulting to PARTICIPANT")
+          setUserRole("PARTICIPANT" as SpaceRole)
+          return
+        }
+        const data: RoleResponse = await res.json()
+        setUserRole(data.role)
+        console.log("[SpacePage] User role:", data.role, { canManageChat: data.canManageChat })
+      } catch (err) {
+        console.error("[SpacePage] fetchRole error:", err)
+        // 에러 시 기본값 PARTICIPANT
+        setUserRole("PARTICIPANT" as SpaceRole)
+      }
+    }
+
+    fetchRole()
   }, [spaceId, session, devMode])
 
   // 🎫 참가자명 입력 완료 핸들러 (로그인 사용자용)
@@ -576,6 +673,7 @@ export default function SpacePage() {
   // Main space view with ZEP-style layout
   // 🔒 userId는 서버 파생 participantId 사용 (session.sessionToken 대신)
   // 🔒 avatar는 이미 getSafeAvatarColor로 검증됨
+  // 🛡️ userRole은 /api/spaces/[id]/my-role에서 조회
   return (
     <SpaceLayout
       spaceId={space.id}
@@ -585,6 +683,7 @@ export default function SpacePage() {
       userNickname={verifiedUser.nickname}
       userId={verifiedUser.participantId}
       userAvatarColor={verifiedUser.avatar as LocalAvatarColor}
+      userRole={userRole ?? undefined}
       sessionToken={session.sessionToken}
       onExit={handleExit}
       onNicknameChange={handleNicknameChange}

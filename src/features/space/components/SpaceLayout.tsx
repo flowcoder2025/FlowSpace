@@ -3,7 +3,7 @@
 import { useState, useCallback, useMemo, useEffect } from "react"
 
 import { SpaceHeader } from "./SpaceHeader"
-import { FloatingChatOverlay } from "./chat"
+import { FloatingChatOverlay, type AdminCommandResult } from "./chat"
 import { ParticipantPanel, type ParticipantViewMode } from "./video/ParticipantPanel"
 import { ScreenShareOverlay } from "./video/ScreenShare"
 import { ControlBar } from "./controls/ControlBar"
@@ -12,8 +12,9 @@ import { SpaceSettingsModal } from "./SpaceSettingsModal"
 import { useSocket } from "../socket"
 import { LiveKitRoomProvider, useLiveKitMedia } from "../livekit"
 import { useNotificationSound, useChatStorage } from "../hooks"
-import type { ChatMessageData, AvatarColor, ReplyToData } from "../socket/types"
+import type { ChatMessageData, AvatarColor, ReplyToData, AnnouncementData, MessageDeletedData } from "../socket/types"
 import type { ChatMessage } from "../types/space.types"
+import type { SpaceRole } from "@prisma/client"
 
 // ============================================
 // SpaceLayout Props
@@ -26,6 +27,7 @@ interface SpaceLayoutProps {
   userNickname: string
   userId: string
   userAvatarColor?: AvatarColor
+  userRole?: SpaceRole // 🛡️ 사용자 역할 (OWNER/STAFF/PARTICIPANT)
   sessionToken?: string // 게스트 세션 토큰 (LiveKit 인증용)
   onExit: () => void
   onNicknameChange?: (nickname: string, avatar: string) => void // 닉네임 변경 콜백
@@ -82,6 +84,7 @@ function SpaceLayoutContent({
   userNickname,
   userId,
   userAvatarColor = "default",
+  userRole,
   sessionToken,
   onExit,
   onNicknameChange,
@@ -159,8 +162,65 @@ function SpaceLayoutContent({
   const [currentNickname, setCurrentNickname] = useState(userNickname)
   const [currentAvatarColor, setCurrentAvatarColor] = useState<AvatarColor>(userAvatarColor)
 
+  // 🛡️ 관리 명령어 에러 핸들러
+  const handleAdminError = useCallback((action: string, message: string) => {
+    const errorMessage: ChatMessage = {
+      id: `admin-error-${Date.now()}`,
+      senderId: "system",
+      senderNickname: "시스템",
+      content: `[${action}] ${message}`,
+      timestamp: new Date(),
+      type: "system",
+    }
+    setMessages((prev) => [...prev, errorMessage])
+  }, [])
+
+  // 🔇 채팅 에러 핸들러 (음소거 등)
+  const handleChatError = useCallback((error: string) => {
+    const errorMessage: ChatMessage = {
+      id: `chat-error-${Date.now()}`,
+      senderId: "system",
+      senderNickname: "시스템",
+      content: `🔇 ${error}`,
+      timestamp: new Date(),
+      type: "system",
+    }
+    setMessages((prev) => [...prev, errorMessage])
+  }, [])
+
+  // 📢 공지 메시지 핸들러
+  const handleAnnouncement = useCallback((data: AnnouncementData) => {
+    const announceMessage: ChatMessage = {
+      id: data.id || `announce-${Date.now()}`,
+      senderId: data.senderId,
+      senderNickname: data.senderNickname,
+      content: `📢 ${data.content}`,
+      timestamp: new Date(data.timestamp),
+      type: "system",
+    }
+    setMessages((prev) => [...prev, announceMessage])
+  }, [])
+
+  // 🗑️ 메시지 삭제 핸들러 (서버에서 삭제 이벤트 수신 시)
+  const handleMessageDeleted = useCallback((data: MessageDeletedData) => {
+    setMessages((prev) => prev.filter((msg) => msg.id !== data.messageId))
+  }, [])
+
   // Socket connection for game position sync (🔒 sessionToken으로 서버 검증)
-  const { players, socketError, effectivePlayerId, sendMessage, sendWhisper, updateProfile } = useSocket({
+  const {
+    players,
+    socketError,
+    effectivePlayerId,
+    sendMessage,
+    sendWhisper,
+    updateProfile,
+    // 🛡️ Phase 6: 관리 명령어 함수
+    sendMuteCommand,
+    sendUnmuteCommand,
+    sendKickCommand,
+    sendAnnounce,
+    deleteMessage,
+  } = useSocket({
     spaceId,
     playerId: userId,
     nickname: currentNickname,
@@ -170,6 +230,10 @@ function SpaceLayoutContent({
     onSystemMessage: handleSystemMessage,
     onWhisperMessage: handleWhisperMessage,  // 📬 귓속말 수신
     onWhisperError: handleWhisperError,      // 📬 귓속말 에러
+    onAnnouncement: handleAnnouncement,      // 📢 공지 수신
+    onMessageDeleted: handleMessageDeleted,  // 🗑️ 메시지 삭제
+    onAdminError: handleAdminError,          // 🛡️ 관리 에러
+    onChatError: handleChatError,            // 🔇 채팅 에러 (음소거 등)
   })
 
   // LiveKit for audio/video (@livekit/components-react 공식 훅 기반)
@@ -220,12 +284,16 @@ function SpaceLayoutContent({
     }
 
     // Add socket players that might not have LiveKit tracks yet
-    // 또는 기존 트랙에 avatarColor 추가
+    // 또는 기존 트랙에 avatarColor + nickname 업데이트
     players.forEach((player) => {
       const existingTrack = tracks.get(player.id)
       if (existingTrack) {
-        // 기존 트랙에 avatarColor 추가
-        tracks.set(player.id, { ...existingTrack, avatarColor: player.avatarColor || "default" })
+        // 기존 트랙에 avatarColor 추가 + 닉네임 업데이트 (Socket.io 닉네임 우선)
+        tracks.set(player.id, {
+          ...existingTrack,
+          participantName: player.nickname, // 🔄 Socket.io 닉네임으로 오버라이드
+          avatarColor: player.avatarColor || "default",
+        })
       } else {
         // 새 트랙 생성
         tracks.set(player.id, {
@@ -250,6 +318,31 @@ function SpaceLayoutContent({
     return null
   }, [allParticipantTracks])
 
+  // 📬 귓속말 히스토리 계산 (최근 대화 상대 닉네임 목록, 중복 제거)
+  const whisperHistory = useMemo(() => {
+    const nicknames: string[] = []
+    const seen = new Set<string>()
+
+    // 최신 메시지부터 역순으로 탐색
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i]
+      if (msg.type === "whisper") {
+        // 내가 보낸 귓속말: targetNickname
+        if (msg.senderId === resolvedUserId && msg.targetNickname && !seen.has(msg.targetNickname)) {
+          nicknames.push(msg.targetNickname)
+          seen.add(msg.targetNickname)
+        }
+        // 내가 받은 귓속말: senderNickname
+        if (msg.targetId === resolvedUserId && msg.senderNickname && !seen.has(msg.senderNickname)) {
+          nicknames.push(msg.senderNickname)
+          seen.add(msg.senderNickname)
+        }
+      }
+    }
+
+    return nicknames  // 최신 대화 상대부터 정렬됨
+  }, [messages, resolvedUserId])
+
   // 🔧 마지막으로 닫은 화면공유 트랙 ID (새 화면공유 감지용)
   // 파생 상태 패턴: closedScreenTrackId와 현재 트랙 ID 비교로 표시 여부 결정
   const [closedScreenTrackId, setClosedScreenTrackId] = useState<string | null>(null)
@@ -271,6 +364,104 @@ function SpaceLayoutContent({
   const handleSendWhisper = useCallback((targetNickname: string, content: string, replyTo?: ReplyToData) => {
     sendWhisper(targetNickname, content, replyTo)
   }, [sendWhisper])
+
+  // 🛡️ 관리 명령어 핸들러
+  const handleAdminCommand = useCallback((result: AdminCommandResult) => {
+    switch (result.command) {
+      case "mute":
+        if (result.targetNickname) {
+          sendMuteCommand(result.targetNickname, result.duration, result.reason)
+        }
+        break
+      case "unmute":
+        if (result.targetNickname) {
+          sendUnmuteCommand(result.targetNickname)
+        }
+        break
+      case "kick":
+        if (result.targetNickname) {
+          sendKickCommand(result.targetNickname, result.reason, false)
+        }
+        break
+      case "ban":
+        if (result.targetNickname) {
+          sendKickCommand(result.targetNickname, result.reason, true)
+        }
+        break
+      case "announce":
+        if (result.message) {
+          sendAnnounce(result.message)
+        }
+        break
+      case "help":
+        // 도움말 시스템 메시지 표시 (로컬 전용)
+        const helpMessages: ChatMessage[] = [
+          {
+            id: `help-header-${Date.now()}`,
+            senderId: "system",
+            senderNickname: "시스템",
+            content: "━━━━━━━━ 📋 채팅 명령어 도움말 ━━━━━━━━",
+            timestamp: new Date(),
+            type: "system",
+          },
+          {
+            id: `help-chat-${Date.now()}`,
+            senderId: "system",
+            senderNickname: "시스템",
+            content: `💬 일반 채팅
+   메시지 입력 후 Enter → 모두에게 공개`,
+            timestamp: new Date(),
+            type: "system",
+          },
+          {
+            id: `help-whisper-${Date.now()}`,
+            senderId: "system",
+            senderNickname: "시스템",
+            content: `📬 귓속말
+   /닉네임 메시지 → 1:1 비밀 대화
+   예: /홍길동 안녕하세요
+   💡 TIP: / 입력 후 ↑↓ 방향키로 최근 대화 상대 선택`,
+            timestamp: new Date(),
+            type: "system",
+          },
+          {
+            id: `help-admin-${Date.now()}`,
+            senderId: "system",
+            senderNickname: "시스템",
+            content: `🛡️ 관리자 명령어 (@로 시작)
+   @mute 닉네임 [분] [사유] → 채팅 금지
+   @unmute 닉네임 → 채팅 금지 해제
+   @kick 닉네임 [사유] → 강퇴
+   @ban 닉네임 [사유] → 영구 차단
+   @announce 메시지 → 공지사항 전송`,
+            timestamp: new Date(),
+            type: "system",
+          },
+          {
+            id: `help-keys-${Date.now()}`,
+            senderId: "system",
+            senderNickname: "시스템",
+            content: `⌨️ 단축키
+   Enter → 채팅 모드 켜기/메시지 전송
+   ESC → 채팅 모드 끄기
+   WASD/방향키 → 캐릭터 이동
+   Space → 점프  |  E → 상호작용`,
+            timestamp: new Date(),
+            type: "system",
+          },
+          {
+            id: `help-footer-${Date.now()}`,
+            senderId: "system",
+            senderNickname: "시스템",
+            content: "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+            timestamp: new Date(),
+            type: "system",
+          },
+        ]
+        setMessages((prev) => [...prev, ...helpMessages])
+        break
+    }
+  }, [sendMuteCommand, sendUnmuteCommand, sendKickCommand, sendAnnounce])
 
   const handleToggleMic = useCallback(async () => {
     await toggleMicrophone()
@@ -365,10 +556,16 @@ function SpaceLayoutContent({
         {/* 플로팅 채팅 오버레이 (좌측 하단) */}
         <FloatingChatOverlay
           messages={messages}
+          players={players}
           onSendMessage={handleSendMessage}
           onSendWhisper={handleSendWhisper}
+          onAdminCommand={handleAdminCommand}
+          onDeleteMessage={deleteMessage}
           currentUserId={resolvedUserId}
+          userRole={userRole}
           isVisible={isChatOpen}
+          whisperHistory={whisperHistory}
+          spaceId={spaceId}
         />
 
         {/* 플로팅 참가자 비디오 - 뷰 모드에 따라 다르게 렌더링 */}

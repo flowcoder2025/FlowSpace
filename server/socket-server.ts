@@ -8,6 +8,7 @@
 
 import { createServer } from "http"
 import { Server } from "socket.io"
+import { PrismaClient } from "@prisma/client"
 import type {
   ClientToServerEvents,
   ServerToClientEvents,
@@ -18,6 +19,19 @@ import type {
   PlayerJumpData,
   AvatarColor,
   ProfileUpdateData,
+  // Phase 6: 관리 이벤트 타입
+  SpaceRole,
+  ChatRestriction,
+  AdminMuteRequest,
+  AdminUnmuteRequest,
+  AdminKickRequest,
+  AdminDeleteMessageRequest,
+  AdminAnnounceRequest,
+  MemberMutedData,
+  MemberUnmutedData,
+  MemberKickedData,
+  MessageDeletedData,
+  AnnouncementData,
 } from "../src/features/space/socket/types"
 
 const PORT = parseInt(process.env.PORT || process.env.SOCKET_PORT || "3001", 10)
@@ -43,6 +57,13 @@ const CORS_ORIGINS = (() => {
 
   return origins
 })()
+
+// Prisma 클라이언트 싱글톤
+const globalForPrisma = globalThis as unknown as { prisma: PrismaClient | undefined }
+const prisma = globalForPrisma.prisma ?? new PrismaClient()
+if (process.env.NODE_ENV !== "production") {
+  globalForPrisma.prisma = prisma
+}
 
 // ============================================
 // 📊 이벤트 로깅 함수
@@ -403,7 +424,13 @@ io.on("connection", (socket) => {
 
   // Chat message (답장 지원)
   socket.on("chat:message", ({ content, replyTo }) => {
-    const { spaceId, playerId, nickname } = socket.data
+    const { spaceId, playerId, nickname, restriction } = socket.data
+
+    // 🔇 음소거 상태 확인
+    if (restriction === "MUTED") {
+      socket.emit("chat:error", { message: "음소거 상태입니다. 채팅을 보낼 수 없습니다." })
+      return
+    }
 
     if (spaceId && playerId && content.trim()) {
       const message: ChatMessageData = {
@@ -434,30 +461,18 @@ io.on("connection", (socket) => {
       return
     }
 
-    // 같은 공간의 소켓들 중에서 targetNickname과 일치하는 소켓 찾기
-    const socketsInRoom = io.sockets.adapter.rooms.get(spaceId)
-    if (!socketsInRoom) {
-      socket.emit("whisper:error", { message: "공간을 찾을 수 없습니다." })
-      return
-    }
-
-    let targetSocket: typeof socket | null = null
-    let targetPlayerId: string | null = null
-
-    for (const socketId of socketsInRoom) {
-      const s = io.sockets.sockets.get(socketId)
-      if (s && s.data.nickname === targetNickname && s.data.playerId !== playerId) {
-        targetSocket = s
-        targetPlayerId = s.data.playerId
-        break
-      }
-    }
+    // 💬 같은 공간의 소켓들 중에서 targetNickname과 일치하는 모든 소켓 찾기
+    const targetSockets = findAllSocketsByNickname(spaceId, targetNickname)
+      .filter(s => s.data.playerId !== playerId) // 본인 소켓 제외
 
     // 대상 사용자가 없으면 에러 반환
-    if (!targetSocket || !targetPlayerId) {
+    if (targetSockets.length === 0) {
       socket.emit("whisper:error", { message: `"${targetNickname}" 님을 찾을 수 없습니다.` })
       return
     }
+
+    // 첫 번째 소켓에서 playerId 가져오기 (메시지 데이터용)
+    const targetPlayerId = targetSockets[0].data.playerId
 
     // 귓속말 메시지 생성 (답장 정보 포함)
     const whisperMessage: ChatMessageData = {
@@ -473,8 +488,10 @@ io.on("connection", (socket) => {
       ...(replyTo && { replyTo }),
     }
 
-    // 수신자에게 전송
-    targetSocket.emit("whisper:receive", whisperMessage)
+    // 💬 모든 수신자 소켓에 전송
+    for (const targetSocket of targetSockets) {
+      targetSocket.emit("whisper:receive", whisperMessage)
+    }
 
     // 송신자에게 확인 전송 (내가 보낸 귓속말도 화면에 표시하기 위함)
     socket.emit("whisper:sent", whisperMessage)
@@ -613,6 +630,560 @@ io.on("connection", (socket) => {
       console.log(`[Socket] Profile updated for ${playerId}: ${data.nickname} (${data.avatarColor})`)
     }
   })
+
+  // ============================================
+  // Phase 6: 관리 액션 핸들러
+  // ============================================
+
+  // 🔒 관리 권한 검증 헬퍼 (Prisma 직접 쿼리)
+  async function verifyAdminPermission(
+    spaceId: string,
+    sessionToken: string,
+    action: string
+  ): Promise<{ valid: boolean; error?: string; userId?: string; role?: SpaceRole }> {
+    try {
+      // auth- 세션에서 userId 추출
+      if (!sessionToken?.startsWith("auth-")) {
+        return { valid: false, error: "Authentication required for admin actions" }
+      }
+
+      const userId = sessionToken.replace("auth-", "")
+
+      // Prisma로 직접 SpaceMember 조회
+      const member = await prisma.spaceMember.findUnique({
+        where: {
+          spaceId_userId: { spaceId, userId },
+        },
+        select: { role: true },
+      })
+
+      if (!member) {
+        // 공간 소유자인지 직접 확인 (SpaceMember 없어도 Space.ownerId면 OWNER)
+        const space = await prisma.space.findUnique({
+          where: { id: spaceId },
+          select: { ownerId: true },
+        })
+
+        if (space?.ownerId === userId) {
+          return { valid: true, userId, role: "OWNER" }
+        }
+
+        return { valid: false, error: "Not a member of this space" }
+      }
+
+      const role = member.role as SpaceRole
+
+      // STAFF 이상만 관리 액션 허용
+      if (role !== "OWNER" && role !== "STAFF") {
+        return { valid: false, error: "Insufficient permissions" }
+      }
+
+      return { valid: true, userId, role }
+    } catch (error) {
+      console.error(`[Socket] Admin permission verification error for ${action}:`, error)
+      return { valid: false, error: "Permission verification error" }
+    }
+  }
+
+  // 음소거 (admin:mute) - Phase 6: 닉네임 기반 처리 지원
+  socket.on("admin:mute", async (data: AdminMuteRequest) => {
+    const { spaceId, sessionToken, nickname } = socket.data
+    if (!spaceId) {
+      socket.emit("admin:error", { action: "mute", message: "공간에 연결되지 않았습니다." })
+      return
+    }
+
+    // Phase 6: 닉네임 기반 처리 (nickname: 프리픽스)
+    const targetNicknameFromPrefix = extractNickname(data.targetMemberId)
+
+    if (targetNicknameFromPrefix) {
+      // 🔒 권한 검증 (STAFF 이상만 허용)
+      if (sessionToken) {
+        const verification = await verifyAdminPermission(spaceId, sessionToken, "mute")
+        if (!verification.valid) {
+          socket.emit("admin:error", { action: "mute", message: verification.error || "권한이 없습니다." })
+          return
+        }
+      } else if (!IS_DEV) {
+        // 운영 환경에서 세션 없으면 거부
+        socket.emit("admin:error", { action: "mute", message: "인증이 필요합니다." })
+        return
+      }
+
+      // 🔇 닉네임으로 모든 대상 소켓 찾기 (같은 닉네임으로 여러 연결 가능)
+      const targetSockets = findAllSocketsByNickname(spaceId, targetNicknameFromPrefix)
+
+      if (targetSockets.length === 0) {
+        socket.emit("admin:error", { action: "mute", message: `'${targetNicknameFromPrefix}' 사용자를 찾을 수 없습니다.` })
+        return
+      }
+
+      // 🔇 모든 대상 소켓에 음소거 상태 설정
+      for (const targetSocket of targetSockets) {
+        targetSocket.data.restriction = "MUTED"
+      }
+      console.log(`[Socket] 🔇 Applied MUTED restriction to ${targetSockets.length} socket(s) for "${targetNicknameFromPrefix}"`)
+
+      // 첫 번째 소켓에서 playerId 가져오기 (이벤트 데이터용)
+      const firstTargetSocket = targetSockets[0]
+
+      // 시스템 메시지로 음소거 알림 (실제 DB 저장 없이 메모리 기반)
+      const systemMessage: ChatMessageData = {
+        id: `sys-${Date.now()}`,
+        senderId: "system",
+        senderNickname: "시스템",
+        content: `🔇 ${targetNicknameFromPrefix}님이 ${nickname}님에 의해 음소거되었습니다.${data.duration ? ` (${data.duration}분)` : ""}${data.reason ? ` 사유: ${data.reason}` : ""}`,
+        timestamp: Date.now(),
+        type: "system",
+      }
+      io.to(spaceId).emit("chat:system", systemMessage)
+
+      // 공간 전체에 음소거 이벤트 알림
+      const mutedData: MemberMutedData = {
+        memberId: firstTargetSocket.data.playerId || "",
+        nickname: targetNicknameFromPrefix,
+        mutedBy: socket.data.playerId || "",
+        mutedByNickname: nickname || "",
+        duration: data.duration,
+        reason: data.reason,
+        mutedUntil: data.duration ? new Date(Date.now() + data.duration * 60000).toISOString() : undefined,
+      }
+      io.to(spaceId).emit("member:muted", mutedData)
+
+      console.log(`[Socket] ${targetNicknameFromPrefix} muted by ${nickname} in space ${spaceId} (nickname-based)`)
+      return
+    }
+
+    // 기존 로직: memberId 기반 API 호출 (관리자 대시보드용)
+    if (!sessionToken) {
+      socket.emit("admin:error", { action: "mute", message: "인증이 필요합니다." })
+      return
+    }
+
+    try {
+      const response = await fetch(
+        `${NEXT_API_URL}/api/spaces/${spaceId}/members/${data.targetMemberId}/mute`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Cookie: `next-auth.session-token=${sessionToken.replace("auth-", "")}`,
+          },
+          body: JSON.stringify({
+            duration: data.duration,
+            reason: data.reason,
+          }),
+        }
+      )
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        socket.emit("admin:error", { action: "mute", message: errorData.error || "음소거 실패" })
+        return
+      }
+
+      const result = await response.json()
+      const targetSocket = findSocketByMemberId(spaceId, data.targetMemberId)
+      const targetNickname = targetSocket?.data.nickname || "Unknown"
+
+      const mutedData: MemberMutedData = {
+        memberId: data.targetMemberId,
+        nickname: targetNickname,
+        mutedBy: socket.data.playerId || "",
+        mutedByNickname: nickname || "",
+        duration: data.duration,
+        reason: data.reason,
+        mutedUntil: result.mutedUntil,
+      }
+      io.to(spaceId).emit("member:muted", mutedData)
+
+      const systemMessage: ChatMessageData = {
+        id: `sys-${Date.now()}`,
+        senderId: "system",
+        senderNickname: "시스템",
+        content: `🔇 ${targetNickname}님이 ${nickname}님에 의해 음소거되었습니다.${data.reason ? ` (사유: ${data.reason})` : ""}`,
+        timestamp: Date.now(),
+        type: "system",
+      }
+      io.to(spaceId).emit("chat:system", systemMessage)
+
+      console.log(`[Socket] Member ${data.targetMemberId} muted by ${nickname} in space ${spaceId}`)
+    } catch (error) {
+      console.error("[Socket] Mute error:", error)
+      socket.emit("admin:error", { action: "mute", message: "내부 오류가 발생했습니다." })
+    }
+  })
+
+  // 음소거 해제 (admin:unmute) - Phase 6: 닉네임 기반 처리 지원
+  socket.on("admin:unmute", async (data: AdminUnmuteRequest) => {
+    const { spaceId, sessionToken, nickname } = socket.data
+    if (!spaceId) {
+      socket.emit("admin:error", { action: "unmute", message: "공간에 연결되지 않았습니다." })
+      return
+    }
+
+    // Phase 6: 닉네임 기반 처리
+    const targetNicknameFromPrefix = extractNickname(data.targetMemberId)
+
+    if (targetNicknameFromPrefix) {
+      // 🔒 권한 검증 (STAFF 이상만 허용)
+      if (sessionToken) {
+        const verification = await verifyAdminPermission(spaceId, sessionToken, "unmute")
+        if (!verification.valid) {
+          socket.emit("admin:error", { action: "unmute", message: verification.error || "권한이 없습니다." })
+          return
+        }
+      } else if (!IS_DEV) {
+        // 운영 환경에서 세션 없으면 거부
+        socket.emit("admin:error", { action: "unmute", message: "인증이 필요합니다." })
+        return
+      }
+
+      // 🔊 닉네임으로 모든 대상 소켓 찾기 (같은 닉네임으로 여러 연결 가능)
+      const targetSockets = findAllSocketsByNickname(spaceId, targetNicknameFromPrefix)
+
+      if (targetSockets.length === 0) {
+        socket.emit("admin:error", { action: "unmute", message: `'${targetNicknameFromPrefix}' 사용자를 찾을 수 없습니다.` })
+        return
+      }
+
+      // 🔊 모든 대상 소켓에 음소거 해제 상태 설정
+      for (const targetSocket of targetSockets) {
+        targetSocket.data.restriction = "NONE"
+      }
+      console.log(`[Socket] 🔊 Removed MUTED restriction from ${targetSockets.length} socket(s) for "${targetNicknameFromPrefix}"`)
+
+      // 첫 번째 소켓에서 playerId 가져오기 (이벤트 데이터용)
+      const firstTargetSocket = targetSockets[0]
+
+      const systemMessage: ChatMessageData = {
+        id: `sys-${Date.now()}`,
+        senderId: "system",
+        senderNickname: "시스템",
+        content: `🔊 ${targetNicknameFromPrefix}님의 음소거가 ${nickname}님에 의해 해제되었습니다.`,
+        timestamp: Date.now(),
+        type: "system",
+      }
+      io.to(spaceId).emit("chat:system", systemMessage)
+
+      const unmutedData: MemberUnmutedData = {
+        memberId: firstTargetSocket.data.playerId || "",
+        nickname: targetNicknameFromPrefix,
+        unmutedBy: socket.data.playerId || "",
+        unmutedByNickname: nickname || "",
+      }
+      io.to(spaceId).emit("member:unmuted", unmutedData)
+
+      console.log(`[Socket] ${targetNicknameFromPrefix} unmuted by ${nickname} in space ${spaceId} (nickname-based)`)
+      return
+    }
+
+    // 기존 로직: memberId 기반 API 호출
+    if (!sessionToken) {
+      socket.emit("admin:error", { action: "unmute", message: "인증이 필요합니다." })
+      return
+    }
+
+    try {
+      const response = await fetch(
+        `${NEXT_API_URL}/api/spaces/${spaceId}/members/${data.targetMemberId}/mute`,
+        {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+            Cookie: `next-auth.session-token=${sessionToken.replace("auth-", "")}`,
+          },
+        }
+      )
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        socket.emit("admin:error", { action: "unmute", message: errorData.error || "음소거 해제 실패" })
+        return
+      }
+
+      const targetSocket = findSocketByMemberId(spaceId, data.targetMemberId)
+      const targetNickname = targetSocket?.data.nickname || "Unknown"
+
+      const unmutedData: MemberUnmutedData = {
+        memberId: data.targetMemberId,
+        nickname: targetNickname,
+        unmutedBy: socket.data.playerId || "",
+        unmutedByNickname: nickname || "",
+      }
+      io.to(spaceId).emit("member:unmuted", unmutedData)
+
+      const systemMessage: ChatMessageData = {
+        id: `sys-${Date.now()}`,
+        senderId: "system",
+        senderNickname: "시스템",
+        content: `🔊 ${targetNickname}님의 음소거가 해제되었습니다.`,
+        timestamp: Date.now(),
+        type: "system",
+      }
+      io.to(spaceId).emit("chat:system", systemMessage)
+
+      console.log(`[Socket] Member ${data.targetMemberId} unmuted by ${nickname} in space ${spaceId}`)
+    } catch (error) {
+      console.error("[Socket] Unmute error:", error)
+      socket.emit("admin:error", { action: "unmute", message: "내부 오류가 발생했습니다." })
+    }
+  })
+
+  // 강퇴/차단 (admin:kick) - Phase 6: 닉네임 기반 처리 지원
+  socket.on("admin:kick", async (data: AdminKickRequest) => {
+    const { spaceId, sessionToken, nickname } = socket.data
+    if (!spaceId) {
+      socket.emit("admin:error", { action: "kick", message: "공간에 연결되지 않았습니다." })
+      return
+    }
+
+    // Phase 6: 닉네임 기반 처리 (nickname: 프리픽스)
+    const targetNicknameFromPrefix = extractNickname(data.targetMemberId)
+
+    if (targetNicknameFromPrefix) {
+      // 🔒 권한 검증 (STAFF 이상만 허용)
+      if (sessionToken) {
+        const verification = await verifyAdminPermission(spaceId, sessionToken, "kick")
+        if (!verification.valid) {
+          socket.emit("admin:error", { action: "kick", message: verification.error || "권한이 없습니다." })
+          return
+        }
+      } else if (!IS_DEV) {
+        // 운영 환경에서 세션 없으면 거부
+        socket.emit("admin:error", { action: "kick", message: "인증이 필요합니다." })
+        return
+      }
+
+      // 🚫 닉네임으로 모든 대상 소켓 찾기 (같은 닉네임으로 여러 연결 가능)
+      const targetSockets = findAllSocketsByNickname(spaceId, targetNicknameFromPrefix)
+
+      if (targetSockets.length === 0) {
+        socket.emit("admin:error", { action: "kick", message: `'${targetNicknameFromPrefix}' 사용자를 찾을 수 없습니다.` })
+        return
+      }
+
+      // 첫 번째 소켓에서 playerId 가져오기 (이벤트 데이터용)
+      const firstTargetSocket = targetSockets[0]
+
+      // 시스템 메시지로 강퇴 알림
+      const systemMessage: ChatMessageData = {
+        id: `sys-${Date.now()}`,
+        senderId: "system",
+        senderNickname: "시스템",
+        content: `🚫 ${targetNicknameFromPrefix}님이 ${nickname}님에 의해 ${data.ban ? "차단" : "강퇴"}되었습니다.${data.reason ? ` (사유: ${data.reason})` : ""}`,
+        timestamp: Date.now(),
+        type: "system",
+      }
+      io.to(spaceId).emit("chat:system", systemMessage)
+
+      // 공간 전체에 강퇴 이벤트 알림
+      const kickedData: MemberKickedData = {
+        memberId: firstTargetSocket.data.playerId || "",
+        nickname: targetNicknameFromPrefix,
+        kickedBy: socket.data.playerId || "",
+        kickedByNickname: nickname || "",
+        reason: data.reason,
+        banned: data.ban || false,
+      }
+      io.to(spaceId).emit("member:kicked", kickedData)
+
+      // 🚫 모든 대상 소켓 연결 종료
+      for (const targetSocket of targetSockets) {
+        targetSocket.emit("error", { message: data.ban ? "이 공간에서 차단되었습니다." : "이 공간에서 강퇴되었습니다." })
+        targetSocket.disconnect(true)
+      }
+
+      console.log(`[Socket] 🚫 Kicked ${targetSockets.length} socket(s) for "${targetNicknameFromPrefix}" by ${nickname} in space ${spaceId}`)
+      return
+    }
+
+    // 기존 로직: memberId 기반 API 호출 (관리자 대시보드용)
+    if (!sessionToken) {
+      socket.emit("admin:error", { action: "kick", message: "세션 토큰이 없습니다." })
+      return
+    }
+
+    try {
+      const response = await fetch(
+        `${NEXT_API_URL}/api/spaces/${spaceId}/members/${data.targetMemberId}/kick`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Cookie: `next-auth.session-token=${sessionToken.replace("auth-", "")}`,
+          },
+          body: JSON.stringify({
+            reason: data.reason,
+            ban: data.ban,
+          }),
+        }
+      )
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        socket.emit("admin:error", { action: "kick", message: errorData.error || "강퇴 처리에 실패했습니다." })
+        return
+      }
+
+      const targetSocket = findSocketByMemberId(spaceId, data.targetMemberId)
+      const targetNickname = targetSocket?.data.nickname || "Unknown"
+
+      const kickedData: MemberKickedData = {
+        memberId: data.targetMemberId,
+        nickname: targetNickname,
+        kickedBy: socket.data.playerId || "",
+        kickedByNickname: nickname || "",
+        reason: data.reason,
+        banned: data.ban || false,
+      }
+
+      io.to(spaceId).emit("member:kicked", kickedData)
+
+      // 강퇴된 사용자의 소켓 연결 종료
+      if (targetSocket) {
+        targetSocket.emit("error", { message: data.ban ? "이 공간에서 차단되었습니다." : "이 공간에서 강퇴되었습니다." })
+        targetSocket.disconnect(true)
+      }
+
+      const systemMessage: ChatMessageData = {
+        id: `sys-${Date.now()}`,
+        senderId: "system",
+        senderNickname: "시스템",
+        content: `🚫 ${targetNickname}님이 ${nickname}님에 의해 ${data.ban ? "차단" : "강퇴"}되었습니다.${data.reason ? ` (사유: ${data.reason})` : ""}`,
+        timestamp: Date.now(),
+        type: "system",
+      }
+      io.to(spaceId).emit("chat:system", systemMessage)
+
+      console.log(`[Socket] Member ${data.targetMemberId} ${data.ban ? "banned" : "kicked"} by ${nickname} in space ${spaceId}`)
+    } catch (error) {
+      console.error("[Socket] Kick error:", error)
+      socket.emit("admin:error", { action: "kick", message: "내부 오류가 발생했습니다." })
+    }
+  })
+
+  // 메시지 삭제 (admin:deleteMessage)
+  socket.on("admin:deleteMessage", async (data: AdminDeleteMessageRequest) => {
+    const { spaceId, sessionToken, nickname, playerId } = socket.data
+    if (!spaceId || !sessionToken) {
+      socket.emit("admin:error", { action: "deleteMessage", message: "Not connected to space" })
+      return
+    }
+
+    try {
+      const response = await fetch(
+        `${NEXT_API_URL}/api/spaces/${spaceId}/messages/${data.messageId}`,
+        {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+            Cookie: `next-auth.session-token=${sessionToken.replace("auth-", "")}`,
+          },
+        }
+      )
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        socket.emit("admin:error", { action: "deleteMessage", message: errorData.error || "Delete failed" })
+        return
+      }
+
+      const deletedData: MessageDeletedData = {
+        messageId: data.messageId,
+        deletedBy: playerId || "",
+        deletedByNickname: nickname || "",
+      }
+
+      io.to(spaceId).emit("chat:messageDeleted", deletedData)
+
+      console.log(`[Socket] Message ${data.messageId} deleted by ${nickname} in space ${spaceId}`)
+    } catch (error) {
+      console.error("[Socket] Delete message error:", error)
+      socket.emit("admin:error", { action: "deleteMessage", message: "Internal error" })
+    }
+  })
+
+  // 공지사항 (admin:announce)
+  socket.on("admin:announce", async (data: AdminAnnounceRequest) => {
+    const { spaceId, sessionToken, nickname, playerId } = socket.data
+    if (!spaceId || !sessionToken) {
+      socket.emit("admin:error", { action: "announce", message: "Not connected to space" })
+      return
+    }
+
+    // 권한 검증 (STAFF 이상)
+    const verification = await verifyAdminPermission(spaceId, sessionToken, "announce")
+    if (!verification.valid) {
+      socket.emit("admin:error", { action: "announce", message: verification.error || "Permission denied" })
+      return
+    }
+
+    const announcement: AnnouncementData = {
+      id: `announce-${Date.now()}`,
+      content: data.content.trim(),
+      senderId: playerId || "",
+      senderNickname: nickname || "",
+      timestamp: Date.now(),
+    }
+
+    // 📢 공지는 space:announcement 이벤트만 전송 (중복 방지)
+    // 클라이언트에서 handleAnnouncement가 처리함
+    io.to(spaceId).emit("space:announcement", announcement)
+
+    console.log(`[Socket] Announcement by ${nickname} in space ${spaceId}: ${data.content.substring(0, 50)}...`)
+  })
+
+  // 멤버 ID로 소켓 찾기 헬퍼
+  function findSocketByMemberId(spaceId: string, memberId: string) {
+    const socketsInRoom = io.sockets.adapter.rooms.get(spaceId)
+    if (!socketsInRoom) return null
+
+    for (const socketId of socketsInRoom) {
+      const s = io.sockets.sockets.get(socketId)
+      if (s && s.data.memberId === memberId) {
+        return s
+      }
+    }
+    return null
+  }
+
+  // 닉네임으로 소켓 찾기 헬퍼 (Phase 6: @ 명령어용)
+  function findSocketByNickname(spaceId: string, targetNickname: string) {
+    const socketsInRoom = io.sockets.adapter.rooms.get(spaceId)
+    if (!socketsInRoom) return null
+
+    for (const socketId of socketsInRoom) {
+      const s = io.sockets.sockets.get(socketId)
+      if (s && s.data.nickname === targetNickname) {
+        return s
+      }
+    }
+    return null
+  }
+
+  // 🔇 닉네임으로 모든 소켓 찾기 (같은 닉네임으로 여러 연결 가능)
+  function findAllSocketsByNickname(spaceId: string, targetNickname: string) {
+    const socketsInRoom = io.sockets.adapter.rooms.get(spaceId)
+    if (!socketsInRoom) return []
+
+    const matchedSockets: typeof socket[] = []
+    for (const socketId of socketsInRoom) {
+      const s = io.sockets.sockets.get(socketId)
+      if (s && s.data.nickname === targetNickname) {
+        matchedSockets.push(s)
+      }
+    }
+    return matchedSockets
+  }
+
+  // nickname: 프리픽스에서 닉네임 추출
+  function extractNickname(targetMemberId: string): string | null {
+    if (targetMemberId.startsWith("nickname:")) {
+      return targetMemberId.replace("nickname:", "")
+    }
+    return null
+  }
 
   // Disconnect
   socket.on("disconnect", (reason) => {

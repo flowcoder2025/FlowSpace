@@ -12,6 +12,12 @@ import type {
   AvatarColor,
   ProfileUpdateData,
   ReplyToData,
+  // Phase 6: 관리 이벤트 타입
+  MemberMutedData,
+  MemberUnmutedData,
+  MemberKickedData,
+  AnnouncementData,
+  MessageDeletedData,
 } from "./types"
 import { eventBridge, GameEvents } from "../game/events"
 
@@ -26,12 +32,20 @@ interface UseSocketOptions {
   sessionToken?: string // 🔒 세션 토큰 (서버 검증용)
   onChatMessage?: (message: ChatMessageData) => void
   onSystemMessage?: (message: ChatMessageData) => void
+  onChatError?: (error: string) => void  // 🔇 채팅 에러 (음소거 시 등)
   onWhisperMessage?: (message: ChatMessageData) => void  // 📬 귓속말 수신 (송신 + 수신 모두)
   onWhisperError?: (error: string) => void  // 📬 귓속말 에러 (대상 못찾음 등)
   onPartyMessage?: (message: ChatMessageData) => void  // 🎉 파티/구역 메시지 수신
   onPartyError?: (error: string) => void  // 🎉 파티 에러
   onPlayerJoined?: (player: PlayerPosition) => void
   onPlayerLeft?: (playerId: string) => void
+  // Phase 6: 관리 이벤트 콜백
+  onMemberMuted?: (data: MemberMutedData) => void  // 🔇 멤버 음소거
+  onMemberUnmuted?: (data: MemberUnmutedData) => void  // 🔊 음소거 해제
+  onMemberKicked?: (data: MemberKickedData) => void  // 👢 멤버 강퇴
+  onMessageDeleted?: (data: MessageDeletedData) => void  // 🗑️ 메시지 삭제
+  onAnnouncement?: (data: AnnouncementData) => void  // 📢 공지사항
+  onAdminError?: (action: string, message: string) => void  // ⚠️ 관리 에러
 }
 
 // 🔒 Socket 에러 타입 (세션 검증 실패 등)
@@ -59,6 +73,12 @@ interface UseSocketReturn {
   sendPartyMessage: (content: string) => void  // 🎉 파티 메시지 전송
   updateProfile: (data: ProfileUpdateData) => void // 🔄 프로필 핫 업데이트
   disconnect: () => void
+  // Phase 6: 관리 명령어 (닉네임 기반)
+  sendMuteCommand: (targetNickname: string, duration?: number, reason?: string) => void  // 🔇 음소거
+  sendUnmuteCommand: (targetNickname: string) => void  // 🔊 음소거 해제
+  sendKickCommand: (targetNickname: string, reason?: string, ban?: boolean) => void  // 👢 강퇴/차단
+  sendAnnounce: (content: string) => void  // 📢 공지사항
+  deleteMessage: (messageId: string) => void  // 🗑️ 메시지 삭제
 }
 
 export function useSocket({
@@ -69,12 +89,20 @@ export function useSocket({
   sessionToken,
   onChatMessage,
   onSystemMessage,
+  onChatError,
   onWhisperMessage,
   onWhisperError,
   onPartyMessage,
   onPartyError,
   onPlayerJoined,
   onPlayerLeft,
+  // Phase 6: 관리 이벤트 콜백
+  onMemberMuted,
+  onMemberUnmuted,
+  onMemberKicked,
+  onMessageDeleted,
+  onAnnouncement,
+  onAdminError,
 }: UseSocketOptions): UseSocketReturn {
   const socketRef = useRef<Socket<ServerToClientEvents, ClientToServerEvents> | null>(null)
   const [isConnected, setIsConnected] = useState(false)
@@ -94,12 +122,20 @@ export function useSocket({
   // This prevents socket reconnection when parent component re-renders
   const onChatMessageRef = useRef(onChatMessage)
   const onSystemMessageRef = useRef(onSystemMessage)
+  const onChatErrorRef = useRef(onChatError)            // 🔇 채팅 에러 콜백
   const onWhisperMessageRef = useRef(onWhisperMessage)  // 📬 귓속말 콜백
   const onWhisperErrorRef = useRef(onWhisperError)      // 📬 귓속말 에러 콜백
   const onPartyMessageRef = useRef(onPartyMessage)      // 🎉 파티 메시지 콜백
   const onPartyErrorRef = useRef(onPartyError)          // 🎉 파티 에러 콜백
   const onPlayerJoinedRef = useRef(onPlayerJoined)
   const onPlayerLeftRef = useRef(onPlayerLeft)
+  // Phase 6: 관리 이벤트 콜백 refs
+  const onMemberMutedRef = useRef(onMemberMuted)
+  const onMemberUnmutedRef = useRef(onMemberUnmuted)
+  const onMemberKickedRef = useRef(onMemberKicked)
+  const onMessageDeletedRef = useRef(onMessageDeleted)
+  const onAnnouncementRef = useRef(onAnnouncement)
+  const onAdminErrorRef = useRef(onAdminError)
 
   // 🔄 Store nickname and avatarColor in refs to enable hot update without reconnection
   const nicknameRef = useRef(nickname)
@@ -109,12 +145,20 @@ export function useSocket({
   useEffect(() => {
     onChatMessageRef.current = onChatMessage
     onSystemMessageRef.current = onSystemMessage
+    onChatErrorRef.current = onChatError            // 🔇 채팅 에러 콜백
     onWhisperMessageRef.current = onWhisperMessage  // 📬 귓속말 콜백
     onWhisperErrorRef.current = onWhisperError      // 📬 귓속말 에러 콜백
     onPartyMessageRef.current = onPartyMessage      // 🎉 파티 메시지 콜백
     onPartyErrorRef.current = onPartyError          // 🎉 파티 에러 콜백
     onPlayerJoinedRef.current = onPlayerJoined
     onPlayerLeftRef.current = onPlayerLeft
+    // Phase 6: 관리 이벤트 콜백 refs 업데이트
+    onMemberMutedRef.current = onMemberMuted
+    onMemberUnmutedRef.current = onMemberUnmuted
+    onMemberKickedRef.current = onMemberKicked
+    onMessageDeletedRef.current = onMessageDeleted
+    onAnnouncementRef.current = onAnnouncement
+    onAdminErrorRef.current = onAdminError
     // 🔄 Update profile refs (used for movement events)
     nicknameRef.current = nickname
     avatarColorRef.current = avatarColor
@@ -278,6 +322,12 @@ export function useSocket({
       onSystemMessageRef.current?.(message)
     })
 
+    // 🔇 Chat error (음소거 등)
+    socket.on("chat:error", (data: { message: string }) => {
+      console.warn("[Socket] Chat error:", data.message)
+      onChatErrorRef.current?.(data.message)
+    })
+
     // 📬 Whisper events (귓속말)
     socket.on("whisper:receive", (message: ChatMessageData) => {
       if (IS_DEV) {
@@ -323,6 +373,49 @@ export function useSocket({
     socket.on("party:error", (data: { message: string }) => {
       console.warn("[Socket] Party error:", data.message)
       onPartyErrorRef.current?.(data.message)
+    })
+
+    // ============================================
+    // Phase 6: 관리 이벤트 리스너
+    // ============================================
+    socket.on("member:muted", (data: MemberMutedData) => {
+      if (IS_DEV) {
+        console.log("[Socket] Member muted:", data.nickname, "by", data.mutedByNickname)
+      }
+      onMemberMutedRef.current?.(data)
+    })
+
+    socket.on("member:unmuted", (data: MemberUnmutedData) => {
+      if (IS_DEV) {
+        console.log("[Socket] Member unmuted:", data.nickname, "by", data.unmutedByNickname)
+      }
+      onMemberUnmutedRef.current?.(data)
+    })
+
+    socket.on("member:kicked", (data: MemberKickedData) => {
+      if (IS_DEV) {
+        console.log("[Socket] Member kicked:", data.nickname, "by", data.kickedByNickname, data.banned ? "(banned)" : "")
+      }
+      onMemberKickedRef.current?.(data)
+    })
+
+    socket.on("chat:messageDeleted", (data: MessageDeletedData) => {
+      if (IS_DEV) {
+        console.log("[Socket] Message deleted:", data.messageId, "by", data.deletedByNickname)
+      }
+      onMessageDeletedRef.current?.(data)
+    })
+
+    socket.on("space:announcement", (data: AnnouncementData) => {
+      if (IS_DEV) {
+        console.log("[Socket] Announcement from", data.senderNickname, ":", data.content)
+      }
+      onAnnouncementRef.current?.(data)
+    })
+
+    socket.on("admin:error", (data: { action: string; message: string }) => {
+      console.warn("[Socket] Admin error:", data.action, data.message)
+      onAdminErrorRef.current?.(data.action, data.message)
     })
 
     // 🔄 Profile update events (다른 플레이어의 닉네임/아바타 변경)
@@ -480,6 +573,73 @@ export function useSocket({
     }
   }, [isConnected])
 
+  // ============================================
+  // Phase 6: 관리 명령어 (닉네임 기반)
+  // ============================================
+
+  // 🔇 음소거 명령어 (닉네임으로 대상 찾기 → 서버에서 멤버 ID 조회)
+  const sendMuteCommand = useCallback((targetNickname: string, duration?: number, reason?: string) => {
+    if (socketRef.current && isConnected && targetNickname.trim()) {
+      // 서버에서 닉네임으로 멤버를 찾아 음소거 처리
+      // 기존 admin:mute는 targetMemberId를 받지만, 우리는 닉네임 기반으로 확장
+      // 서버에서 닉네임 → memberId 변환 필요
+      socketRef.current.emit("admin:mute", {
+        targetMemberId: `nickname:${targetNickname.trim()}`, // 서버에서 닉네임 해석
+        duration,
+        reason,
+      })
+      if (IS_DEV) {
+        console.log("[Socket] Sending mute command for:", targetNickname, duration, reason)
+      }
+    }
+  }, [isConnected])
+
+  // 🔊 음소거 해제 명령어
+  const sendUnmuteCommand = useCallback((targetNickname: string) => {
+    if (socketRef.current && isConnected && targetNickname.trim()) {
+      socketRef.current.emit("admin:unmute", {
+        targetMemberId: `nickname:${targetNickname.trim()}`,
+      })
+      if (IS_DEV) {
+        console.log("[Socket] Sending unmute command for:", targetNickname)
+      }
+    }
+  }, [isConnected])
+
+  // 👢 강퇴/차단 명령어
+  const sendKickCommand = useCallback((targetNickname: string, reason?: string, ban?: boolean) => {
+    if (socketRef.current && isConnected && targetNickname.trim()) {
+      socketRef.current.emit("admin:kick", {
+        targetMemberId: `nickname:${targetNickname.trim()}`,
+        reason,
+        ban,
+      })
+      if (IS_DEV) {
+        console.log("[Socket] Sending kick command for:", targetNickname, reason, ban ? "(ban)" : "")
+      }
+    }
+  }, [isConnected])
+
+  // 📢 공지사항 전송
+  const sendAnnounce = useCallback((content: string) => {
+    if (socketRef.current && isConnected && content.trim()) {
+      socketRef.current.emit("admin:announce", { content: content.trim() })
+      if (IS_DEV) {
+        console.log("[Socket] Sending announcement:", content)
+      }
+    }
+  }, [isConnected])
+
+  // 🗑️ 메시지 삭제
+  const deleteMessage = useCallback((messageId: string) => {
+    if (socketRef.current && isConnected && messageId) {
+      socketRef.current.emit("admin:deleteMessage", { messageId })
+      if (IS_DEV) {
+        console.log("[Socket] Deleting message:", messageId)
+      }
+    }
+  }, [isConnected])
+
   return {
     isConnected,
     players,
@@ -493,5 +653,11 @@ export function useSocket({
     sendPartyMessage, // 🎉 파티 메시지 전송
     updateProfile, // 🔄 프로필 핫 업데이트
     disconnect,
+    // Phase 6: 관리 명령어
+    sendMuteCommand, // 🔇 음소거
+    sendUnmuteCommand, // 🔊 음소거 해제
+    sendKickCommand, // 👢 강퇴/차단
+    sendAnnounce, // 📢 공지사항
+    deleteMessage, // 🗑️ 메시지 삭제
   }
 }

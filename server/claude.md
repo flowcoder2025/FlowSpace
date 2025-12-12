@@ -62,7 +62,14 @@ npm run dev:all
 | `leave:space` | - | 공간 퇴장 + 📊 EXIT 로그 기록 |
 | `player:move` | `PlayerPosition` | 위치 업데이트 |
 | `player:jump` | `PlayerJumpData` | 점프 이벤트 |
-| `chat:message` | `{ content }` | 채팅 전송 |
+| `chat:message` | `{ content, type? }` | 채팅 전송 (type: message/whisper/party) |
+| `whisper:send` | `{ targetId, content }` | 귓속말 전송 |
+| `party:create` | `{ name }` | 파티 생성 |
+| `party:invite` | `{ partyId, targetId }` | 파티 초대 |
+| `party:accept` | `{ partyId }` | 파티 초대 수락 |
+| `party:decline` | `{ partyId }` | 파티 초대 거절 |
+| `party:leave` | `{ partyId }` | 파티 탈퇴 |
+| `party:message` | `{ partyId, content }` | 파티 채팅 전송 |
 
 ### 4.2 서버 → 클라이언트
 
@@ -75,6 +82,11 @@ npm run dev:all
 | `player:jumped` | `PlayerJumpData` | 점프 동기화 |
 | `chat:message` | `ChatMessageData` | 채팅 수신 |
 | `chat:system` | `ChatMessageData` | 시스템 메시지 |
+| `whisper:received` | `{ senderId, senderName, content }` | 귓속말 수신 |
+| `party:invited` | `{ partyId, partyName, inviterId }` | 파티 초대 수신 |
+| `party:joined` | `{ partyId, members }` | 파티 입장 완료 |
+| `party:message` | `{ partyId, senderId, senderName, content }` | 파티 채팅 수신 |
+| `party:member_left` | `{ partyId, memberId }` | 파티원 퇴장 |
 | `error` | `{ message }` | 에러 알림 |
 
 ---
@@ -207,5 +219,6 @@ leave:space / disconnect 이벤트
 
 | 날짜 | 변경 |
 |-----|------|
+| 2025-12-11 | whisper/party 이벤트 추가 - 귓속말 및 파티 채팅 시스템 지원 |
 | 2025-12-09 | EXIT 이벤트 로깅 추가 - 체류시간 통계 지원 |
 | 2025-12-08 | 초기 생성 - 보안 강화 내용 반영 |

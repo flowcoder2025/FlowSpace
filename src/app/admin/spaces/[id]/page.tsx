@@ -24,6 +24,7 @@ import {
   Divider,
 } from "@/components/ui"
 import { getText } from "@/lib/text-config"
+import { StaffManagement } from "@/components/space/StaffManagement"
 
 // ============================================
 // Types
@@ -525,6 +526,19 @@ export default function SpaceManagePage() {
                 </Card>
               </GridItem>
             </Grid>
+
+            {/* Staff Management */}
+            <Card>
+              <CardHeader>
+                <CardTitle>스태프 관리</CardTitle>
+                <CardDescription>
+                  스태프에게 채팅 관리 권한을 부여할 수 있습니다
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <StaffManagement spaceId={spaceId} />
+              </CardContent>
+            </Card>
 
             {/* Actions */}
             <HStack justify="between">

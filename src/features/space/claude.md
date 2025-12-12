@@ -17,8 +17,9 @@
 ├── /components            # 📌 공간 전용 컴포넌트
 │   ├── SpaceLayout.tsx    # 전체 레이아웃 (react-resizable-panels)
 │   ├── SpaceHeader.tsx    # 상단 헤더
-│   ├── /chat              # 📌 플로팅 채팅 시스템 (NEW)
+│   ├── /chat              # 📌 플로팅 채팅 시스템
 │   │   ├── FloatingChatOverlay.tsx  # 게임 위 플로팅 채팅창
+│   │   ├── ChatTabs.tsx             # 전체/귓속말/파티 탭 (NEW)
 │   │   ├── ChatMessageList.tsx      # 스크롤 가능 메시지 목록
 │   │   ├── ChatInputArea.tsx        # 채팅 입력 영역
 │   │   └── index.ts
@@ -62,9 +63,12 @@
 │   └── index.ts
 │
 ├── /hooks                 # 📌 공간 관련 훅
-│   ├── useChatMode.ts     # 채팅 모드 상태 관리 (NEW)
-│   ├── useChatDrag.ts     # 채팅창 드래그/리사이즈 (NEW)
-│   ├── useFullscreen.ts   # 전체화면 상태 감지 (NEW)
+│   ├── useChatMode.ts     # 채팅 모드 상태 관리
+│   ├── useChatDrag.ts     # 채팅창 드래그/리사이즈
+│   ├── useChatStorage.ts  # 채팅 메시지 영속성 (NEW)
+│   ├── useFullscreen.ts   # 전체화면 상태 감지
+│   ├── useNotificationSound.ts  # 알림 사운드 (NEW)
+│   ├── useMediaDevices.ts # 미디어 장치 관리 (NEW)
 │   └── index.ts
 │
 └── /types
@@ -173,7 +177,23 @@ SpaceLayout
 | 채팅 | 채팅 패널 토글 | `isChatOpen` |
 | 참가자 | 참가자 패널 토글 | `isParticipantsOpen` |
 
-### 3.4 FloatingChatOverlay.tsx (NEW - 2025-12-10)
+### 3.4 ChatTabs.tsx (NEW - 2025-12-11)
+
+**역할**: 채팅 탭 전환 UI (전체/귓속말/파티)
+
+**탭 종류**:
+| 탭 | MessageType | 설명 |
+|---|-------------|------|
+| 전체 | message | 공개 채팅 |
+| 귓속말 | whisper | 1:1 비밀 대화 |
+| 파티 | party | 파티원 전용 |
+
+**기능**:
+- 읽지 않은 메시지 뱃지 표시
+- 탭별 메시지 필터링
+- 활성 탭 상태 관리
+
+### 3.5 FloatingChatOverlay.tsx
 
 **역할**: 게임 캔버스 위 플로팅 채팅 시스템
 
@@ -286,7 +306,7 @@ const { position, size, isDragging, isResizing, handleMoveStart, handleResizeSta
 - 우하단 핸들로 크기 조절
 - localStorage에 위치/크기 저장 (새로고침 후에도 유지)
 
-### 4.6 useFullscreen (NEW - 2025-12-10)
+### 4.6 useFullscreen
 
 **역할**: 브라우저 전체화면 상태 감지
 
@@ -297,6 +317,44 @@ const { isFullscreen, fullscreenElement } = useFullscreen()
 **용도**:
 - 전체화면 진입/종료 감지
 - Portal 렌더링 대상 요소 제공
+
+### 4.7 useChatStorage (NEW - 2025-12-11)
+
+**역할**: 채팅 메시지 영속성 관리
+
+```tsx
+const { messages, addMessage, clearMessages } = useChatStorage(spaceId)
+```
+
+**기능**:
+- localStorage 기반 메시지 저장
+- 공간별 메시지 분리 저장
+- 세션 간 채팅 기록 유지
+
+### 4.8 useNotificationSound (NEW - 2025-12-11)
+
+**역할**: 채팅 알림 사운드 재생
+
+```tsx
+const { playNotification } = useNotificationSound()
+```
+
+**용도**:
+- 새 메시지 수신 시 사운드 재생
+- 귓속말/멘션 시 강조 알림
+
+### 4.9 useMediaDevices (NEW - 2025-12-11)
+
+**역할**: 미디어 장치 (카메라/마이크) 관리
+
+```tsx
+const { devices, selectedCamera, selectedMic, selectDevice } = useMediaDevices()
+```
+
+**기능**:
+- 사용 가능한 장치 목록 조회
+- 장치 선택 및 전환
+- 권한 요청 처리
 
 ---
 
@@ -440,3 +498,5 @@ DEBUG=socket.io* npm run socket:dev
 | 2025-12-10 | 플로팅 채팅 시스템 추가 (FloatingChatOverlay, useChatMode, useChatDrag, useFullscreen) |
 | 2025-12-10 | 전체화면 모드 채팅 오버레이 지원 (Portal, z-index 수정) |
 | 2025-12-10 | 시스템 안내 메시지 추가 (조작 가이드: WASD, Space, E키) |
+| 2025-12-11 | 귓속말/파티 시스템 추가 (ChatTabs, whisper/party 이벤트) |
+| 2025-12-11 | 추가 훅 문서화 (useChatStorage, useNotificationSound, useMediaDevices) |

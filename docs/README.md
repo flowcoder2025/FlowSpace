@@ -9,9 +9,9 @@
 
 | 문서 | 역할 | 상태 |
 |-----|------|------|
-| **PRD.md** | 제품 요구사항 정의서 | ✅ Phase 1-4 완료 |
+| **PRD.md** | 제품 요구사항 정의서 | ✅ Phase 5 진행중, Phase 6 계획 |
 | `/CLAUDE.md` | 루트 헌법 (전역 원칙) | ✅ 최신 |
-| `architecture/flowspace.md` | FlowSpace 아키텍처 | ✅ 신규 |
+| `architecture/flowspace.md` | FlowSpace 아키텍처 | ✅ 채팅/비디오 업데이트 |
 
 ---
 
@@ -35,7 +35,8 @@
 ├── PRD.md                    # 📌 제품 요구사항 (핵심)
 │
 ├── architecture/             # 시스템 아키텍처
-│   ├── flowspace.md         # 📌 FlowSpace 아키텍처 (신규)
+│   ├── flowspace.md         # 📌 FlowSpace 아키텍처
+│   ├── phase6-permissions-spec.md # 📌 Phase 6 권한/구독 스펙 (신규)
 │   └── ui-system-overview.md # UI 시스템 연결 지도
 │
 ├── foundations/              # UI 시스템 전역 규칙
@@ -101,7 +102,13 @@
 
 | Phase | 내용 |
 |-------|------|
-| Phase 5 | 통합 및 Polish (반응형, 템플릿, 오브젝트 상호작용) |
+| Phase 5 | 통합 및 Polish (채팅 오버레이 ✅, 반응형, 템플릿) |
+
+### 📋 계획
+
+| Phase | 내용 |
+|-------|------|
+| Phase 6 | 권한/구독 시스템 (SaaS 모델, 채팅 관리) |
 
 ---
 

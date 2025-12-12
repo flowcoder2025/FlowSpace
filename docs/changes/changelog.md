@@ -4,6 +4,96 @@
 
 ---
 
+## [2025-12-11] Phase 6 DB 스키마 확장 구현
+
+### 데이터베이스 변경
+
+**`prisma/schema.prisma`**:
+- 새 Enum 타입 추가: SpaceRole, ChatRestriction, SenderType, MessageType
+- SpaceEventType 확장: MEMBER_MUTED, MEMBER_UNMUTED, MEMBER_KICKED, MESSAGE_DELETED, STAFF_ASSIGNED, STAFF_REMOVED
+- SpaceMember 모델 추가 (공간 멤버십 + 역할 + 제재 상태)
+- ChatMessage 모델 추가 (채팅 메시지 영속화)
+- User 모델 확장: isSuperAdmin 필드, spaceMemberships 관계
+- Space 모델 확장: members, chatMessages 관계
+- GuestSession 모델 확장: spaceMemberships 관계
+
+### 검증
+
+- ✅ `prisma db push` 성공
+- ✅ `npx tsc --noEmit` 에러 없음
+- ✅ `npm run build` 성공 (23 페이지 생성)
+
+---
+
+## [2025-12-11] Phase 6 권한/구독 시스템 스펙 문서 작성
+
+### 문서 추가
+
+**`docs/architecture/phase6-permissions-spec.md`** (신규):
+- 역할 계층 구조: SUPER_ADMIN → SPACE_OWNER → STAFF → PARTICIPANT
+- 구독 티어 정의: FREE/PRO/PREMIUM (가격, 제한 사항)
+- DB 스키마 확장: SpaceMember, ChatMessage 테이블
+- API 설계: 권한 관리, 채팅 관리, 구독 관리
+- Socket.io 관리 이벤트 정의
+- UI 컴포넌트 설계
+- 구현 우선순위 및 일정
+
+### CLAUDE.md 업데이트
+
+**`server/claude.md`**:
+- whisper/party 이벤트 추가 (귓속말/파티 채팅)
+
+**`src/features/claude.md`**:
+- 채팅 시스템 디렉토리 구조 업데이트 (/chat 폴더)
+- FloatingChatOverlay, ChatTabs 컴포넌트 문서화
+
+---
+
+## [2025-12-11] 문서 현행화 및 Phase 6 계획 추가
+
+### 문서 업데이트
+
+**`docs/architecture/flowspace.md`**:
+- 채팅 시스템 아키텍처 추가 (Floating Overlay, 귓속말/파티)
+- VideoTile 아바타 색상 시스템 문서화
+- Socket.io 이벤트 상세화 (whisper, party 이벤트)
+
+**`docs/PRD.md`**:
+- Phase 5 진행 상황 업데이트 (완료 항목 4개 추가)
+- Phase 6 권한/구독 시스템 계획 추가
+
+**업데이트 목적**:
+- 권한/구독/채팅관리 시스템 구현 전 문서 현행화
+- SaaS 모델 반영 (SUPER_ADMIN → SPACE_OWNER → STAFF → PARTICIPANT)
+
+---
+
+## [2025-12-10] 플로팅 채팅 오버레이 및 귓속말/파티 시스템
+
+### 추가
+
+**채팅 UI 개편**:
+- `FloatingChatOverlay.tsx` - 게임 캔버스 위 드래그 가능 채팅창
+- `ChatTabs.tsx` - 전체/귓속말/파티 탭 전환
+- `ChatMessageList.tsx` - 스크롤, 자동스크롤, 방향키 네비게이션
+- `ChatInputArea.tsx` - Enter 전송, ESC 취소
+
+**채팅 관련 훅**:
+- `useChatMode.ts` - ACTIVE/INACTIVE 모드 토글
+- `useChatDrag.ts` - 드래그 위치, localStorage 저장
+- `useChatStorage.ts` - 메시지 영속성
+
+**귓속말/파티 시스템**:
+- `whisper:send/received` - 1:1 귓속말
+- `party:create/invite/accept/decline/leave/message` - 파티 채팅
+- Socket 서버 파티 상태 관리
+
+**VideoTile 개선**:
+- CSS `hue-rotate` 로 아바타 색상 표시
+- 참가자 패널 투명 배경
+
+---
+
 ## [2025-12-09] 캐릭터 스프라이트 Missing Texture 버그 수정
 
 ### 수정

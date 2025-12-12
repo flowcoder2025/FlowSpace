@@ -3,5 +3,5 @@
  */
 export { FloatingChatOverlay } from "./FloatingChatOverlay"
 export { ChatMessageList } from "./ChatMessageList"
-export { ChatInputArea } from "./ChatInputArea"
+export { ChatInputArea, type AdminCommandResult } from "./ChatInputArea"
 export { ChatTabs } from "./ChatTabs"

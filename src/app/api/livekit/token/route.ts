@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { AccessToken } from "livekit-server-sdk"
+import { AccessToken, RoomServiceClient } from "livekit-server-sdk"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 
@@ -9,10 +9,54 @@ import { prisma } from "@/lib/prisma"
 const IS_DEV = process.env.NODE_ENV === "development"
 const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY
 const LIVEKIT_API_SECRET = process.env.LIVEKIT_API_SECRET
+const LIVEKIT_URL = process.env.LIVEKIT_URL || "http://localhost:7880"
 
 // 개발환경 폴백 키 (운영환경에서는 사용 불가)
 const DEV_API_KEY = "devkey"
 const DEV_API_SECRET = "devsecret"
+
+// ============================================
+// 🧹 중복 참가자 정리 (세션 전환 시)
+// ============================================
+/**
+ * 같은 닉네임을 가진 다른 identity의 참가자를 Room에서 제거합니다.
+ * 이렇게 하면 게스트 → 인증 사용자 전환 시 중복 표시를 방지합니다.
+ */
+async function removeDuplicateParticipants(
+  roomName: string,
+  newIdentity: string,
+  participantName: string,
+  apiKey: string,
+  apiSecret: string
+): Promise<void> {
+  try {
+    const roomService = new RoomServiceClient(LIVEKIT_URL, apiKey, apiSecret)
+    const participants = await roomService.listParticipants(roomName)
+
+    // 같은 이름을 가진 다른 identity 찾기
+    const duplicates = participants.filter(
+      (p) => p.name === participantName && p.identity !== newIdentity
+    )
+
+    if (duplicates.length > 0) {
+      console.log(`[LiveKit Token] 🧹 Removing ${duplicates.length} duplicate participant(s) with name "${participantName}"`)
+
+      for (const dup of duplicates) {
+        try {
+          await roomService.removeParticipant(roomName, dup.identity)
+          console.log(`[LiveKit Token] ✅ Removed duplicate participant: ${dup.identity}`)
+        } catch (removeError) {
+          console.warn(`[LiveKit Token] ⚠️ Failed to remove participant ${dup.identity}:`, removeError)
+        }
+      }
+    }
+  } catch (error) {
+    // Room이 아직 없거나 조회 실패 - 무시하고 계속 진행
+    if (IS_DEV) {
+      console.log("[LiveKit Token] 🔍 Could not check for duplicates (room may not exist yet):", error)
+    }
+  }
+}
 
 // Room name validation pattern (space-{uuid} format)
 const ROOM_NAME_PATTERN = /^space-[a-zA-Z0-9-]+$/
@@ -117,7 +161,8 @@ export async function POST(request: NextRequest) {
     if (session?.user?.id) {
       // 인증된 사용자의 participantId는 서버에서 생성
       serverParticipantId = `user-${session.user.id}`
-      serverParticipantName = session.user.name || participantName
+      // 🔄 클라이언트가 보낸 닉네임 우선 사용 (Socket.io와 동기화)
+      serverParticipantName = participantName || session.user.name || "Unknown"
       if (IS_DEV) {
         console.log("[LiveKit Token] Authenticated user:", session.user.id, "→ participantId:", serverParticipantId)
       }
@@ -185,14 +230,23 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // 6. 토큰 생성 (🔒 서버에서 생성한 participantId 사용)
+    // 6. 🧹 중복 참가자 정리 (세션 전환 시 기존 게스트 세션 제거)
+    await removeDuplicateParticipants(
+      roomName,
+      serverParticipantId,
+      serverParticipantName,
+      apiKey,
+      apiSecret
+    )
+
+    // 7. 토큰 생성 (🔒 서버에서 생성한 participantId 사용)
     const token = new AccessToken(apiKey, apiSecret, {
       identity: serverParticipantId,
       name: serverParticipantName,
       ttl: 60 * 60 * 4, // 4 hours
     })
 
-    // 7. Room 권한 부여
+    // 8. Room 권한 부여
     token.addGrant({
       room: roomName,
       roomJoin: true,

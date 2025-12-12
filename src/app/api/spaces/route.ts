@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { createSpaceOwner } from "@/lib/space-auth"
 import { SpaceAccessType, SpaceStatus, TemplateKey } from "@prisma/client"
 
 // ============================================
@@ -112,6 +113,9 @@ export async function POST(request: NextRequest) {
         template: true,
       },
     })
+
+    // 7. 소유자 멤버십 자동 생성 (Phase 6)
+    await createSpaceOwner(space.id, ownerId)
 
     if (IS_DEV) {
       console.log("[Spaces API] Space created:", space.id, "by", ownerId)
