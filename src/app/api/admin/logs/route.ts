@@ -2,7 +2,9 @@
  * Admin Event Logs API
  *
  * GET /api/admin/logs
- * Returns recent event logs for admin dashboard
+ * Returns recent event logs for admin dashboard (SuperAdmin only)
+ *
+ * 🔒 SuperAdmin 전용 API (Phase 2)
  *
  * Query params:
  * - limit: number of logs to return (default 10, max 100)
@@ -17,6 +19,7 @@
 
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
+import { isSuperAdmin } from "@/lib/space-auth"
 import { prisma } from "@/lib/prisma"
 
 export async function GET(request: NextRequest) {
@@ -27,6 +30,13 @@ export async function GET(request: NextRequest) {
     }
 
     const userId = session.user.id
+
+    // 🔒 SuperAdmin 권한 확인
+    const isAdmin = await isSuperAdmin(userId)
+    if (!isAdmin) {
+      return NextResponse.json({ error: "Forbidden: SuperAdmin only" }, { status: 403 })
+    }
+
     const searchParams = request.nextUrl.searchParams
     const limit = Math.min(parseInt(searchParams.get("limit") || "10"), 100)
     const spaceId = searchParams.get("spaceId")
@@ -34,9 +44,9 @@ export async function GET(request: NextRequest) {
     const endDate = searchParams.get("endDate")
     const format = searchParams.get("format") || "json"
 
-    // Get user's spaces
+    // 🔓 SuperAdmin은 모든 공간의 로그를 볼 수 있음
     const spaces = await prisma.space.findMany({
-      where: { ownerId: userId, deletedAt: null },
+      where: { deletedAt: null },
       select: { id: true, name: true },
     })
     const spaceIds = spaces.map((s) => s.id)

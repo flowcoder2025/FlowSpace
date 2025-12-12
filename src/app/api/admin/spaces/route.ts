@@ -2,11 +2,14 @@
  * Admin Spaces List API
  *
  * GET /api/admin/spaces
- * Returns user's spaces with statistics
+ * Returns all spaces with statistics (SuperAdmin only)
+ *
+ * 🔒 SuperAdmin 전용 API (Phase 2)
  */
 
 import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
+import { isSuperAdmin } from "@/lib/space-auth"
 import { prisma } from "@/lib/prisma"
 
 export async function GET() {
@@ -18,9 +21,15 @@ export async function GET() {
 
     const userId = session.user.id
 
-    // Get user's spaces with template info
+    // 🔒 SuperAdmin 권한 확인
+    const isAdmin = await isSuperAdmin(userId)
+    if (!isAdmin) {
+      return NextResponse.json({ error: "Forbidden: SuperAdmin only" }, { status: 403 })
+    }
+
+    // 🔓 SuperAdmin은 모든 공간을 볼 수 있음
     const spaces = await prisma.space.findMany({
-      where: { ownerId: userId, deletedAt: null },
+      where: { deletedAt: null },
       include: {
         template: {
           select: { name: true },

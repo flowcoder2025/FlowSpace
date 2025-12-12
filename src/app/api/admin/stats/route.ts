@@ -4,6 +4,8 @@
  * GET /api/admin/stats
  * Returns aggregated statistics for admin dashboard
  *
+ * 🔒 SuperAdmin 전용 API (Phase 2)
+ *
  * ⚡ Performance Optimized (2025-12-09):
  * - Promise.all()로 독립 쿼리 병렬 실행
  * - 재방문율 계산 DB 집계 사용 (메모리 로드 최소화)
@@ -11,6 +13,7 @@
 
 import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
+import { isSuperAdmin } from "@/lib/space-auth"
 import { prisma } from "@/lib/prisma"
 
 export async function GET() {
@@ -22,9 +25,15 @@ export async function GET() {
 
     const userId = session.user.id
 
-    // Get user's spaces
+    // 🔒 SuperAdmin 권한 확인
+    const isAdmin = await isSuperAdmin(userId)
+    if (!isAdmin) {
+      return NextResponse.json({ error: "Forbidden: SuperAdmin only" }, { status: 403 })
+    }
+
+    // 🔓 SuperAdmin은 모든 공간의 통계를 볼 수 있음
     const spaces = await prisma.space.findMany({
-      where: { ownerId: userId, deletedAt: null },
+      where: { deletedAt: null },
       select: { id: true },
     })
     const spaceIds = spaces.map((s) => s.id)
