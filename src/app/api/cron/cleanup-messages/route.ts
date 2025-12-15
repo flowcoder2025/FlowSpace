@@ -1,7 +1,8 @@
 /**
  * Cron Job: 채팅 메시지 자동 정리
  *
- * 24시간 이상 된 채팅 메시지를 삭제하여 DB 비용 절감
+ * - 일반 메시지: 24시간 후 삭제 (DB 비용 절감)
+ * - 귓속말: 3개월(90일) 후 삭제 (개인 대화 보존)
  *
  * Vercel Cron: 매일 새벽 3시 (KST) 실행
  * 설정: vercel.json에 cron 스케줄 정의
@@ -13,8 +14,9 @@ import { prisma } from "@/lib/prisma"
 // Vercel Cron 인증 키 (환경변수로 설정)
 const CRON_SECRET = process.env.CRON_SECRET
 
-// 메시지 보관 기간 (시간)
-const MESSAGE_RETENTION_HOURS = 24
+// 메시지 보관 기간
+const MESSAGE_RETENTION_HOURS = 24         // 일반 메시지: 24시간
+const WHISPER_RETENTION_DAYS = 90          // 귓속말: 90일 (3개월)
 
 export async function GET(request: NextRequest) {
   try {
@@ -27,26 +29,52 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // 24시간 전 시간 계산
-    const cutoffDate = new Date()
-    cutoffDate.setHours(cutoffDate.getHours() - MESSAGE_RETENTION_HOURS)
+    // 📬 일반 메시지: 24시간 전 기준
+    const messageCutoffDate = new Date()
+    messageCutoffDate.setHours(messageCutoffDate.getHours() - MESSAGE_RETENTION_HOURS)
 
-    // 오래된 메시지 삭제 (하드 삭제)
-    const result = await prisma.chatMessage.deleteMany({
+    // 🔒 귓속말: 90일 전 기준
+    const whisperCutoffDate = new Date()
+    whisperCutoffDate.setDate(whisperCutoffDate.getDate() - WHISPER_RETENTION_DAYS)
+
+    // 1️⃣ 일반 메시지 삭제 (WHISPER 제외)
+    const messageResult = await prisma.chatMessage.deleteMany({
       where: {
-        createdAt: {
-          lt: cutoffDate,
-        },
+        type: { not: "WHISPER" },
+        createdAt: { lt: messageCutoffDate },
       },
     })
 
-    console.log(`[Cron] Deleted ${result.count} messages older than ${MESSAGE_RETENTION_HOURS} hours`)
+    // 2️⃣ 귓속말 삭제 (3개월 이상)
+    const whisperResult = await prisma.chatMessage.deleteMany({
+      where: {
+        type: "WHISPER",
+        createdAt: { lt: whisperCutoffDate },
+      },
+    })
+
+    const totalDeleted = messageResult.count + whisperResult.count
+
+    console.log(`[Cron] Cleanup completed:`)
+    console.log(`  - Messages (24h): ${messageResult.count} deleted`)
+    console.log(`  - Whispers (90d): ${whisperResult.count} deleted`)
 
     return NextResponse.json({
       success: true,
-      deletedCount: result.count,
-      cutoffDate: cutoffDate.toISOString(),
-      message: `${result.count}개의 메시지가 삭제되었습니다.`,
+      deletedCount: totalDeleted,
+      breakdown: {
+        messages: {
+          count: messageResult.count,
+          retentionHours: MESSAGE_RETENTION_HOURS,
+          cutoffDate: messageCutoffDate.toISOString(),
+        },
+        whispers: {
+          count: whisperResult.count,
+          retentionDays: WHISPER_RETENTION_DAYS,
+          cutoffDate: whisperCutoffDate.toISOString(),
+        },
+      },
+      message: `일반 메시지 ${messageResult.count}개, 귓속말 ${whisperResult.count}개 삭제됨`,
     })
   } catch (error) {
     console.error("[Cron] Cleanup failed:", error)

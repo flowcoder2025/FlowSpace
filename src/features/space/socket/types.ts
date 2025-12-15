@@ -219,6 +219,7 @@ export interface ServerToClientEvents {
   // Chat
   "chat:message": (message: ChatMessageData) => void
   "chat:system": (message: ChatMessageData) => void
+  "chat:messageIdUpdate": (data: { tempId: string; realId: string }) => void  // Optimistic 브로드캐스팅용
 
   // Whisper (귓속말)
   "whisper:receive": (message: ChatMessageData) => void

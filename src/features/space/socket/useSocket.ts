@@ -33,6 +33,7 @@ interface UseSocketOptions {
   onChatMessage?: (message: ChatMessageData) => void
   onSystemMessage?: (message: ChatMessageData) => void
   onChatError?: (error: string) => void  // 🔇 채팅 에러 (음소거 시 등)
+  onMessageIdUpdate?: (tempId: string, realId: string) => void  // ⚡ Optimistic ID 업데이트
   onWhisperMessage?: (message: ChatMessageData) => void  // 📬 귓속말 수신 (송신 + 수신 모두)
   onWhisperError?: (error: string) => void  // 📬 귓속말 에러 (대상 못찾음 등)
   onPartyMessage?: (message: ChatMessageData) => void  // 🎉 파티/구역 메시지 수신
@@ -90,6 +91,7 @@ export function useSocket({
   onChatMessage,
   onSystemMessage,
   onChatError,
+  onMessageIdUpdate,
   onWhisperMessage,
   onWhisperError,
   onPartyMessage,
@@ -123,6 +125,7 @@ export function useSocket({
   const onChatMessageRef = useRef(onChatMessage)
   const onSystemMessageRef = useRef(onSystemMessage)
   const onChatErrorRef = useRef(onChatError)            // 🔇 채팅 에러 콜백
+  const onMessageIdUpdateRef = useRef(onMessageIdUpdate)  // ⚡ Optimistic ID 업데이트 콜백
   const onWhisperMessageRef = useRef(onWhisperMessage)  // 📬 귓속말 콜백
   const onWhisperErrorRef = useRef(onWhisperError)      // 📬 귓속말 에러 콜백
   const onPartyMessageRef = useRef(onPartyMessage)      // 🎉 파티 메시지 콜백
@@ -146,6 +149,7 @@ export function useSocket({
     onChatMessageRef.current = onChatMessage
     onSystemMessageRef.current = onSystemMessage
     onChatErrorRef.current = onChatError            // 🔇 채팅 에러 콜백
+    onMessageIdUpdateRef.current = onMessageIdUpdate  // ⚡ Optimistic ID 업데이트 콜백
     onWhisperMessageRef.current = onWhisperMessage  // 📬 귓속말 콜백
     onWhisperErrorRef.current = onWhisperError      // 📬 귓속말 에러 콜백
     onPartyMessageRef.current = onPartyMessage      // 🎉 파티 메시지 콜백
@@ -329,6 +333,14 @@ export function useSocket({
     socket.on("chat:error", (data: { message: string }) => {
       console.warn("[Socket] Chat error:", data.message)
       onChatErrorRef.current?.(data.message)
+    })
+
+    // ⚡ Chat message ID update (Optimistic 브로드캐스팅용)
+    socket.on("chat:messageIdUpdate", (data: { tempId: string; realId: string }) => {
+      if (IS_DEV) {
+        console.log("[Socket] Message ID updated:", data.tempId, "→", data.realId)
+      }
+      onMessageIdUpdateRef.current?.(data.tempId, data.realId)
     })
 
     // 📬 Whisper events (귓속말)

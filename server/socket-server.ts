@@ -527,8 +527,8 @@ io.on("connection", (socket) => {
     console.log(`[Socket] Player ${playerId} jumped at (${verifiedJumpData.x}, ${verifiedJumpData.y})`)
   })
 
-  // Chat message (답장 지원) - DB 저장
-  socket.on("chat:message", async ({ content, replyTo }) => {
+  // Chat message (답장 지원) - Optimistic Broadcasting + 비동기 DB 저장
+  socket.on("chat:message", ({ content, replyTo }) => {
     const { spaceId, playerId, nickname, restriction, sessionToken } = socket.data
 
     // 🔇 음소거 상태 확인
@@ -538,51 +538,44 @@ io.on("connection", (socket) => {
     }
 
     if (spaceId && playerId && content.trim()) {
-      try {
-        // senderType 판단 (auth-* = USER, 그 외 = GUEST)
-        const senderType = sessionToken?.startsWith("auth-") ? "USER" : "GUEST"
-        // senderId 추출 (auth-userId 또는 guest-sessionId에서)
-        const senderId = sessionToken?.replace("auth-", "").replace("guest-", "") || playerId
+      const now = Date.now()
+      const tempId = `msg-${now}-${playerId}`
 
-        // 📝 DB에 메시지 저장
-        const savedMessage = await prisma.chatMessage.create({
-          data: {
-            spaceId,
-            senderId,
-            senderType,
-            senderName: nickname || "Unknown",
-            content: content.trim(),
-            type: "MESSAGE",
-          },
-        })
-
-        const message: ChatMessageData = {
-          id: savedMessage.id,  // DB에서 생성된 실제 ID 사용
-          senderId: playerId,
-          senderNickname: nickname || "Unknown",
-          content: content.trim(),
-          timestamp: savedMessage.createdAt.getTime(),
-          type: "message",
-          // 답장 정보 포함 (있는 경우에만)
-          ...(replyTo && { replyTo }),
-        }
-
-        // Broadcast to all players in room (including sender)
-        io.to(spaceId).emit("chat:message", message)
-      } catch (error) {
-        console.error("[Socket] Failed to save chat message:", error)
-        // DB 저장 실패해도 메시지는 전송 (fallback)
-        const fallbackMessage: ChatMessageData = {
-          id: `msg-${Date.now()}-${playerId}`,
-          senderId: playerId,
-          senderNickname: nickname || "Unknown",
-          content: content.trim(),
-          timestamp: Date.now(),
-          type: "message",
-          ...(replyTo && { replyTo }),
-        }
-        io.to(spaceId).emit("chat:message", fallbackMessage)
+      // ⚡ 1. 즉시 브로드캐스트 (지연 없음)
+      const message: ChatMessageData = {
+        id: tempId,
+        senderId: playerId,
+        senderNickname: nickname || "Unknown",
+        content: content.trim(),
+        timestamp: now,
+        type: "message",
+        ...(replyTo && { replyTo }),
       }
+      io.to(spaceId).emit("chat:message", message)
+
+      // 📝 2. 백그라운드 DB 저장 (비동기, 블로킹 없음)
+      const senderType = sessionToken?.startsWith("auth-") ? "USER" : "GUEST"
+      const senderId = sessionToken?.replace("auth-", "").replace("guest-", "") || playerId
+
+      prisma.chatMessage.create({
+        data: {
+          spaceId,
+          senderId,
+          senderType,
+          senderName: nickname || "Unknown",
+          content: content.trim(),
+          type: "MESSAGE",
+        },
+      }).then((savedMessage) => {
+        // 🔄 3. ID 업데이트 전송 (삭제 기능용)
+        io.to(spaceId).emit("chat:messageIdUpdate", {
+          tempId,
+          realId: savedMessage.id,
+        })
+      }).catch((error) => {
+        console.error("[Socket] Failed to save chat message:", error)
+        // DB 저장 실패해도 메시지는 이미 전송됨 (삭제 불가)
+      })
     }
   })
 
