@@ -5,6 +5,10 @@
  * Returns all spaces with statistics (SuperAdmin only)
  *
  * 🔒 SuperAdmin 전용 API (Phase 2)
+ *
+ * ⚠️ SSOT: 방문자 계산은 dashboard/spaces와 동일한 로직 사용
+ * - 게스트: GuestSession count
+ * - 인증 사용자: SpaceEventLog에서 unique userId count
  */
 
 import { NextResponse } from "next/server"
@@ -44,18 +48,41 @@ export async function GET() {
       orderBy: { createdAt: "desc" },
     })
 
-    // Transform spaces
-    const transformedSpaces = spaces.map((space) => ({
-      id: space.id,
-      name: space.name,
-      template: space.template.name,
-      status: space.status,
-      visitors: space._count.guestSessions,
-      events: space._count.eventLogs,
-      inviteCode: space.inviteCode,
-      createdAt: space.createdAt.toISOString(),
-      createdAtFormatted: space.createdAt.toLocaleDateString("ko-KR"),
-    }))
+    // 📊 SSOT: 인증 사용자 방문 수 조회 (공간별 unique userId)
+    const spaceIds = spaces.map((s) => s.id)
+
+    const authVisitorGroups = await prisma.spaceEventLog.groupBy({
+      by: ["spaceId", "userId"],
+      where: {
+        spaceId: { in: spaceIds },
+        eventType: "ENTER",
+        userId: { not: null },
+      },
+    })
+
+    // 공간별 unique 인증 사용자 수 맵
+    const authVisitorMap = new Map<string, number>()
+    authVisitorGroups.forEach((item) => {
+      const current = authVisitorMap.get(item.spaceId) || 0
+      authVisitorMap.set(item.spaceId, current + 1)
+    })
+
+    // Transform spaces with combined visitor count
+    const transformedSpaces = spaces.map((space) => {
+      const guestCount = space._count.guestSessions
+      const authCount = authVisitorMap.get(space.id) || 0
+      return {
+        id: space.id,
+        name: space.name,
+        template: space.template.name,
+        status: space.status,
+        visitors: guestCount + authCount, // 📊 SSOT: 게스트 + 인증 사용자 합산
+        events: space._count.eventLogs,
+        inviteCode: space.inviteCode,
+        createdAt: space.createdAt.toISOString(),
+        createdAtFormatted: space.createdAt.toLocaleDateString("ko-KR"),
+      }
+    })
 
     return NextResponse.json({ spaces: transformedSpaces })
   } catch (error) {

@@ -29,7 +29,6 @@ import { filterMessagesByTab, calculateUnreadCounts } from "../../utils/chatFilt
 import type { ChatMessage, ReactionType, ChatTab, ReplyTo, ChatFontSize } from "../../types/space.types"
 import type { ReplyToData, PlayerPosition } from "../../socket/types"
 import type { SpaceRole } from "@prisma/client"
-import { StaffManagement } from "@/components/space/StaffManagement"
 
 // ============================================
 // FloatingChatOverlay Props
@@ -71,9 +70,8 @@ export function FloatingChatOverlay({
   const { isFullscreen, fullscreenElement } = useFullscreen()
   const messageListRef = useRef<ChatMessageListHandle>(null)
 
-  // ⚙️ 채팅 관리 권한 여부 (OWNER 또는 STAFF) 및 설정 패널 상태
+  // ⚙️ 채팅 관리 권한 여부 (OWNER 또는 STAFF)
   const canManageChat = userRole === "OWNER" || userRole === "STAFF"
-  const [showSettings, setShowSettings] = useState(false)
 
   // 🔤 글씨 크기 상태 (localStorage 연동)
   const [chatFontSize, setChatFontSize] = useState<ChatFontSize>("medium")
@@ -95,14 +93,6 @@ export function FloatingChatOverlay({
     localStorage.setItem("flowspace-chat-font-size", size)
   }, [])
 
-  // ⚙️ 설정 패널 열기/닫기
-  const handleOpenSettings = useCallback(() => {
-    setShowSettings(true)
-  }, [])
-
-  const handleCloseSettings = useCallback(() => {
-    setShowSettings(false)
-  }, [])
 
   // 📬 탭 상태
   const [activeTab, setActiveTab] = useState<ChatTab>("all")
@@ -396,7 +386,7 @@ export function FloatingChatOverlay({
       )}
 
       {/* 📬 채팅 탭 (활성화 시에만 표시) */}
-      {isActive && !showSettings && (
+      {isActive && (
         <ChatTabs
           activeTab={activeTab}
           onTabChange={handleTabChange}
@@ -404,31 +394,9 @@ export function FloatingChatOverlay({
           onDeactivate={handleDeactivate}
           className="bg-black/30 backdrop-blur-sm"
           canManageChat={canManageChat}
-          onOpenSettings={spaceId ? handleOpenSettings : undefined}
           fontSize={chatFontSize}
           onFontSizeChange={handleFontSizeChange}
         />
-      )}
-
-      {/* ⚙️ 설정 패널 (OWNER만, 스태프 관리) */}
-      {showSettings && spaceId && (
-        <div className="flex flex-col bg-black/40 backdrop-blur-sm border-b border-white/5">
-          <div className="flex items-center justify-between px-3 py-2 border-b border-white/10">
-            <span className="text-xs font-medium text-white/80">설정</span>
-            <button
-              onClick={handleCloseSettings}
-              className="p-1 rounded hover:bg-white/10 text-white/60 hover:text-white/80"
-              title="닫기"
-            >
-              <svg className="size-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-          <div className="p-2 overflow-y-auto max-h-[200px]">
-            <StaffManagement spaceId={spaceId} compact />
-          </div>
-        </div>
       )}
 
       {/* 메시지 목록 - 동적 높이 */}

@@ -394,7 +394,8 @@ export function MemberList({
         {/* 추가 버튼 */}
         {!readOnly && !addingRole && (
           <div className="flex items-center gap-1">
-            {isSuperAdmin && (
+            {/* OWNER 추가: OWNER 또는 SuperAdmin */}
+            {(isSuperAdmin || isOwner) && (
               <Button
                 variant="outline"
                 size="sm"

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
 import {
   Container,
@@ -20,6 +20,7 @@ import {
   Badge,
   Divider,
 } from "@/components/ui"
+import { Users, UserCheck, UserPlus, RefreshCw, TrendingUp } from "lucide-react"
 
 // ============================================
 // Types
@@ -32,6 +33,9 @@ interface MySpace {
   role: "OWNER" | "STAFF" | "PARTICIPANT"
   inviteCode: string
   members: number
+  // OWNER/STAFF만 통계 포함 (SSOT)
+  visitors?: number
+  events?: number
   owner: {
     id: string
     name: string | null
@@ -40,6 +44,176 @@ interface MySpace {
   isOwner: boolean
   joinedAt: string
   createdAt: string
+}
+
+// ============================================
+// Stat Card Component (admin 스타일과 동일)
+// ============================================
+function StatCard({
+  title,
+  value,
+  icon,
+}: {
+  title: string
+  value: string | number
+  icon?: React.ReactNode
+}) {
+  return (
+    <Card>
+      <CardContent className="pt-6">
+        <VStack gap="xs">
+          <HStack gap="xs" align="center" justify="center">
+            {icon}
+            <Text tone="muted" size="sm">
+              {title}
+            </Text>
+          </HStack>
+          <Text weight="bold" className="text-3xl text-center">
+            {value}
+          </Text>
+        </VStack>
+      </CardContent>
+    </Card>
+  )
+}
+
+// ============================================
+// Quick Stats Component (OWNER/STAFF 전용)
+// ============================================
+function QuickStats({ managedSpaces }: { managedSpaces: MySpace[] }) {
+  const [stats, setStats] = useState({
+    totalOnline: 0,
+    totalVisitors: 0,
+    totalMembers: 0,
+  })
+  const [isLoading, setIsLoading] = useState(true)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+
+  // Fetch presence data for all managed spaces
+  const fetchStats = useCallback(async () => {
+    if (managedSpaces.length === 0) {
+      setIsLoading(false)
+      return
+    }
+
+    try {
+      const socketServerUrl = process.env.NEXT_PUBLIC_SOCKET_SERVER_URL || "http://localhost:3001"
+
+      // 각 공간의 온라인 수 조회
+      const presencePromises = managedSpaces.map(async (space) => {
+        try {
+          const res = await fetch(`${socketServerUrl}/presence/${space.id}`)
+          if (res.ok) {
+            const data = await res.json()
+            return data.count || 0
+          }
+          return 0
+        } catch {
+          return 0
+        }
+      })
+
+      const onlineCounts = await Promise.all(presencePromises)
+      const totalOnline = onlineCounts.reduce((sum, count) => sum + count, 0)
+
+      // 총 방문자 및 멤버 집계 (API에서 제공되는 데이터 사용)
+      const totalVisitors = managedSpaces.reduce(
+        (sum, space) => sum + (space.visitors || 0),
+        0
+      )
+      const totalMembers = managedSpaces.reduce(
+        (sum, space) => sum + space.members,
+        0
+      )
+
+      setStats({
+        totalOnline,
+        totalVisitors,
+        totalMembers,
+      })
+    } catch (err) {
+      console.error("[QuickStats] Failed to fetch stats:", err)
+    } finally {
+      setIsLoading(false)
+      setIsRefreshing(false)
+    }
+  }, [managedSpaces])
+
+  useEffect(() => {
+    fetchStats()
+  }, [fetchStats])
+
+  const handleRefresh = () => {
+    setIsRefreshing(true)
+    fetchStats()
+  }
+
+  if (managedSpaces.length === 0) return null
+
+  return (
+    <VStack gap="default">
+      {/* 헤더 */}
+      <HStack justify="between" align="center">
+        <HStack gap="sm" align="center">
+          <TrendingUp className="h-5 w-5 text-muted-foreground" />
+          <Heading as="h2" size="xl">
+            오늘의 통계
+          </Heading>
+          <Badge variant="outline">{managedSpaces.length}개 공간</Badge>
+        </HStack>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleRefresh}
+          disabled={isRefreshing}
+        >
+          <RefreshCw
+            className={`h-4 w-4 mr-2 ${isRefreshing ? "animate-spin" : ""}`}
+          />
+          새로고침
+        </Button>
+      </HStack>
+
+      {/* 통계 카드 그리드 */}
+      {isLoading ? (
+        <Grid cols={3} gap="default">
+          {[1, 2, 3].map((i) => (
+            <GridItem key={i}>
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="h-16 animate-pulse rounded bg-muted" />
+                </CardContent>
+              </Card>
+            </GridItem>
+          ))}
+        </Grid>
+      ) : (
+        <Grid cols={3} gap="default">
+          <GridItem>
+            <StatCard
+              title="현재 접속자"
+              value={`${stats.totalOnline}명`}
+              icon={<UserCheck className="h-4 w-4 text-green-500" />}
+            />
+          </GridItem>
+          <GridItem>
+            <StatCard
+              title="총 방문자"
+              value={`${stats.totalVisitors}명`}
+              icon={<Users className="h-4 w-4 text-blue-500" />}
+            />
+          </GridItem>
+          <GridItem>
+            <StatCard
+              title="총 멤버"
+              value={`${stats.totalMembers}명`}
+              icon={<UserPlus className="h-4 w-4 text-purple-500" />}
+            />
+          </GridItem>
+        </Grid>
+      )}
+    </VStack>
+  )
 }
 
 // ============================================
@@ -52,9 +226,10 @@ function SpaceCard({
   status,
   role,
   members,
+  visitors,
+  // events는 향후 확장용으로 API에서 제공
   owner,
   isOwner,
-  inviteCode,
   joinedAt,
   loading = false,
 }: MySpace & { loading?: boolean }) {
@@ -85,6 +260,7 @@ function SpaceCard({
   }[role]
 
   const joinedAtFormatted = new Date(joinedAt).toLocaleDateString("ko-KR")
+  const isManager = role === "OWNER" || role === "STAFF"
 
   return (
     <Card className="transition-shadow hover:shadow-md">
@@ -106,20 +282,45 @@ function SpaceCard({
       </CardHeader>
       <CardContent>
         <Divider className="mb-4" />
-        <Grid cols={2} gap="default">
-          <VStack gap="xs">
-            <Text tone="muted" size="sm">
-              멤버
-            </Text>
-            <Text weight="medium">{members}명</Text>
-          </VStack>
-          <VStack gap="xs">
-            <Text tone="muted" size="sm">
-              참여일
-            </Text>
-            <Text weight="medium">{joinedAtFormatted}</Text>
-          </VStack>
-        </Grid>
+        {/* OWNER/STAFF: 통계 포함 그리드 */}
+        {isManager ? (
+          <Grid cols={3} gap="default">
+            <VStack gap="xs">
+              <Text tone="muted" size="sm">
+                멤버
+              </Text>
+              <Text weight="medium">{members}명</Text>
+            </VStack>
+            <VStack gap="xs">
+              <Text tone="muted" size="sm">
+                방문자
+              </Text>
+              <Text weight="medium">{visitors ?? 0}명</Text>
+            </VStack>
+            <VStack gap="xs">
+              <Text tone="muted" size="sm">
+                참여일
+              </Text>
+              <Text weight="medium">{joinedAtFormatted}</Text>
+            </VStack>
+          </Grid>
+        ) : (
+          /* PARTICIPANT: 기본 그리드 */
+          <Grid cols={2} gap="default">
+            <VStack gap="xs">
+              <Text tone="muted" size="sm">
+                멤버
+              </Text>
+              <Text weight="medium">{members}명</Text>
+            </VStack>
+            <VStack gap="xs">
+              <Text tone="muted" size="sm">
+                참여일
+              </Text>
+              <Text weight="medium">{joinedAtFormatted}</Text>
+            </VStack>
+          </Grid>
+        )}
         {!isOwner && (
           <HStack gap="xs" className="mt-3">
             <Text tone="muted" size="sm">
@@ -129,17 +330,18 @@ function SpaceCard({
           </HStack>
         )}
         <HStack gap="sm" className="mt-4">
-          {(role === "OWNER" || role === "STAFF") && (
+          {isManager && (
             <Button variant="outline" size="sm" className="flex-1" asChild>
               <Link href={`/dashboard/spaces/${id}`}>관리</Link>
             </Button>
           )}
           <Button
             size="sm"
-            className={role === "PARTICIPANT" ? "w-full" : "flex-1"}
+            className={!isManager ? "w-full" : "flex-1"}
             asChild
           >
-            <Link href={`/spaces/${inviteCode}`}>입장</Link>
+            {/* 입장 경로 통일: /space/{id} */}
+            <Link href={`/space/${id}`}>입장</Link>
           </Button>
         </HStack>
       </CardContent>
@@ -240,11 +442,6 @@ export default function MySpacesPage() {
               </Text>
             </Link>
             <HStack gap="default">
-              {managedSpaces.length > 0 && (
-                <Button variant="outline" asChild>
-                  <Link href="/dashboard">공간 관리</Link>
-                </Button>
-              )}
               <Button asChild>
                 <Link href="/spaces/new">새 공간 만들기</Link>
               </Button>
@@ -268,6 +465,11 @@ export default function MySpacesPage() {
                 <Badge variant="outline">{spaces.length}개 공간</Badge>
               </HStack>
             </HStack>
+
+            {/* Quick Stats Widget (OWNER/STAFF 전용) */}
+            {!loading && managedSpaces.length > 0 && (
+              <QuickStats managedSpaces={managedSpaces} />
+            )}
 
             {/* Loading State */}
             {loading && (
@@ -316,17 +518,12 @@ export default function MySpacesPage() {
 
             {/* Managed Spaces (Owner/Staff) */}
             {!loading && managedSpaces.length > 0 && (
-              <VStack gap="default">
+              <VStack gap="default" id="managed">
                 <HStack justify="between" align="center">
                   <Heading as="h2" size="xl">
                     관리 중인 공간
                   </Heading>
-                  <HStack gap="sm">
-                    <Badge variant="outline">{managedSpaces.length}개</Badge>
-                    <Button variant="outline" size="sm" asChild>
-                      <Link href="/dashboard">대시보드로 이동</Link>
-                    </Button>
-                  </HStack>
+                  <Badge variant="outline">{managedSpaces.length}개</Badge>
                 </HStack>
                 <Grid cols={3} gap="default">
                   {managedSpaces.map((space) => (

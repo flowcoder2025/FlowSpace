@@ -80,6 +80,11 @@ function SettingsForm({
       return
     }
 
+    if (trimmedNickname.includes(" ")) {
+      setError("참가자명에 띄어쓰기를 사용할 수 없습니다")
+      return
+    }
+
     if (trimmedNickname.length < 2 || trimmedNickname.length > 20) {
       setError("참가자명은 2~20자 사이로 입력해주세요")
       return
@@ -114,10 +119,13 @@ function SettingsForm({
           <Input
             id="settings-nickname"
             value={nickname}
-            onChange={(e) => setNickname(e.target.value)}
-            placeholder="공간에서 사용할 이름"
+            onChange={(e) => setNickname(e.target.value.replace(/\s/g, ""))}
+            placeholder="공간에서 사용할 이름 (띄어쓰기 불가)"
             maxLength={20}
           />
+          <Text size="xs" tone="muted">
+            귓속말 기능을 위해 띄어쓰기 없이 입력해주세요
+          </Text>
         </VStack>
 
         {/* Avatar Selection */}

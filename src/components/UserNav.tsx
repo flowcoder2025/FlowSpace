@@ -62,17 +62,10 @@ export function UserNav() {
           </Text>
         </HStack>
 
-        {/* 내 공간 (모든 로그인 사용자) */}
+        {/* 내 공간 (모든 로그인 사용자) - /dashboard 통합 */}
         <Button variant="ghost" size="sm" asChild>
           <Link href="/my-spaces">내 공간</Link>
         </Button>
-
-        {/* 공간 관리 (OWNER/STAFF 있는 경우) */}
-        {navRoles?.hasManageableSpaces && (
-          <Button variant="ghost" size="sm" asChild>
-            <Link href="/dashboard">공간 관리</Link>
-          </Button>
-        )}
 
         {/* 관리자 (SuperAdmin만) */}
         {navRoles?.isSuperAdmin && (

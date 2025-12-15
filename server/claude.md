@@ -190,6 +190,7 @@ io.use(async (socket, next) => {
 
 ### 10.1 로깅 흐름
 
+**게스트 사용자 (guest-* 세션)**:
 ```
 leave:space / disconnect 이벤트
            ↓
@@ -197,21 +198,43 @@ leave:space / disconnect 이벤트
            ↓
    POST /api/guest/event
            ↓
-   SpaceEventLog 테이블에 EXIT 기록
+   SpaceEventLog 테이블에 EXIT 기록 (guestSessionId 포함)
+```
+
+**인증 사용자 (auth-* 세션)**:
+```
+leave:space / disconnect 이벤트
+           ↓
+   logGuestEvent() → auth- 세션 감지
+           ↓
+   logAuthUserEvent() 호출
+           ↓
+   DELETE /api/spaces/[id]/visit
+           ↓
+   SpaceEventLog 테이블에 EXIT 기록 (userId 포함)
 ```
 
 ### 10.2 로깅 대상
 
-| 이벤트 | 로깅 여부 | 비고 |
-|-------|----------|------|
-| ENTER | ✅ | Guest API에서 세션 생성 시 로깅 |
-| EXIT | ✅ | Socket 서버에서 퇴장/연결 종료 시 로깅 |
-| CHAT | ⏳ | 향후 구현 예정 |
+| 이벤트 | 게스트 | 인증 사용자 | 비고 |
+|-------|--------|------------|------|
+| ENTER | ✅ Guest API | ✅ Visit API | 세션/페이지 입장 시 |
+| EXIT | ✅ Socket 서버 | ✅ Socket 서버 | 퇴장/연결 종료 시 |
+| CHAT | ⏳ 향후 | ⏳ 향후 | 향후 구현 예정 |
 
-### 10.3 로깅 조건
+### 10.3 세션 유형별 처리
 
-- 게스트 세션만 로깅 (dev-, auth- 세션 제외)
+| 세션 패턴 | 처리 | 설명 |
+|----------|------|------|
+| `dev-*` | 스킵 | 개발 모드 세션, 로깅 안함 |
+| `guest-*` | logGuestEvent | 게스트 세션, Guest API로 로깅 |
+| `auth-*` | logAuthUserEvent | 인증 사용자, Visit API로 로깅 |
+
+### 10.4 로깅 조건
+
 - 비동기 처리 (로깅 실패해도 퇴장 처리는 계속)
+- 체류시간 계산은 ENTER/EXIT 시간 차이로 계산
+- 24시간 이상 체류는 통계에서 제외
 
 ---
 
@@ -219,6 +242,7 @@ leave:space / disconnect 이벤트
 
 | 날짜 | 변경 |
 |-----|------|
+| 2025-12-15 | 인증 사용자 EXIT 로깅 추가 - auth-* 세션도 Visit API로 로깅 |
 | 2025-12-11 | whisper/party 이벤트 추가 - 귓속말 및 파티 채팅 시스템 지원 |
 | 2025-12-09 | EXIT 이벤트 로깅 추가 - 체류시간 통계 지원 |
 | 2025-12-08 | 초기 생성 - 보안 강화 내용 반영 |

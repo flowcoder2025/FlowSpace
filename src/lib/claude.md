@@ -116,66 +116,106 @@ export default async function Page() {
 
 ---
 
-## 5. 권한 시스템 (permissions.ts)
+## 5. 권한 시스템 (space-auth.ts, space-permissions.ts)
 
-### 5.1 ReBAC 개념
+### 5.1 권한 계층
 
 ```
-owner (전체 권한)
-├── editor (읽기 + 쓰기)
-│   └── viewer (읽기 전용)
-└── admin (시스템 레벨)
+SuperAdmin (플랫폼 전체)
+    ↓
+OWNER (공간 소유자)
+    ↓
+STAFF (공간 관리자)
+    ↓
+PARTICIPANT (일반 참가자)
 ```
 
-### 5.2 핵심 함수
+### 5.2 space-permissions.ts - 역할 비교 유틸
 
 ```tsx
-// 권한 확인
-export async function check(
-  userId: string,
-  namespace: Namespace,
-  objectId: string,
-  relation: Relation
-): Promise<boolean>
+// 역할 계층 확인
+export function hasMinRole(userRole: SpaceRole, minRole: SpaceRole): boolean
 
-// 권한 부여
-export async function grant(
-  namespace: Namespace,
-  objectId: string,
-  relation: Relation,
-  subjectType: SubjectType,
-  subjectId: string
-): Promise<void>
+// 관리 권한 확인 (상위 역할만 하위 관리 가능)
+export function canManage(actorRole: SpaceRole, targetRole: SpaceRole): boolean
 
-// 권한 해제
-export async function revoke(
-  namespace: Namespace,
-  objectId: string,
-  relation: Relation,
-  subjectType: SubjectType,
-  subjectId: string
-): Promise<void>
+// 커스텀 에러 클래스
+export class ForbiddenError extends Error { statusCode = 403 }
+export class NotFoundError extends Error { statusCode = 404 }
 ```
 
-### 5.3 사용 예시
+### 5.3 space-auth.ts - API 권한 미들웨어
 
 ```tsx
-// 리소스 생성 시 owner 권한 부여
-await grant("project", project.id, "owner", "user", userId)
+// SuperAdmin 확인
+export async function isSuperAdmin(userId: string): Promise<boolean>
 
-// 편집 권한 확인
-const canEdit = await check(userId, "project", projectId, "editor")
+// 공간 관리 권한 확인 (Owner/Staff/SuperAdmin)
+export async function canManageSpace(userId: string, spaceId: string): Promise<boolean>
 
-// 협업자 초대
-await grant("project", projectId, "editor", "user", collaboratorId)
+// 공간 멤버십 조회
+export async function getSpaceMember(
+  spaceId: string,
+  userId: string | null,
+  guestSessionId: string | null
+): Promise<SpaceMemberInfo | null>
+
+// 최소 역할 요구사항 검증 (throws ForbiddenError/NotFoundError)
+export async function requireSpaceRole(
+  spaceId: string,
+  minRole: SpaceRole
+): Promise<SpaceAuthResult>
+
+// 대상 멤버에 대한 관리 권한 검증
+export async function requireManagePermission(
+  spaceId: string,
+  targetMemberId: string
+): Promise<{ actor: SpaceMemberInfo; target: SpaceMemberInfo; space: {...} }>
 ```
 
-### 5.4 타입 정의
+### 5.4 사용 예시
 
 ```tsx
-export type Namespace = "project" | "document" | "system"
-export type Relation = "owner" | "editor" | "viewer" | "admin"
-export type SubjectType = "user" | "user_set"
+// API 라우트에서 권한 확인
+export async function PATCH(req, { params }) {
+  const session = await auth()
+  if (!session?.user?.id) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
+  // 공간 관리 권한 확인
+  const canManage = await canManageSpace(session.user.id, params.id)
+  if (!canManage) {
+    return Response.json({ error: "Forbidden" }, { status: 403 })
+  }
+
+  // 업데이트 로직...
+}
+
+// 역할 기반 접근 제어
+try {
+  const { member, space } = await requireSpaceRole(spaceId, "STAFF")
+  // STAFF 이상만 여기에 도달
+} catch (error) {
+  if (error instanceof ForbiddenError) {
+    return Response.json({ error: error.message }, { status: 403 })
+  }
+}
+```
+
+### 5.5 타입 정의
+
+```tsx
+export type SpaceRole = "OWNER" | "STAFF" | "PARTICIPANT"
+
+export interface SpaceMemberInfo {
+  memberId: string
+  spaceId: string
+  userId: string | null
+  guestSessionId: string | null
+  role: SpaceRole
+  isSuperAdmin: boolean
+}
 ```
 
 ---
@@ -286,5 +326,6 @@ export async function PATCH(req, { params }) {
 
 | 날짜 | 변경 |
 |-----|------|
+| 2025-12-15 | 권한 시스템 문서 업데이트 - space-auth.ts, space-permissions.ts 추가 |
 | 2025-12-05 | 초기 생성 |
 | 2025-12-05 | /docs 참조 섹션 추가 |

@@ -75,11 +75,19 @@ async function logGuestEvent(
   payload?: Record<string, unknown>
 ): Promise<boolean> {
   try {
-    // dev- 세션과 auth- 세션은 로깅 스킵 (게스트 세션만 로깅)
-    if (!sessionToken || sessionToken.startsWith("dev-") || sessionToken.startsWith("auth-")) {
+    // dev- 세션은 로깅 스킵
+    if (!sessionToken || sessionToken.startsWith("dev-")) {
       return false
     }
 
+    // auth- 세션은 인증 사용자 로깅 API 호출
+    if (sessionToken.startsWith("auth-")) {
+      // auth-{userId} 형식에서 userId 추출
+      const userId = sessionToken.replace("auth-", "")
+      return await logAuthUserEvent(userId, spaceId, eventType, payload)
+    }
+
+    // 게스트 세션 로깅
     const response = await fetch(`${NEXT_API_URL}/api/guest/event`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -99,6 +107,43 @@ async function logGuestEvent(
     return data.logged === true
   } catch (error) {
     console.error("[Socket] Event logging error:", error)
+    return false
+  }
+}
+
+// 📊 인증 사용자 이벤트 로깅 함수
+async function logAuthUserEvent(
+  userId: string,
+  spaceId: string,
+  eventType: "EXIT" | "CHAT",
+  payload?: Record<string, unknown>
+): Promise<boolean> {
+  try {
+    // EXIT 이벤트만 로깅 (CHAT은 별도 처리)
+    if (eventType !== "EXIT") {
+      return false
+    }
+
+    const response = await fetch(`${NEXT_API_URL}/api/spaces/${spaceId}/visit`, {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+        "x-user-id": userId, // 서버 간 통신용 헤더
+      },
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      console.warn(`[Socket] Auth user event logging failed:`, errorData.error || "Unknown error")
+      return false
+    }
+
+    if (IS_DEV) {
+      console.log(`[Socket] Auth user EXIT logged: user=${userId}, space=${spaceId}`)
+    }
+    return true
+  } catch (error) {
+    console.error("[Socket] Auth user event logging error:", error)
     return false
   }
 }
@@ -151,13 +196,75 @@ const httpServer = createServer((req, res) => {
   // Health check 요청 로깅 (디버깅용)
   console.log(`[Socket] HTTP ${method} ${url} from ${req.socket.remoteAddress}`)
 
+  // CORS 헤더 설정
+  const corsHeaders: Record<string, string> = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+  }
+
+  // OPTIONS 요청 처리 (CORS preflight)
+  if (method === "OPTIONS") {
+    res.writeHead(204, corsHeaders)
+    res.end()
+    return
+  }
+
   if (url === "/health" || url === "/") {
     const response = { status: "ok", timestamp: Date.now(), uptime: process.uptime() }
-    res.writeHead(200, { "Content-Type": "application/json" })
+    res.writeHead(200, { "Content-Type": "application/json", ...corsHeaders })
     res.end(JSON.stringify(response))
     console.log(`[Socket] Health check responded: 200 OK`)
+  }
+  // 🆕 Presence API: GET /presence/:spaceId
+  else if (url.startsWith("/presence/") && method === "GET") {
+    const spaceId = url.replace("/presence/", "")
+    
+    if (!spaceId) {
+      res.writeHead(400, { "Content-Type": "application/json", ...corsHeaders })
+      res.end(JSON.stringify({ error: "spaceId is required" }))
+      return
+    }
+
+    // 해당 공간에 접속한 소켓들 조회
+    const roomSocketIds = io.sockets.adapter.rooms.get(spaceId)
+    const onlineUsers: Array<{
+      id: string
+      nickname: string
+      avatarColor?: string
+      userId?: string
+      memberId?: string
+      role?: string
+    }> = []
+
+    if (roomSocketIds) {
+      for (const socketId of roomSocketIds) {
+        const socket = io.sockets.sockets.get(socketId)
+        if (socket && socket.data) {
+          onlineUsers.push({
+            id: socket.data.playerId,
+            nickname: socket.data.nickname,
+            avatarColor: socket.data.avatarColor,
+            userId: socket.data.userId,
+            memberId: socket.data.memberId,
+            role: socket.data.role,
+          })
+        }
+      }
+    }
+
+    const response = {
+      spaceId,
+      onlineUsers,
+      count: onlineUsers.length,
+      timestamp: Date.now(),
+    }
+
+    res.writeHead(200, { "Content-Type": "application/json", ...corsHeaders })
+    res.end(JSON.stringify(response))
+    console.log(`[Socket] Presence API: ${spaceId} has ${onlineUsers.length} online users`)
   } else {
-    res.writeHead(404)
+    res.writeHead(404, corsHeaders)
     res.end()
   }
 })
@@ -348,16 +455,14 @@ io.on("connection", (socket) => {
 
   // Leave space
   socket.on("leave:space", async () => {
-    const { spaceId, playerId, nickname, sessionToken } = socket.data
+    const { spaceId, playerId, nickname } = socket.data
 
     if (spaceId && playerId) {
       socket.leave(spaceId)
       removePlayerFromRoom(spaceId, playerId)
 
-      // 📊 EXIT 이벤트 로깅 (비동기, 실패해도 퇴장 처리는 계속)
-      if (sessionToken) {
-        logGuestEvent(sessionToken, spaceId, "EXIT", { reason: "leave" }).catch(() => {})
-      }
+      // ⚠️ SSOT: EXIT 로깅은 disconnect에서만 처리 (중복 방지)
+      // leave:space 후 disconnect가 항상 호출되므로 여기서는 생략
 
       // Notify other players
       socket.to(spaceId).emit("player:left", { id: playerId })

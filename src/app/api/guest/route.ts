@@ -55,20 +55,41 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // 닉네임 유효성 검사
+    const trimmedNickname = body.nickname?.trim()
+    if (!trimmedNickname) {
+      return NextResponse.json(
+        { error: "닉네임을 입력해주세요" },
+        { status: 400 }
+      )
+    }
+    if (trimmedNickname.includes(" ") || /\s/.test(trimmedNickname)) {
+      return NextResponse.json(
+        { error: "닉네임에 띄어쓰기를 사용할 수 없습니다" },
+        { status: 400 }
+      )
+    }
+    if (trimmedNickname.length < 2 || trimmedNickname.length > 20) {
+      return NextResponse.json(
+        { error: "닉네임은 2~20자 사이로 입력해주세요" },
+        { status: 400 }
+      )
+    }
+
     // 닉네임 중복 체크 (같은 공간 내 활성 세션)
     const existingSession = await prisma.guestSession.findFirst({
       where: {
         spaceId: body.spaceId,
-        nickname: body.nickname,
+        nickname: trimmedNickname,
         expiresAt: { gt: new Date() },
       },
     })
 
-    let finalNickname = body.nickname
+    let finalNickname = trimmedNickname
     if (existingSession) {
       // 닉네임에 랜덤 숫자 suffix 추가
       const suffix = Math.floor(Math.random() * 9000) + 1000
-      finalNickname = `${body.nickname}#${suffix}`
+      finalNickname = `${trimmedNickname}#${suffix}`
     }
 
     // 현재 접속자 수 체크

@@ -24,7 +24,7 @@ import {
   Divider,
 } from "@/components/ui"
 import { getText } from "@/lib/text-config"
-import { StaffManagement } from "@/components/space/StaffManagement"
+import { MemberManagement } from "@/components/space"
 
 // ============================================
 // Types
@@ -127,6 +127,7 @@ export default function DashboardSpaceManagePage() {
   const [copied, setCopied] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isOwner, setIsOwner] = useState(false)
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false)
 
   // Form state
   const [formData, setFormData] = useState({
@@ -176,6 +177,18 @@ export default function DashboardSpaceManagePage() {
         if (statsRes.ok) {
           const statsData = await statsRes.json()
           setStats(statsData)
+        }
+
+        // 사용자 역할 확인 (my-role API 사용)
+        try {
+          const roleRes = await fetch(`/api/spaces/${spaceId}/my-role`)
+          if (roleRes.ok) {
+            const roleData = await roleRes.json()
+            setIsSuperAdmin(roleData.isSuperAdmin || false)
+            setIsOwner(roleData.isOwner || roleData.role === "OWNER" || false)
+          }
+        } catch {
+          // 역할 확인 실패해도 페이지는 표시
         }
       } catch (err) {
         setError("공간을 불러올 수 없습니다")
@@ -246,7 +259,7 @@ export default function DashboardSpaceManagePage() {
             <VStack gap="default" align="center">
               <Text tone="muted">{error || "공간을 찾을 수 없습니다"}</Text>
               <Button variant="outline" asChild>
-                <Link href="/dashboard">대시보드로 돌아가기</Link>
+                <Link href="/my-spaces">내 공간으로 돌아가기</Link>
               </Button>
             </VStack>
           </Section>
@@ -288,9 +301,9 @@ export default function DashboardSpaceManagePage() {
                 </Text>
               </Link>
               <Text tone="muted">/</Text>
-              <Link href="/dashboard">
+              <Link href="/my-spaces">
                 <Text tone="muted" className="hover:text-foreground">
-                  공간 관리
+                  내 공간
                 </Text>
               </Link>
               <Text tone="muted">/</Text>
@@ -298,10 +311,11 @@ export default function DashboardSpaceManagePage() {
             </HStack>
             <HStack gap="default">
               <Button variant="outline" asChild>
-                <Link href="/dashboard">뒤로</Link>
+                <Link href="/my-spaces">뒤로</Link>
               </Button>
               <Button asChild>
-                <Link href={`/spaces/${space.inviteCode}`}>
+                {/* 입장 경로 통일: /space/{id} */}
+                <Link href={`/space/${space.id}`}>
                   {getText("BTN.SPACE.ENTER")}
                 </Link>
               </Button>
@@ -579,16 +593,25 @@ export default function DashboardSpaceManagePage() {
               </GridItem>
             </Grid>
 
-            {/* Staff Management */}
+            {/* Member Management - 온라인/오프라인 상태 + 멤버 추가/권한 관리 통합 */}
             <Card>
               <CardHeader>
-                <CardTitle>스태프 관리</CardTitle>
+                <CardTitle>멤버 관리</CardTitle>
                 <CardDescription>
-                  스태프에게 채팅 관리 권한을 부여할 수 있습니다
+                  {isSuperAdmin
+                    ? "SuperAdmin: OWNER/STAFF 임명, 역할 변경, 멤버 관리가 가능합니다"
+                    : isOwner
+                      ? "OWNER: OWNER/STAFF 추가, 멤버 관리가 가능합니다"
+                      : "공간의 멤버 목록과 온라인 상태를 확인합니다"}
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <StaffManagement spaceId={spaceId} />
+                <MemberManagement
+                  spaceId={spaceId}
+                  isSuperAdmin={isSuperAdmin}
+                  isOwner={isOwner}
+                  canManage={isSuperAdmin || isOwner}
+                />
               </CardContent>
             </Card>
 
@@ -596,7 +619,7 @@ export default function DashboardSpaceManagePage() {
             <HStack justify="end">
               <HStack gap="default">
                 <Button variant="outline" asChild>
-                  <Link href="/dashboard">{getText("BTN.SECONDARY.CANCEL")}</Link>
+                  <Link href="/my-spaces">{getText("BTN.SECONDARY.CANCEL")}</Link>
                 </Button>
                 <Button onClick={handleSave} disabled={saving}>
                   {saving ? getText("LID.STATUS.SAVING") : getText("BTN.SPACE.SAVE")}

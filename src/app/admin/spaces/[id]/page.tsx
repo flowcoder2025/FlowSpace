@@ -24,7 +24,7 @@ import {
   Divider,
 } from "@/components/ui"
 import { getText } from "@/lib/text-config"
-import { MemberList } from "@/components/space"
+import { MemberManagement } from "@/components/space"
 
 // ============================================
 // Types
@@ -579,23 +579,24 @@ export default function SpaceManagePage() {
               </GridItem>
             </Grid>
 
-            {/* Member Management */}
+            {/* Member Management - 온라인/오프라인 상태 + 멤버 추가/권한 관리 통합 */}
             <Card>
               <CardHeader>
                 <CardTitle>멤버 관리</CardTitle>
                 <CardDescription>
                   {isSuperAdmin
-                    ? "SuperAdmin: OWNER 및 STAFF를 관리할 수 있습니다"
+                    ? "SuperAdmin: OWNER/STAFF 임명, 역할 변경, 멤버 관리가 가능합니다"
                     : isOwner
-                      ? "OWNER: STAFF를 관리할 수 있습니다"
-                      : "공간의 멤버 목록을 확인합니다"}
+                      ? "OWNER: STAFF 추가/제거, 멤버 관리가 가능합니다"
+                      : "공간의 멤버 목록과 온라인 상태를 확인합니다"}
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <MemberList
+                <MemberManagement
                   spaceId={spaceId}
                   isSuperAdmin={isSuperAdmin}
                   isOwner={isOwner}
+                  canManage={isSuperAdmin || isOwner}
                   refreshTrigger={refreshKey}
                 />
               </CardContent>

@@ -60,20 +60,36 @@ export async function GET() {
 
     // ⚡ 병렬 실행: 독립적인 쿼리들을 Promise.all()로 동시 실행
     const [
-      totalVisitors,
-      thisWeekVisitors,
-      lastWeekVisitors,
+      guestVisitors,
+      authVisitors,
+      thisWeekGuestVisitors,
+      thisWeekAuthVisitors,
+      lastWeekGuestVisitors,
+      lastWeekAuthVisitors,
       enterEvents,
-      enterLogs,
-      exitLogs,
-      returnRateData,
+      guestEnterLogs,
+      guestExitLogs,
+      authEnterLogs,
+      authExitLogs,
+      guestReturnRateData,
+      authReturnRateData,
     ] = await Promise.all([
-      // 1. Total visitors (unique guest sessions)
+      // 1. Total guest visitors (unique guest sessions)
       prisma.guestSession.count({
         where: { spaceId: { in: spaceIds } },
       }),
 
-      // 2. This week's visitors
+      // 1b. Total auth visitors (unique userIds with ENTER events)
+      prisma.spaceEventLog.groupBy({
+        by: ["userId"],
+        where: {
+          spaceId: { in: spaceIds },
+          eventType: "ENTER",
+          userId: { not: null },
+        },
+      }),
+
+      // 2. This week's guest visitors
       prisma.guestSession.count({
         where: {
           spaceId: { in: spaceIds },
@@ -81,10 +97,32 @@ export async function GET() {
         },
       }),
 
-      // 3. Last week's visitors
+      // 2b. This week's auth visitors
+      prisma.spaceEventLog.groupBy({
+        by: ["userId"],
+        where: {
+          spaceId: { in: spaceIds },
+          eventType: "ENTER",
+          userId: { not: null },
+          createdAt: { gte: oneWeekAgo },
+        },
+      }),
+
+      // 3. Last week's guest visitors
       prisma.guestSession.count({
         where: {
           spaceId: { in: spaceIds },
+          createdAt: { gte: twoWeeksAgo, lt: oneWeekAgo },
+        },
+      }),
+
+      // 3b. Last week's auth visitors
+      prisma.spaceEventLog.groupBy({
+        by: ["userId"],
+        where: {
+          spaceId: { in: spaceIds },
+          eventType: "ENTER",
+          userId: { not: null },
           createdAt: { gte: twoWeeksAgo, lt: oneWeekAgo },
         },
       }),
@@ -100,7 +138,7 @@ export async function GET() {
         _count: true,
       }),
 
-      // 5. Enter logs for duration calculation
+      // 5. Guest enter logs for duration calculation
       prisma.spaceEventLog.findMany({
         where: {
           spaceId: { in: spaceIds },
@@ -112,7 +150,7 @@ export async function GET() {
         orderBy: { createdAt: "asc" },
       }),
 
-      // 6. Exit logs for duration calculation
+      // 6. Guest exit logs for duration calculation
       prisma.spaceEventLog.findMany({
         where: {
           spaceId: { in: spaceIds },
@@ -124,14 +162,53 @@ export async function GET() {
         orderBy: { createdAt: "asc" },
       }),
 
-      // 7. ⚡ 재방문율 계산: DB 집계 사용 (전체 레코드 로드 대신)
-      // spaceId + nickname 조합으로 그룹화하여 2회 이상 방문한 조합 카운트
+      // 5b. Auth enter logs for duration calculation
+      prisma.spaceEventLog.findMany({
+        where: {
+          spaceId: { in: spaceIds },
+          eventType: "ENTER",
+          userId: { not: null },
+          createdAt: { gte: oneWeekAgo },
+        },
+        select: { userId: true, createdAt: true },
+        orderBy: { createdAt: "asc" },
+      }),
+
+      // 6b. Auth exit logs for duration calculation
+      prisma.spaceEventLog.findMany({
+        where: {
+          spaceId: { in: spaceIds },
+          eventType: "EXIT",
+          userId: { not: null },
+          createdAt: { gte: oneWeekAgo },
+        },
+        select: { userId: true, createdAt: true },
+        orderBy: { createdAt: "asc" },
+      }),
+
+      // 7. Guest 재방문율 계산: DB 집계 사용
       prisma.guestSession.groupBy({
         by: ["spaceId", "nickname"],
         where: { spaceId: { in: spaceIds } },
         _count: true,
       }),
+
+      // 7b. Auth 재방문율 계산: userId로 그룹화
+      prisma.spaceEventLog.groupBy({
+        by: ["userId", "spaceId"],
+        where: {
+          spaceId: { in: spaceIds },
+          eventType: "ENTER",
+          userId: { not: null },
+        },
+        _count: true,
+      }),
     ])
+
+    // 📊 합산: 게스트 + 인증 사용자
+    const totalVisitors = guestVisitors + authVisitors.length
+    const thisWeekVisitors = thisWeekGuestVisitors + thisWeekAuthVisitors.length
+    const lastWeekVisitors = lastWeekGuestVisitors + lastWeekAuthVisitors.length
 
     // Calculate weekly change for visitors
     const visitorChange =
@@ -149,18 +226,39 @@ export async function GET() {
     })
     const peakConcurrent = Math.max(...Array.from(dailyEnters.values()), 0)
 
-    // Calculate durations from ENTER/EXIT pairs
+    // Calculate durations from ENTER/EXIT pairs (게스트)
     const durations: number[] = []
-    const exitMap = new Map<string, Date>()
-    exitLogs.forEach((log) => {
+    const guestExitMap = new Map<string, Date>()
+    guestExitLogs.forEach((log) => {
       if (log.guestSessionId) {
-        exitMap.set(log.guestSessionId, log.createdAt)
+        guestExitMap.set(log.guestSessionId, log.createdAt)
       }
     })
 
-    enterLogs.forEach((enter) => {
+    guestEnterLogs.forEach((enter) => {
       if (enter.guestSessionId) {
-        const exitTime = exitMap.get(enter.guestSessionId)
+        const exitTime = guestExitMap.get(enter.guestSessionId)
+        if (exitTime) {
+          const durationMs = exitTime.getTime() - enter.createdAt.getTime()
+          if (durationMs > 0 && durationMs < 24 * 60 * 60 * 1000) {
+            // Less than 24h
+            durations.push(durationMs)
+          }
+        }
+      }
+    })
+
+    // Calculate durations from ENTER/EXIT pairs (인증 사용자)
+    const authExitMap = new Map<string, Date>()
+    authExitLogs.forEach((log) => {
+      if (log.userId) {
+        authExitMap.set(log.userId, log.createdAt)
+      }
+    })
+
+    authEnterLogs.forEach((enter) => {
+      if (enter.userId) {
+        const exitTime = authExitMap.get(enter.userId)
         if (exitTime) {
           const durationMs = exitTime.getTime() - enter.createdAt.getTime()
           if (durationMs > 0 && durationMs < 24 * 60 * 60 * 1000) {
@@ -178,12 +276,19 @@ export async function GET() {
         : 0
 
     // ⚡ 재방문율 계산 (DB 집계 결과 사용)
-    // returnRateData: { spaceId, nickname, _count }[]
-    const totalUniqueVisitors = returnRateData.length
-    const returningVisitors = returnRateData.filter((r) => r._count > 1).length
+    // 게스트: spaceId + nickname 조합
+    const guestUniqueVisitors = guestReturnRateData.length
+    const guestReturning = guestReturnRateData.filter((r) => r._count > 1).length
+
+    // 인증 사용자: userId + spaceId 조합
+    const authUniqueVisitors = authReturnRateData.length
+    const authReturning = authReturnRateData.filter((r) => r._count > 1).length
+
+    const totalUniqueVisitors = guestUniqueVisitors + authUniqueVisitors
+    const totalReturning = guestReturning + authReturning
     const returnRate =
       totalUniqueVisitors > 0
-        ? Math.round((returningVisitors / totalUniqueVisitors) * 100)
+        ? Math.round((totalReturning / totalUniqueVisitors) * 100)
         : 0
 
     return NextResponse.json({

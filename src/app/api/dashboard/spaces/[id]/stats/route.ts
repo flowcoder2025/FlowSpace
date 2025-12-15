@@ -39,12 +39,15 @@ export async function GET(
     const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
     const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000)
 
-    // 병렬 쿼리 실행
+    // ⚡ 병렬 쿼리 실행: 게스트 + 인증 사용자 분리 조회
     const [
       totalMembers,
-      totalVisitors,
-      thisWeekVisitors,
-      lastWeekVisitors,
+      guestVisitors,
+      authVisitors,
+      thisWeekGuestVisitors,
+      thisWeekAuthVisitors,
+      lastWeekGuestVisitors,
+      lastWeekAuthVisitors,
       totalEvents,
       recentEnters,
     ] = await Promise.all([
@@ -58,7 +61,17 @@ export async function GET(
         where: { spaceId },
       }),
 
-      // 이번 주 방문자
+      // 총 방문자 수 (인증 사용자 - unique userId)
+      prisma.spaceEventLog.groupBy({
+        by: ["userId"],
+        where: {
+          spaceId,
+          eventType: "ENTER",
+          userId: { not: null },
+        },
+      }),
+
+      // 이번 주 게스트 방문자
       prisma.guestSession.count({
         where: {
           spaceId,
@@ -66,10 +79,32 @@ export async function GET(
         },
       }),
 
-      // 지난 주 방문자
+      // 이번 주 인증 사용자 방문자
+      prisma.spaceEventLog.groupBy({
+        by: ["userId"],
+        where: {
+          spaceId,
+          eventType: "ENTER",
+          userId: { not: null },
+          createdAt: { gte: oneWeekAgo },
+        },
+      }),
+
+      // 지난 주 게스트 방문자
       prisma.guestSession.count({
         where: {
           spaceId,
+          createdAt: { gte: twoWeeksAgo, lt: oneWeekAgo },
+        },
+      }),
+
+      // 지난 주 인증 사용자 방문자
+      prisma.spaceEventLog.groupBy({
+        by: ["userId"],
+        where: {
+          spaceId,
+          eventType: "ENTER",
+          userId: { not: null },
           createdAt: { gte: twoWeeksAgo, lt: oneWeekAgo },
         },
       }),
@@ -90,6 +125,11 @@ export async function GET(
         _count: true,
       }),
     ])
+
+    // 📊 합산: 게스트 + 인증 사용자
+    const totalVisitors = guestVisitors + authVisitors.length
+    const thisWeekVisitors = thisWeekGuestVisitors + thisWeekAuthVisitors.length
+    const lastWeekVisitors = lastWeekGuestVisitors + lastWeekAuthVisitors.length
 
     // 주간 변화율 계산
     const visitorChange =

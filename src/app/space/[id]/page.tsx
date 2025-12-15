@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useRef } from "react"
 import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { useSession } from "next-auth/react"
 import Link from "next/link"
@@ -505,6 +505,45 @@ export default function SpacePage() {
     fetchRole()
   }, [spaceId, session, devMode])
 
+  // 📊 인증 사용자 방문 로깅 (ENTER 이벤트)
+  // ⚠️ useRef로 React StrictMode 중복 실행 방지
+  const enterLoggedRef = useRef(false)
+
+  useEffect(() => {
+    // 조건: 인증 사용자 + verifiedUser 설정 완료 + 공간 로드 완료
+    if (!isAuthUser || !verifiedUser || !space || devMode) return
+
+    // ⚠️ 이미 로깅했으면 스킵 (StrictMode 중복 방지)
+    if (enterLoggedRef.current) {
+      console.log("[SpacePage] 📊 ENTER already logged (ref guard)")
+      return
+    }
+    enterLoggedRef.current = true
+
+    async function recordVisit() {
+      try {
+        const res = await fetch(`/api/spaces/${spaceId}/visit`, {
+          method: "POST",
+        })
+        if (res.ok) {
+          const data = await res.json()
+          if (data.skipped) {
+            console.log("[SpacePage] 📊 Visit already recorded recently")
+          } else {
+            console.log("[SpacePage] 📊 ENTER recorded:", data.eventLogId)
+          }
+        } else {
+          console.warn("[SpacePage] 📊 Visit recording failed:", await res.text())
+        }
+      } catch (err) {
+        // 방문 로깅 실패해도 입장은 계속 진행
+        console.warn("[SpacePage] 📊 Visit recording error:", err)
+      }
+    }
+
+    recordVisit()
+  }, [isAuthUser, verifiedUser, space, spaceId, devMode])
+
   // 🎫 참가자명 입력 완료 핸들러 (로그인 사용자용)
   const handleParticipantComplete = useCallback(
     ({ nickname, avatar }: { nickname: string; avatar: string }) => {
@@ -553,23 +592,11 @@ export default function SpacePage() {
   }, [])
 
   // Handle exit
+  // ⚠️ SSOT: EXIT 로깅은 Socket disconnect에서만 처리
+  // 페이지 이동 → SpaceLayout 언마운트 → socket.disconnect() → 서버에서 EXIT 기록
   const handleExit = useCallback(async () => {
-    if (session) {
-      try {
-        // Record exit event
-        await fetch("/api/guest/exit", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            sessionToken: session.sessionToken,
-            spaceId: session.spaceId,
-          }),
-        })
-      } catch (err) {
-        console.error("Failed to record exit:", err)
-      }
-
-      // Clear session
+    // Clear session (게스트만)
+    if (session && !isAuthUser) {
       try {
         localStorage.removeItem("guestSession")
       } catch {
@@ -578,7 +605,12 @@ export default function SpacePage() {
     }
 
     router.push("/")
-  }, [session, router])
+  }, [session, router, isAuthUser])
+
+  // 📊 인증 사용자 EXIT 로깅
+  // ⚠️ SSOT: Socket disconnect에서 처리하므로 클라이언트에서 별도 전송 안함
+  // Socket 연결 종료 시 서버에서 자동으로 EXIT 이벤트 기록됨
+  // (beforeunload + Socket disconnect 중복 방지)
 
   // 🎫 참가자명 입력 모달 (로그인 사용자 첫 입장)
   if (showParticipantModal && authSession?.user) {

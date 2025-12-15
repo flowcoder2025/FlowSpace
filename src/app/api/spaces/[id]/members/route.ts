@@ -113,6 +113,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const { id: spaceId } = await params
     const { searchParams } = new URL(request.url)
     const roleFilter = searchParams.get("role") as SpaceRole | null
+    const includePresence = searchParams.get("includePresence") === "true"
 
     // ID 형식 검증
     if (!spaceId || spaceId.length > 100) {
@@ -191,6 +192,32 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       (m) => m.userId === space.ownerId && m.role === SpaceRole.OWNER
     )
 
+    // 🆕 온라인 상태 조회 (includePresence=true인 경우)
+    const onlineUserMap = new Map<string, boolean>()
+    const onlineMemberMap = new Map<string, boolean>()
+    
+    if (includePresence) {
+      try {
+        const socketServerUrl = process.env.SOCKET_SERVER_URL || "http://localhost:3001"
+        const presenceRes = await fetch(`${socketServerUrl}/presence/${spaceId}`, {
+          headers: { "Content-Type": "application/json" },
+          cache: "no-store",
+        })
+        
+        if (presenceRes.ok) {
+          const presenceData = await presenceRes.json()
+          // userId 기반 맵 생성
+          presenceData.onlineUsers?.forEach((u: { userId?: string; memberId?: string }) => {
+            if (u.userId) onlineUserMap.set(u.userId, true)
+            if (u.memberId) onlineMemberMap.set(u.memberId, true)
+          })
+        }
+      } catch (presenceError) {
+        console.warn("[Members API] Failed to fetch presence data:", presenceError)
+        // 프레즌스 조회 실패해도 멤버 목록은 반환
+      }
+    }
+
     const formattedMembers = members.map((m) => ({
       id: m.id,
       spaceId: m.spaceId,
@@ -203,6 +230,12 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       guestSession: m.guestSession,
       createdAt: m.createdAt,
       updatedAt: m.updatedAt,
+      // 🆕 온라인 상태 (includePresence=true인 경우에만)
+      ...(includePresence && {
+        isOnline: m.userId 
+          ? onlineUserMap.has(m.userId) 
+          : onlineMemberMap.has(m.id),
+      }),
     }))
 
     // 원본 소유자를 목록에 추가 (SpaceMember에 없는 경우)
@@ -219,8 +252,18 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         guestSession: null,
         createdAt: new Date(),
         updatedAt: new Date(),
+        ...(includePresence && {
+          isOnline: onlineUserMap.has(space.ownerId),
+        }),
       })
     }
+
+    // 🆕 역할별 온라인 수 계산
+    const onlineCounts = includePresence ? {
+      OWNER: formattedMembers.filter((m) => m.role === SpaceRole.OWNER && m.isOnline).length,
+      STAFF: formattedMembers.filter((m) => m.role === SpaceRole.STAFF && m.isOnline).length,
+      PARTICIPANT: formattedMembers.filter((m) => m.role === SpaceRole.PARTICIPANT && m.isOnline).length,
+    } : undefined
 
     return NextResponse.json({
       members: formattedMembers,
@@ -230,6 +273,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         STAFF: formattedMembers.filter((m) => m.role === SpaceRole.STAFF).length,
         PARTICIPANT: formattedMembers.filter((m) => m.role === SpaceRole.PARTICIPANT).length,
       },
+      // 🆕 온라인 수 (includePresence=true인 경우에만)
+      ...(includePresence && { onlineCounts }),
     })
   } catch (error) {
     console.error("[Members API] Failed to fetch members:", error)
@@ -242,7 +287,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
 // ============================================
 // POST /api/spaces/[id]/members - 멤버 추가
-// - OWNER 임명: SuperAdmin만 가능
+// - OWNER 임명: OWNER 또는 SuperAdmin 가능
 // - STAFF 임명: OWNER 또는 SuperAdmin 가능
 // ============================================
 export async function POST(request: NextRequest, { params }: RouteParams) {
@@ -280,19 +325,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const userIsSuperAdmin = await isSuperAdmin(userId)
     const userIsOwner = await isSpaceOwner(spaceId, userId)
 
-    // OWNER 임명은 SuperAdmin만 가능
-    if (targetRole === SpaceRole.OWNER) {
-      if (!userIsSuperAdmin) {
-        return NextResponse.json(
-          { error: "Only SuperAdmin can appoint OWNER" },
-          { status: 403 }
-        )
-      }
-    } else {
-      // STAFF/PARTICIPANT 임명은 OWNER 또는 SuperAdmin
-      if (!userIsSuperAdmin && !userIsOwner) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-      }
+    // 모든 역할 임명은 OWNER 또는 SuperAdmin
+    if (!userIsSuperAdmin && !userIsOwner) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
     // 자기 자신을 스태프로 추가하는 것 방지 (SuperAdmin은 예외)
@@ -407,9 +442,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
 // ============================================
 // PATCH /api/spaces/[id]/members - 역할 변경
-// - OWNER로 변경: SuperAdmin만 가능
-// - STAFF로 변경: OWNER 또는 SuperAdmin
-// - OWNER 양도: 현재 OWNER가 다른 사용자에게 양도
+// - OWNER로 승격: OWNER 또는 SuperAdmin 가능
+// - OWNER에서 강등: SuperAdmin만 가능
+// - STAFF/PARTICIPANT 변경: OWNER 또는 SuperAdmin
 // ============================================
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
@@ -451,19 +486,32 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const userIsSuperAdmin = await isSuperAdmin(userId)
     const userIsOwner = await isSpaceOwner(spaceId, userId)
 
-    // OWNER로 변경은 SuperAdmin만 가능
-    if (body.newRole === SpaceRole.OWNER) {
-      if (!userIsSuperAdmin) {
-        return NextResponse.json(
-          { error: "Only SuperAdmin can assign OWNER role" },
-          { status: 403 }
-        )
-      }
-    } else {
-      // STAFF/PARTICIPANT 변경은 OWNER 또는 SuperAdmin
-      if (!userIsSuperAdmin && !userIsOwner) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-      }
+    // 기본 권한 검증: OWNER 또는 SuperAdmin만 역할 변경 가능
+    if (!userIsSuperAdmin && !userIsOwner) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
+
+    // 대상 멤버의 현재 역할 확인 (OWNER 강등 검증용)
+    const currentMember = await prisma.spaceMember.findUnique({
+      where: {
+        spaceId_userId: {
+          spaceId,
+          userId: body.userId,
+        },
+      },
+      select: { role: true },
+    })
+
+    // OWNER에서 강등하는 경우 SuperAdmin만 가능
+    if (
+      currentMember?.role === SpaceRole.OWNER &&
+      body.newRole !== SpaceRole.OWNER &&
+      !userIsSuperAdmin
+    ) {
+      return NextResponse.json(
+        { error: "Only SuperAdmin can demote OWNER" },
+        { status: 403 }
+      )
     }
 
     // 대상 사용자 존재 확인

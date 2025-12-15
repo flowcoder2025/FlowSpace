@@ -5,4 +5,4 @@
 export { MemberList } from "./MemberList"
 export { MemberSearchInput } from "./MemberSearchInput"
 export { RoleBadge, getRoleLabel, getRoleColor } from "./RoleBadge"
-export { StaffManagement } from "./StaffManagement"
+export { MemberManagement } from "./MemberManagement"

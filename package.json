@@ -31,6 +31,7 @@
     "clsx": "^2.1.0",
     "livekit-client": "^2.16.0",
     "livekit-server-sdk": "^2.14.2",
+    "lucide-react": "^0.561.0",
     "next": "^15.0.0",
     "next-auth": "^5.0.0-beta.25",
     "phaser": "^3.90.0",
