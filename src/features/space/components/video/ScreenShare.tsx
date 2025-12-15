@@ -432,11 +432,11 @@ export function ScreenShare({
         </div>
       </div>
 
-      {/* 🎬 OSD 알림 (자동 사라짐) - 녹화 취소/완료/에러 등 */}
+      {/* 🎬 OSD 알림 (자동 사라짐) - 화면 상단 중앙 */}
       {notification && (
         <div
           className={cn(
-            "absolute bottom-3 left-3 right-3 z-10 flex items-center justify-between gap-2 rounded-md px-3 py-2 text-white shadow-lg backdrop-blur-sm transition-all duration-300",
+            "absolute left-1/2 top-4 z-20 -translate-x-1/2 flex items-center justify-between gap-2 rounded-md px-4 py-2 text-white shadow-lg backdrop-blur-sm transition-all duration-300",
             notification.type === "success" && "bg-green-600/90",
             notification.type === "info" && "bg-blue-600/90",
             notification.type === "error" && "bg-red-600/90"
