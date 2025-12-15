@@ -163,6 +163,20 @@ SpaceLayout
 - 음소거 상태 표시
 - 발화 중 표시 (isSpeaking)
 - 풀스크린/PIP 모드
+- 🔧 화면 공유 시 `object-contain` 적용 (크롭 방지)
+
+**화면 공유 처리**:
+```tsx
+// 화면 공유는 object-contain (잘리지 않음), 일반 비디오는 object-cover (꽉 채움)
+className={cn(
+  "absolute inset-0 size-full z-0",
+  isScreenShare ? "object-contain bg-black" : "object-cover",
+  ...
+)}
+```
+
+> ⚠️ **참고**: 본인의 화면 공유는 `ScreenShareOverlay`가 아닌 `VideoTile`에서 렌더링됩니다.
+> `SpaceLayout`에서 `activeScreenShare.participantId !== resolvedUserId` 조건으로 타인의 화면만 오버레이로 표시합니다.
 
 ### 3.3 ControlBar.tsx
 
@@ -500,3 +514,4 @@ DEBUG=socket.io* npm run socket:dev
 | 2025-12-10 | 시스템 안내 메시지 추가 (조작 가이드: WASD, Space, E키) |
 | 2025-12-11 | 귓속말/파티 시스템 추가 (ChatTabs, whisper/party 이벤트) |
 | 2025-12-11 | 추가 훅 문서화 (useChatStorage, useNotificationSound, useMediaDevices) |
+| 2025-12-16 | 화면 공유 크롭 문제 해결 (VideoTile object-contain 적용) |
