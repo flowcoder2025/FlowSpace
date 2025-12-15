@@ -210,6 +210,16 @@ function SpaceLayoutContent({
     setMessages((prev) => prev.filter((msg) => msg.id !== data.messageId))
   }, [])
 
+  // ⚡ 메시지 ID 업데이트 핸들러 (Optimistic Broadcasting용)
+  // tempId → realId로 변환하여 삭제 기능 등이 제대로 작동하도록 함
+  const handleMessageIdUpdate = useCallback((tempId: string, realId: string) => {
+    setMessages((prev) =>
+      prev.map((msg) =>
+        msg.id === tempId ? { ...msg, id: realId } : msg
+      )
+    )
+  }, [])
+
   // Socket connection for game position sync (🔒 sessionToken으로 서버 검증)
   const {
     players,
@@ -236,6 +246,7 @@ function SpaceLayoutContent({
     onWhisperError: handleWhisperError,      // 📬 귓속말 에러
     onAnnouncement: handleAnnouncement,      // 📢 공지 수신
     onMessageDeleted: handleMessageDeleted,  // 🗑️ 메시지 삭제
+    onMessageIdUpdate: handleMessageIdUpdate, // ⚡ Optimistic ID 업데이트
     onAdminError: handleAdminError,          // 🛡️ 관리 에러
     onChatError: handleChatError,            // 🔇 채팅 에러 (음소거 등)
   })
@@ -562,7 +573,8 @@ function SpaceLayoutContent({
       )}
 
       {/* Main Content - ZEP 스타일 플로팅 레이아웃 */}
-      <div className="relative flex-1 overflow-hidden bg-[#1a1a2e]">
+      {/* 🎬 id="game-panel": 녹화 OSD 알림의 Portal 타겟 */}
+      <div id="game-panel" className="relative flex-1 overflow-hidden bg-[#1a1a2e]">
         {/* Game Canvas - 전체 영역 */}
         <GameCanvas
           playerId={resolvedUserId}

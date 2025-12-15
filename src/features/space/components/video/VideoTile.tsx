@@ -1,6 +1,7 @@
 "use client"
 
 import { useRef, useEffect, useState, useCallback } from "react"
+import { createPortal } from "react-dom"
 import { cn } from "@/lib/utils"
 import { Text, Button } from "@/components/ui"
 import { useScreenRecorder } from "../../hooks"
@@ -469,30 +470,53 @@ export function VideoTile({
         </div>
       )}
 
-      {/* 🎬 OSD 알림 (자동 사라짐) - 화면 상단 중앙 */}
-      {notification && (
-        <div
-          className={cn(
-            "absolute left-1/2 top-2 z-20 -translate-x-1/2 flex items-center justify-between gap-2 rounded-md px-3 py-2 text-white shadow-lg backdrop-blur-sm transition-all duration-300",
-            notification.type === "success" && "bg-green-600/90",
-            notification.type === "info" && "bg-blue-600/90",
-            notification.type === "error" && "bg-red-600/90"
-          )}
-        >
-          <Text size="xs" className="font-medium">
-            {notification.message}
-          </Text>
-          <button
-            onClick={clearNotification}
-            className="shrink-0 rounded p-0.5 hover:bg-white/20"
-            aria-label="알림 닫기"
+      {/* 🎬 OSD 알림 (자동 사라짐)
+          - 전체화면: 전체화면 정중앙에 표시
+          - 일반 타일: Portal로 게임 패널(#game-panel) 정중앙에 표시
+      */}
+      {notification && (() => {
+        const osdContent = (
+          <div
+            className={cn(
+              "flex items-center justify-between gap-2 rounded-md px-3 py-2 text-white shadow-lg backdrop-blur-sm transition-all duration-300",
+              notification.type === "success" && "bg-green-600/90",
+              notification.type === "info" && "bg-blue-600/90",
+              notification.type === "error" && "bg-red-600/90",
+              // 전체화면: 상단 중앙 (기존 위치)
+              isFullscreen && "absolute left-1/2 top-1/2 z-20 -translate-x-1/2 -translate-y-1/2",
+              // 일반 타일: Portal 타겟 내에서 정중앙
+              !isFullscreen && "fixed left-1/2 top-1/2 z-[9999] -translate-x-1/2 -translate-y-1/2"
+            )}
           >
-            <svg className="size-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-      )}
+            <Text size="xs" className="font-medium">
+              {notification.message}
+            </Text>
+            <button
+              onClick={clearNotification}
+              className="shrink-0 rounded p-0.5 hover:bg-white/20"
+              aria-label="알림 닫기"
+            >
+              <svg className="size-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        )
+
+        // 전체화면: VideoTile 내부에 렌더링
+        if (isFullscreen) {
+          return osdContent
+        }
+
+        // 일반 타일: 게임 패널에 Portal로 렌더링
+        const gamePanel = typeof document !== "undefined" ? document.getElementById("game-panel") : null
+        if (gamePanel) {
+          return createPortal(osdContent, gamePanel)
+        }
+
+        // 폴백: 그냥 렌더링
+        return osdContent
+      })()}
 
       {/* 녹화 에러 표시 (영구 - 명시적 확인 필요) */}
       {recordingError && !notification && (
