@@ -3,6 +3,7 @@
 import { useRef, useEffect, useState, useMemo, useCallback } from "react"
 import { cn } from "@/lib/utils"
 import { Text, Button } from "@/components/ui"
+import { useScreenRecorder } from "../../hooks"
 import type { ParticipantTrack } from "../../livekit/types"
 
 const IS_DEV = process.env.NODE_ENV === "development"
@@ -47,6 +48,21 @@ function calculateFitSize(
   }
 }
 
+/**
+ * 녹화 시간 포맷 (MM:SS 또는 HH:MM:SS)
+ */
+function formatRecordingTime(seconds: number): string {
+  const hrs = Math.floor(seconds / 3600)
+  const mins = Math.floor((seconds % 3600) / 60)
+  const secs = seconds % 60
+  const pad = (n: number) => n.toString().padStart(2, "0")
+
+  if (hrs > 0) {
+    return `${pad(hrs)}:${pad(mins)}:${pad(secs)}`
+  }
+  return `${pad(mins)}:${pad(secs)}`
+}
+
 // ============================================
 // Icons
 // ============================================
@@ -69,6 +85,18 @@ const PipIcon = () => (
   </svg>
 )
 
+const RecordIcon = () => (
+  <svg className="size-4" fill="currentColor" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="8" />
+  </svg>
+)
+
+const StopIcon = () => (
+  <svg className="size-4" fill="currentColor" viewBox="0 0 24 24">
+    <rect x="6" y="6" width="12" height="12" rx="1" />
+  </svg>
+)
+
 // ============================================
 // ScreenShare Props
 // ============================================
@@ -76,13 +104,26 @@ interface ScreenShareProps {
   track: ParticipantTrack
   onClose?: () => void
   className?: string
+  /** 🎬 녹화 권한 (STAFF/OWNER/SuperAdmin) */
+  canRecord?: boolean
+  /** 🏷️ 공간 이름 (녹화 파일명용) */
+  spaceName?: string
+  /** 🔊 오디오 트랙 (화면+음성 녹화용) */
+  audioTrack?: MediaStreamTrack
 }
 
 // ============================================
 // ScreenShare Component
 // Large view for screen share presentations
 // ============================================
-export function ScreenShare({ track, onClose, className }: ScreenShareProps) {
+export function ScreenShare({
+  track,
+  onClose,
+  className,
+  canRecord = false,
+  spaceName = "recording",
+  audioTrack,
+}: ScreenShareProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
@@ -102,7 +143,23 @@ export function ScreenShare({ track, onClose, className }: ScreenShareProps) {
     return !!document.pictureInPictureEnabled
   })
 
-  // 🔧 클라이언트에서 윈도우 크기 초기화 (lazy useState init으로 이동됨)
+  // 🎬 녹화 훅
+  const {
+    recordingState,
+    recordingTime,
+    startRecording,
+    stopRecording,
+    error: recordingError,
+  } = useScreenRecorder({
+    spaceName,
+    onError: (err) => {
+      if (IS_DEV) {
+        console.error("[ScreenShare] Recording error:", err)
+      }
+    },
+  })
+
+  const isRecording = recordingState === "recording" || recordingState === "paused"
 
   // 🔧 displaySize를 useMemo로 계산 (setState 없이 파생 상태)
   const displaySize = useMemo<DisplayDimensions | null>(() => {
@@ -141,10 +198,7 @@ export function ScreenShare({ track, onClose, className }: ScreenShareProps) {
       video.srcObject = stream
 
       // 🔧 loadedmetadata 이벤트 콜백에서만 크기 설정 (React 19 규칙 준수)
-      // - Effect body에서 직접 setState 호출 금지
-      // - 이벤트 콜백에서 setState 호출은 허용
       const handleLoadedMetadata = () => {
-        // 우선: video element의 크기 사용
         const { videoWidth, videoHeight } = video
         if (videoWidth > 0 && videoHeight > 0) {
           setVideoNativeSize({ width: videoWidth, height: videoHeight })
@@ -170,7 +224,6 @@ export function ScreenShare({ track, onClose, className }: ScreenShareProps) {
       }
 
       video.addEventListener("loadedmetadata", handleLoadedMetadata)
-      // 이미 로드된 경우: 이벤트를 수동 디스패치하여 콜백 실행 (Effect body에서 직접 setState 방지)
       if (video.readyState >= 1 && video.videoWidth > 0) {
         video.dispatchEvent(new Event("loadedmetadata"))
       }
@@ -186,7 +239,7 @@ export function ScreenShare({ track, onClose, className }: ScreenShareProps) {
     }
   }, [track.screenTrack])
 
-  // 🔧 윈도우 리사이즈 시 windowSize 상태 업데이트 → useMemo가 displaySize 자동 재계산
+  // 🔧 윈도우 리사이즈 시 windowSize 상태 업데이트
   useEffect(() => {
     const handleResize = () => {
       setWindowSize({ width: window.innerWidth, height: window.innerHeight })
@@ -233,7 +286,7 @@ export function ScreenShare({ track, onClose, className }: ScreenShareProps) {
     }
   }, [track.participantName])
 
-  // 컨테이너를 전체화면으로 (Portal이 렌더링될 수 있도록)
+  // 컨테이너를 전체화면으로
   const handleFullscreen = useCallback(() => {
     if (containerRef.current) {
       if (document.fullscreenElement) {
@@ -260,6 +313,15 @@ export function ScreenShare({ track, onClose, className }: ScreenShareProps) {
     }
   }, [])
 
+  // 🎬 녹화 시작/중지 핸들러
+  const handleToggleRecording = useCallback(async () => {
+    if (isRecording) {
+      await stopRecording()
+    } else if (track.screenTrack) {
+      await startRecording(track.screenTrack, audioTrack)
+    }
+  }, [isRecording, track.screenTrack, audioTrack, startRecording, stopRecording])
+
   if (!track.screenTrack) {
     return null
   }
@@ -274,20 +336,14 @@ export function ScreenShare({ track, onClose, className }: ScreenShareProps) {
       )}
     >
       {/* Screen share video */}
-      {/* 🔧 PIP 원리: JavaScript로 픽셀 단위 크기 직접 계산 */}
-      {/* - displaySize: 비디오 비율과 뷰포트를 기반으로 계산된 픽셀 크기 */}
-      {/* - CSS 자동 계산에 의존하지 않음 → 일관된 동작 보장 */}
       <video
         ref={videoRef}
         autoPlay
         playsInline
         style={{
           display: "block",
-          // 🔧 픽셀 단위로 명시적 크기 지정 (PIP와 동일 원리)
-          // displaySize가 없을 때는 80vw x 80vh 기본값 사용
           width: displaySize ? `${displaySize.width}px` : "80vw",
           height: displaySize ? `${displaySize.height}px` : "auto",
-          // 전체화면일 때는 뷰포트 전체 사용
           maxWidth: isFullscreen ? "100vw" : "calc(100vw - 64px)",
           maxHeight: isFullscreen ? "100vh" : "calc(100vh - 64px)",
           objectFit: "contain",
@@ -295,7 +351,17 @@ export function ScreenShare({ track, onClose, className }: ScreenShareProps) {
         className="rounded-lg"
       />
 
-      {/* Header overlay - 비디오 위에 절대 위치 */}
+      {/* 🔴 녹화 중 표시 - 화면 좌상단 */}
+      {isRecording && (
+        <div className="absolute left-3 top-12 flex items-center gap-2 rounded-md bg-red-600/90 px-3 py-1.5 text-white shadow-lg">
+          <div className="size-2.5 animate-pulse rounded-full bg-white" />
+          <Text size="sm" className="font-medium tracking-wider">
+            REC {formatRecordingTime(recordingTime)}
+          </Text>
+        </div>
+      )}
+
+      {/* Header overlay */}
       <div className="absolute inset-x-0 top-0 flex items-center justify-between rounded-t-lg bg-linear-to-b from-black/70 to-transparent p-3">
         <div className="flex items-center gap-2">
           <div className="size-2 animate-pulse rounded-full bg-red-500" />
@@ -304,6 +370,23 @@ export function ScreenShare({ track, onClose, className }: ScreenShareProps) {
           </Text>
         </div>
         <div className="flex items-center gap-1">
+          {/* 🎬 녹화 버튼 - 권한이 있을 때만 표시 */}
+          {canRecord && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleToggleRecording}
+              disabled={recordingState === "stopping"}
+              className={cn(
+                "size-8 p-0 text-white hover:bg-white/20",
+                isRecording && "bg-red-600/80 hover:bg-red-600"
+              )}
+              title={isRecording ? "녹화 중지" : "녹화 시작"}
+              aria-label={isRecording ? "화면 녹화 중지" : "화면 녹화 시작"}
+            >
+              {isRecording ? <StopIcon /> : <RecordIcon />}
+            </Button>
+          )}
           {/* PIP Button */}
           {canPip && (
             <Button
@@ -345,6 +428,13 @@ export function ScreenShare({ track, onClose, className }: ScreenShareProps) {
           )}
         </div>
       </div>
+
+      {/* 녹화 에러 표시 */}
+      {recordingError && (
+        <div className="absolute bottom-3 left-3 right-3 rounded-md bg-red-600/90 px-3 py-2 text-white">
+          <Text size="sm">{recordingError}</Text>
+        </div>
+      )}
     </div>
   )
 }
@@ -356,17 +446,34 @@ export function ScreenShare({ track, onClose, className }: ScreenShareProps) {
 interface ScreenShareOverlayProps {
   track: ParticipantTrack
   onClose: () => void
+  /** 🎬 녹화 권한 (STAFF/OWNER/SuperAdmin) */
+  canRecord?: boolean
+  /** 🏷️ 공간 이름 (녹화 파일명용) */
+  spaceName?: string
+  /** 🔊 오디오 트랙 (화면+음성 녹화용) */
+  audioTrack?: MediaStreamTrack
 }
 
-export function ScreenShareOverlay({ track, onClose }: ScreenShareOverlayProps) {
+export function ScreenShareOverlay({
+  track,
+  onClose,
+  canRecord,
+  spaceName,
+  audioTrack,
+}: ScreenShareOverlayProps) {
   if (!track.screenTrack) {
     return null
   }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80">
-      {/* 🔧 ScreenShare가 자체적으로 픽셀 크기 계산 → 외부 컨테이너 불필요 */}
-      <ScreenShare track={track} onClose={onClose} />
+      <ScreenShare
+        track={track}
+        onClose={onClose}
+        canRecord={canRecord}
+        spaceName={spaceName}
+        audioTrack={audioTrack}
+      />
     </div>
   )
 }

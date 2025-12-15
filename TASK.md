@@ -1,48 +1,67 @@
-# TASK: 화면공유 동적 컨테이너 구현
+# TASK: 화면공유 녹화 기능 구현
 
 > **상태**: ✅ 완료
-> **시작일**: 2025-12-15
-> **완료일**: 2025-12-15
-> **범위**: ScreenShare 컴포넌트 비율 동적 조절
+> **시작일**: 2025-12-16
+> **범위**: ScreenShare 컴포넌트에 녹화 기능 추가
 
 ---
 
 ## 🎯 목표
 
 ### 핵심 요구사항
-1. **동적 컨테이너** - 화면공유 비율에 맞춰 컨테이너 크기 자동 조절
-2. **전체화면 표시** - 어떤 해상도/비율로 공유해도 수신자는 전체를 볼 수 있음
-3. **채팅창 기능 보존** - 전체화면 시 채팅 오버레이 기능 유지
+1. **녹화 권한 제어** - STAFF, OWNER, SuperAdmin만 녹화 가능
+2. **녹화 표시** - 공유 중인 화면에 🔴 녹화 중 표시
+3. **로컬 저장** - 사용자가 저장 위치 직접 선택
+4. **파일명 형식** - `YYYY_MM_DD_HH:MM:SS_공간이름.webm`
+5. **화면+음성 녹화** - 화면과 오디오 모두 포함
 
-### 배경
-- 현재: 고정 컨테이너(`max-w-6xl h-[80vh]`) + `object-contain`
-- 문제: 공유자 모니터 해상도에 따라 표시 크기/여백이 달라짐
-- 해결: 비디오 실제 비율에 맞춰 컨테이너 동적 조절
+### 기술 스택
+- MediaRecorder API (클라이언트 측 녹화)
+- File System Access API (저장 위치 선택)
+- WebM 포맷 (video/webm;codecs=vp9,opus)
 
 ---
 
 ## 📋 Phase 1: 분석 ✅
 
-- [x] Serena로 ScreenShare 컴포넌트 심볼 구조 분석
-- [x] 전체화면 채팅창 구현 방식 파악 (Portal, z-index)
-- [x] 영향받는 컴포넌트 식별
+- [x] ScreenShare 컴포넌트 구조 분석 (Serena)
+- [x] 역할/권한 정보 전달 경로 파악
+- [x] 오디오 트랙 접근 방법 확인
 
 ---
 
-## 📋 Phase 2: 구현 ✅
+## 📋 Phase 2: useScreenRecorder 훅 구현 ✅
 
-- [x] ScreenShare.tsx - 비디오 해상도 추적 상태 추가 (`aspectRatio`)
-- [x] ScreenShare.tsx - 동적 aspect-ratio 스타일 적용
-- [x] ScreenShareOverlay.tsx - 비율 기반 컨테이너 수정 (`h-[80vh]` → `max-h-[80vh]`)
-- [x] 전체화면 모드 채팅창 z-index 유지 확인
+- [x] MediaRecorder 초기화 로직
+- [x] 녹화 시작/중지/일시정지 기능
+- [x] Blob 데이터 수집 및 파일 생성
+- [x] 파일명 생성 유틸리티 (날짜_공간명)
+- [x] showSaveFilePicker API 통합
 
 ---
 
-## 📋 Phase 3: 검증 ✅
+## 📋 Phase 3: ScreenShare UI 수정 ✅
+
+- [x] 녹화 버튼 추가 (권한 있는 사용자만 표시)
+- [x] 녹화 중 표시 UI (🔴 REC + 타이머)
+- [x] 녹화 컨트롤 (시작/중지)
+- [x] Props 확장 (역할 정보, 공간명)
+
+---
+
+## 📋 Phase 4: 권한 연동 ✅
+
+- [x] SpaceLayout에서 역할 정보 전달
+- [x] canRecord 권한 계산 로직
+- [x] ScreenShareOverlay Props 확장
+
+---
+
+## 📋 Phase 5: 검증 ✅
 
 - [x] 타입체크 통과
 - [x] 빌드 테스트 통과
-- [ ] 다양한 비율 시나리오 테스트 (수동 테스트 권장)
+- [ ] 실제 녹화 테스트 (수동 확인 필요)
 
 ---
 
@@ -50,17 +69,21 @@
 
 | Phase | 상태 | 완료일 |
 |-------|------|--------|
-| Phase 1: 분석 | ✅ 완료 | 2025-12-15 |
-| Phase 2: 구현 | ✅ 완료 | 2025-12-15 |
-| Phase 3: 검증 | ✅ 완료 | 2025-12-15 |
+| Phase 1: 분석 | ✅ 완료 | 2025-12-16 |
+| Phase 2: useScreenRecorder | ✅ 완료 | 2025-12-16 |
+| Phase 3: ScreenShare UI | ✅ 완료 | 2025-12-16 |
+| Phase 4: 권한 연동 | ✅ 완료 | 2025-12-16 |
+| Phase 5: 검증 | ✅ 완료 | 2025-12-16 |
 
 ---
 
-## 🔧 수정 대상 파일
+## 🔧 수정/생성 대상 파일
 
 | 파일 | 변경 내용 |
 |-----|----------|
-| `src/features/space/components/video/ScreenShare.tsx` | 동적 비율 추적 및 스타일 적용 |
+| `src/features/space/hooks/useScreenRecorder.ts` | 신규 - 녹화 훅 |
+| `src/features/space/components/video/ScreenShare.tsx` | 녹화 UI 추가 |
+| `src/features/space/components/SpaceLayout.tsx` | 역할 정보 전달 |
 
 ---
 
@@ -68,5 +91,6 @@
 
 | 날짜 | 내용 |
 |-----|------|
-| 2025-12-15 | TASK.md 초기화 - 화면공유 동적 컨테이너 태스크 시작 |
-| 2025-12-15 | 구현 완료 - aspectRatio 상태, loadedmetadata 이벤트, 동적 스타일 적용 |
+| 2025-12-16 | TASK.md 초기화 - 화면공유 녹화 기능 태스크 시작 |
+| 2025-12-16 | Phase 1-5 완료 - 녹화 기능 구현 및 검증 완료 |
+

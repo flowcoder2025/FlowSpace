@@ -660,6 +660,9 @@ function SpaceLayoutContent({
         <ScreenShareOverlay
           track={activeScreenShare}
           onClose={handleCloseScreenShareOverlay}
+          canRecord={userRole === "OWNER" || userRole === "STAFF" || isSuperAdmin}
+          spaceName={spaceName}
+          audioTrack={activeScreenShare.audioTrack}
         />
       )}
     </div>
