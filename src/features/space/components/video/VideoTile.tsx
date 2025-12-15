@@ -349,7 +349,9 @@ export function VideoTile({ track, isLocal = false, isScreenShare = false, class
         playsInline
         muted={isLocal} // Mute local video to prevent feedback
         className={cn(
-          "absolute inset-0 size-full object-cover z-0",
+          "absolute inset-0 size-full z-0",
+          // 🔧 화면 공유는 object-contain (잘리지 않음), 일반 비디오는 object-cover (꽉 채움)
+          isScreenShare ? "object-contain bg-black" : "object-cover",
           !shouldShowVideo && "opacity-0 pointer-events-none"
         )}
       />

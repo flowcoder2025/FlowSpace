@@ -1,11 +1,51 @@
 "use client"
 
-import { useRef, useEffect, useState, useCallback } from "react"
+import { useRef, useEffect, useState, useCallback, useLayoutEffect } from "react"
 import { cn } from "@/lib/utils"
 import { Text, Button } from "@/components/ui"
 import type { ParticipantTrack } from "../../livekit/types"
 
 const IS_DEV = process.env.NODE_ENV === "development"
+
+// ============================================
+// 🔧 PIP 원리 기반 크기 계산 유틸리티
+// ============================================
+interface DisplayDimensions {
+  width: number
+  height: number
+}
+
+/**
+ * 비디오 비율을 유지하면서 컨테이너에 맞는 크기 계산
+ * PIP가 작동하는 핵심 원리와 동일
+ */
+function calculateFitSize(
+  videoWidth: number,
+  videoHeight: number,
+  maxWidth: number,
+  maxHeight: number
+): DisplayDimensions {
+  if (videoWidth <= 0 || videoHeight <= 0) {
+    return { width: maxWidth, height: maxHeight }
+  }
+
+  const videoRatio = videoWidth / videoHeight
+  const containerRatio = maxWidth / maxHeight
+
+  if (videoRatio > containerRatio) {
+    // 비디오가 컨테이너보다 넓음 → width 기준으로 맞춤
+    return {
+      width: maxWidth,
+      height: Math.round(maxWidth / videoRatio),
+    }
+  } else {
+    // 비디오가 컨테이너보다 높음 → height 기준으로 맞춤
+    return {
+      width: Math.round(maxHeight * videoRatio),
+      height: maxHeight,
+    }
+  }
+}
 
 // ============================================
 // Icons
@@ -47,33 +87,110 @@ export function ScreenShare({ track, onClose, className }: ScreenShareProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [isPipActive, setIsPipActive] = useState(false)
+
+  // 🔧 PIP 원리 기반: 비디오 원본 크기와 계산된 표시 크기
+  const [displaySize, setDisplaySize] = useState<DisplayDimensions | null>(null)
+  const [videoNativeSize, setVideoNativeSize] = useState<{ width: number; height: number } | null>(null)
+
   // Check PIP availability (lazy initialization for client-side only)
   const [canPip] = useState(() => {
     if (typeof document === "undefined") return false
     return !!document.pictureInPictureEnabled
   })
 
-  // Attach screen track to video element
+  // 🔧 크기 재계산 함수 - 비디오 크기와 뷰포트 기반
+  const recalculateSize = useCallback(() => {
+    if (!videoNativeSize) return
+
+    const padding = 64 // 좌우상하 패딩 (32px * 2)
+    const maxWidth = window.innerWidth - padding
+    const maxHeight = window.innerHeight - padding
+
+    const newSize = calculateFitSize(
+      videoNativeSize.width,
+      videoNativeSize.height,
+      maxWidth,
+      maxHeight
+    )
+
+    setDisplaySize(newSize)
+
+    if (IS_DEV) {
+      console.log("[ScreenShare] Size recalculated:", {
+        videoNative: videoNativeSize,
+        viewport: { width: window.innerWidth, height: window.innerHeight },
+        display: newSize,
+      })
+    }
+  }, [videoNativeSize])
+
+  // Attach screen track to video element + 원본 크기 추출
   useEffect(() => {
     const video = videoRef.current
     if (!video) return
 
     if (track.screenTrack) {
+      // 🔧 방법 1: MediaStreamTrack.getSettings()에서 직접 크기 가져오기 (더 신뢰성 높음)
+      const settings = track.screenTrack.getSettings()
+      if (settings.width && settings.height) {
+        setVideoNativeSize({ width: settings.width, height: settings.height })
+        if (IS_DEV) {
+          console.log("[ScreenShare] 🎯 Track settings size:", {
+            width: settings.width,
+            height: settings.height,
+          })
+        }
+      }
+
+      // 비디오 스트림 연결
       const stream = new MediaStream([track.screenTrack])
       video.srcObject = stream
-    } else {
-      // 🔧 srcObject만 null하면 브라우저가 마지막 프레임을 유지할 수 있음
-      video.srcObject = null
-      video.load()
-    }
 
-    return () => {
-      if (video) {
+      // 🔧 방법 2: video loadedmetadata에서 크기 가져오기 (백업)
+      const handleLoadedMetadata = () => {
+        const { videoWidth, videoHeight } = video
+        if (videoWidth > 0 && videoHeight > 0) {
+          setVideoNativeSize({ width: videoWidth, height: videoHeight })
+          if (IS_DEV) {
+            console.log("[ScreenShare] Video metadata size:", {
+              width: videoWidth,
+              height: videoHeight,
+            })
+          }
+        }
+      }
+
+      video.addEventListener("loadedmetadata", handleLoadedMetadata)
+      // 이미 로드된 경우 즉시 처리
+      if (video.readyState >= 1 && video.videoWidth > 0) {
+        handleLoadedMetadata()
+      }
+
+      return () => {
+        video.removeEventListener("loadedmetadata", handleLoadedMetadata)
         video.srcObject = null
         video.load()
       }
+    } else {
+      video.srcObject = null
+      video.load()
     }
   }, [track.screenTrack])
+
+  // 🔧 비디오 원본 크기가 변경되면 표시 크기 재계산
+  useLayoutEffect(() => {
+    if (videoNativeSize) {
+      recalculateSize()
+    }
+  }, [videoNativeSize, recalculateSize])
+
+  // 🔧 윈도우 리사이즈 시 크기 재계산
+  useEffect(() => {
+    if (!videoNativeSize) return
+
+    window.addEventListener("resize", recalculateSize)
+    return () => window.removeEventListener("resize", recalculateSize)
+  }, [videoNativeSize, recalculateSize])
 
   // Fullscreen change detection
   useEffect(() => {
@@ -149,24 +266,34 @@ export function ScreenShare({ track, onClose, className }: ScreenShareProps) {
       ref={containerRef}
       className={cn(
         "relative rounded-lg bg-black",
-        // 전체화면이 아닐 때만 overflow-hidden (Portal이 잘리지 않도록)
-        !isFullscreen && "overflow-hidden",
-        isFullscreen && "fixed inset-0 z-50",
+        isFullscreen && "fixed inset-0 z-50 flex items-center justify-center",
         className
       )}
     >
       {/* Screen share video */}
-      {/* 🔧 absolute z-0: 전체화면 시 Portal로 렌더링되는 채팅 오버레이(z-max)가 위에 표시되도록 */}
-      {/* z-index는 positioned 요소(relative/absolute/fixed)에만 적용됨 */}
+      {/* 🔧 PIP 원리: JavaScript로 픽셀 단위 크기 직접 계산 */}
+      {/* - displaySize: 비디오 비율과 뷰포트를 기반으로 계산된 픽셀 크기 */}
+      {/* - CSS 자동 계산에 의존하지 않음 → 일관된 동작 보장 */}
       <video
         ref={videoRef}
         autoPlay
         playsInline
-        className="absolute inset-0 size-full object-contain z-0"
+        style={{
+          display: "block",
+          // 🔧 픽셀 단위로 명시적 크기 지정 (PIP와 동일 원리)
+          // displaySize가 없을 때는 80vw x 80vh 기본값 사용
+          width: displaySize ? `${displaySize.width}px` : "80vw",
+          height: displaySize ? `${displaySize.height}px` : "auto",
+          // 전체화면일 때는 뷰포트 전체 사용
+          maxWidth: isFullscreen ? "100vw" : "calc(100vw - 64px)",
+          maxHeight: isFullscreen ? "100vh" : "calc(100vh - 64px)",
+          objectFit: "contain",
+        }}
+        className="rounded-lg"
       />
 
-      {/* Header overlay */}
-      <div className="absolute inset-x-0 top-0 flex items-center justify-between bg-gradient-to-b from-black/70 to-transparent p-3">
+      {/* Header overlay - 비디오 위에 절대 위치 */}
+      <div className="absolute inset-x-0 top-0 flex items-center justify-between rounded-t-lg bg-linear-to-b from-black/70 to-transparent p-3">
         <div className="flex items-center gap-2">
           <div className="size-2 animate-pulse rounded-full bg-red-500" />
           <Text size="sm" className="text-white">
@@ -234,12 +361,9 @@ export function ScreenShareOverlay({ track, onClose }: ScreenShareOverlayProps) 
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
-      <ScreenShare
-        track={track}
-        onClose={onClose}
-        className="h-[80vh] w-full max-w-6xl"
-      />
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80">
+      {/* 🔧 ScreenShare가 자체적으로 픽셀 크기 계산 → 외부 컨테이너 불필요 */}
+      <ScreenShare track={track} onClose={onClose} />
     </div>
   )
 }
