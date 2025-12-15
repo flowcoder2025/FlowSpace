@@ -1183,27 +1183,56 @@ io.on("connection", (socket) => {
   socket.on("admin:deleteMessage", async (data: AdminDeleteMessageRequest) => {
     const { spaceId, sessionToken, nickname, playerId } = socket.data
     if (!spaceId || !sessionToken) {
-      socket.emit("admin:error", { action: "deleteMessage", message: "Not connected to space" })
+      socket.emit("admin:error", { action: "deleteMessage", message: "공간에 연결되지 않았습니다." })
+      return
+    }
+
+    // 🔒 권한 검증 (STAFF 이상만 허용)
+    const verification = await verifyAdminPermission(spaceId, sessionToken, "deleteMessage")
+    if (!verification.valid) {
+      socket.emit("admin:error", { action: "deleteMessage", message: verification.error || "권한이 없습니다." })
       return
     }
 
     try {
-      const response = await fetch(
-        `${NEXT_API_URL}/api/spaces/${spaceId}/messages/${data.messageId}`,
-        {
-          method: "DELETE",
-          headers: {
-            "Content-Type": "application/json",
-            Cookie: `next-auth.session-token=${sessionToken.replace("auth-", "")}`,
-          },
-        }
-      )
+      // 메시지 조회
+      const message = await prisma.chatMessage.findUnique({
+        where: { id: data.messageId },
+      })
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        socket.emit("admin:error", { action: "deleteMessage", message: errorData.error || "Delete failed" })
+      if (!message) {
+        socket.emit("admin:error", { action: "deleteMessage", message: "메시지를 찾을 수 없습니다." })
         return
       }
+
+      if (message.spaceId !== spaceId) {
+        socket.emit("admin:error", { action: "deleteMessage", message: "이 공간의 메시지가 아닙니다." })
+        return
+      }
+
+      // 소프트 삭제
+      await prisma.chatMessage.update({
+        where: { id: data.messageId },
+        data: {
+          isDeleted: true,
+          deletedBy: verification.userId,
+          deletedAt: new Date(),
+        },
+      })
+
+      // 이벤트 로그 기록
+      await prisma.spaceEventLog.create({
+        data: {
+          spaceId,
+          userId: verification.userId,
+          eventType: "MESSAGE_DELETED",
+          payload: {
+            messageId: data.messageId,
+            deletedBy: verification.userId,
+            originalSenderId: message.senderId,
+          },
+        },
+      })
 
       const deletedData: MessageDeletedData = {
         messageId: data.messageId,
@@ -1216,7 +1245,7 @@ io.on("connection", (socket) => {
       console.log(`[Socket] Message ${data.messageId} deleted by ${nickname} in space ${spaceId}`)
     } catch (error) {
       console.error("[Socket] Delete message error:", error)
-      socket.emit("admin:error", { action: "deleteMessage", message: "Internal error" })
+      socket.emit("admin:error", { action: "deleteMessage", message: "내부 오류가 발생했습니다." })
     }
   })
 
