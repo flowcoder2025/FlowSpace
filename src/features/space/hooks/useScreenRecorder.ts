@@ -7,9 +7,18 @@ import { useState, useRef, useCallback } from "react"
 // ============================================
 export type RecordingState = "idle" | "recording" | "paused" | "stopping"
 
+export type NotificationType = "info" | "success" | "error"
+
+interface Notification {
+  type: NotificationType
+  message: string
+}
+
 interface UseScreenRecorderOptions {
   spaceName: string
   onError?: (error: string) => void
+  /** OSD 알림 표시 시간 (ms), 기본값 4000 */
+  notificationDuration?: number
 }
 
 interface UseScreenRecorderReturn {
@@ -23,8 +32,12 @@ interface UseScreenRecorderReturn {
   stopRecording: () => Promise<void>
   /** 녹화 일시정지/재개 */
   togglePause: () => void
-  /** 에러 메시지 */
+  /** 에러 메시지 (영구 표시) */
   error: string | null
+  /** OSD 알림 (자동 사라짐) */
+  notification: Notification | null
+  /** 알림 수동 닫기 */
+  clearNotification: () => void
 }
 
 // ============================================
@@ -55,10 +68,15 @@ function supportsFileSystemAccess(): boolean {
   return typeof window !== "undefined" && "showSaveFilePicker" in window
 }
 
+type SaveResult =
+  | { status: "saved"; fileName: string }
+  | { status: "cancelled" }
+  | { status: "error"; message: string }
+
 /**
  * 파일 저장 (File System Access API 또는 다운로드 폴백)
  */
-async function saveFile(blob: Blob, fileName: string): Promise<void> {
+async function saveFile(blob: Blob, fileName: string): Promise<SaveResult> {
   if (supportsFileSystemAccess() && window.showSaveFilePicker) {
     try {
       const handle = await window.showSaveFilePicker({
@@ -73,25 +91,30 @@ async function saveFile(blob: Blob, fileName: string): Promise<void> {
       const writable = await handle.createWritable()
       await writable.write(blob)
       await writable.close()
-      return
+      return { status: "saved", fileName }
     } catch (err) {
-      // 사용자가 취소하거나 에러 발생 시 다운로드 폴백
+      // 사용자가 취소한 경우 (에러 아님)
       if ((err as Error).name === "AbortError") {
-        throw new Error("저장이 취소되었습니다")
+        return { status: "cancelled" }
       }
       console.warn("[useScreenRecorder] File System API failed, falling back to download:", err)
     }
   }
 
   // 폴백: 자동 다운로드
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement("a")
-  a.href = url
-  a.download = fileName
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
-  URL.revokeObjectURL(url)
+  try {
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = fileName
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    return { status: "saved", fileName }
+  } catch (err) {
+    return { status: "error", message: "파일 다운로드에 실패했습니다" }
+  }
 }
 
 // ============================================
@@ -100,15 +123,39 @@ async function saveFile(blob: Blob, fileName: string): Promise<void> {
 export function useScreenRecorder({
   spaceName,
   onError,
+  notificationDuration = 4000,
 }: UseScreenRecorderOptions): UseScreenRecorderReturn {
   const [recordingState, setRecordingState] = useState<RecordingState>("idle")
   const [recordingTime, setRecordingTime] = useState(0)
   const [error, setError] = useState<string | null>(null)
+  const [notification, setNotification] = useState<Notification | null>(null)
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
   const timerRef = useRef<NodeJS.Timeout | null>(null)
   const startTimeRef = useRef<number>(0)
+  const notificationTimerRef = useRef<NodeJS.Timeout | null>(null)
+
+  // 알림 표시 (자동 사라짐)
+  const showNotification = useCallback((type: NotificationType, message: string) => {
+    // 기존 타이머 클리어
+    if (notificationTimerRef.current) {
+      clearTimeout(notificationTimerRef.current)
+    }
+    setNotification({ type, message })
+    // 자동 사라짐
+    notificationTimerRef.current = setTimeout(() => {
+      setNotification(null)
+    }, notificationDuration)
+  }, [notificationDuration])
+
+  // 알림 수동 닫기
+  const clearNotification = useCallback(() => {
+    if (notificationTimerRef.current) {
+      clearTimeout(notificationTimerRef.current)
+    }
+    setNotification(null)
+  }, [])
 
   // 에러 핸들링
   const handleError = useCallback((message: string) => {
@@ -199,27 +246,34 @@ export function useScreenRecorder({
 
     return new Promise<void>((resolve) => {
       recorder.onstop = async () => {
-        try {
-          const blob = new Blob(chunksRef.current, { type: "video/webm" })
-          const fileName = generateFileName(spaceName)
+        const blob = new Blob(chunksRef.current, { type: "video/webm" })
+        const fileName = generateFileName(spaceName)
 
-          await saveFile(blob, fileName)
+        const result = await saveFile(blob, fileName)
 
-          chunksRef.current = []
-          setRecordingState("idle")
-          setRecordingTime(0)
-          resolve()
-        } catch (err) {
-          console.error("[useScreenRecorder] Failed to save recording:", err)
-          handleError((err as Error).message || "녹화 저장에 실패했습니다")
-          setRecordingState("idle")
-          resolve()
+        chunksRef.current = []
+        setRecordingState("idle")
+        setRecordingTime(0)
+
+        // 결과에 따른 알림 표시
+        switch (result.status) {
+          case "saved":
+            showNotification("success", `녹화가 저장되었습니다`)
+            break
+          case "cancelled":
+            showNotification("info", "녹화 저장이 취소되었습니다")
+            break
+          case "error":
+            handleError(result.message)
+            break
         }
+
+        resolve()
       }
 
       recorder.stop()
     })
-  }, [recordingState, spaceName, stopTimer, handleError])
+  }, [recordingState, spaceName, stopTimer, handleError, showNotification])
 
   // 일시정지/재개
   const togglePause = useCallback(() => {
@@ -244,6 +298,8 @@ export function useScreenRecorder({
     stopRecording,
     togglePause,
     error,
+    notification,
+    clearNotification,
   }
 }
 

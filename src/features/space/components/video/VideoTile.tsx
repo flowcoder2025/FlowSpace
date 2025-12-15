@@ -128,8 +128,11 @@ export function VideoTile({
     startRecording,
     stopRecording,
     error: recordingError,
+    notification,
+    clearNotification,
   } = useScreenRecorder({
     spaceName,
+    notificationDuration: 4000, // 4초 후 자동 사라짐
     onError: (err) => {
       if (IS_DEV) {
         console.error("[VideoTile] Recording error:", err)
@@ -466,9 +469,34 @@ export function VideoTile({
         </div>
       )}
 
-      {/* 녹화 에러 표시 */}
-      {recordingError && (
-        <div className="absolute inset-x-2 top-2 rounded-md bg-red-600/90 px-2 py-1 text-white">
+      {/* 🎬 OSD 알림 (자동 사라짐) - 녹화 취소/완료/에러 등 */}
+      {notification && (
+        <div
+          className={cn(
+            "absolute inset-x-2 top-10 z-10 flex items-center justify-between gap-2 rounded-md px-3 py-2 text-white shadow-lg backdrop-blur-sm transition-all duration-300",
+            notification.type === "success" && "bg-green-600/90",
+            notification.type === "info" && "bg-blue-600/90",
+            notification.type === "error" && "bg-red-600/90"
+          )}
+        >
+          <Text size="xs" className="font-medium">
+            {notification.message}
+          </Text>
+          <button
+            onClick={clearNotification}
+            className="shrink-0 rounded p-0.5 hover:bg-white/20"
+            aria-label="알림 닫기"
+          >
+            <svg className="size-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      )}
+
+      {/* 녹화 에러 표시 (영구 - 명시적 확인 필요) */}
+      {recordingError && !notification && (
+        <div className="absolute inset-x-2 top-10 z-10 rounded-md bg-red-600/90 px-3 py-2 text-white shadow-lg">
           <Text size="xs">{recordingError}</Text>
         </div>
       )}
