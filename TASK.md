@@ -61,6 +61,7 @@
 
 - [x] 타입체크 통과
 - [x] 빌드 테스트 통과
+- [x] 본인 화면 공유 녹화 기능 추가 (VideoTile + ParticipantPanel)
 - [ ] 실제 녹화 테스트 (수동 확인 필요)
 
 ---
@@ -82,8 +83,10 @@
 | 파일 | 변경 내용 |
 |-----|----------|
 | `src/features/space/hooks/useScreenRecorder.ts` | 신규 - 녹화 훅 |
-| `src/features/space/components/video/ScreenShare.tsx` | 녹화 UI 추가 |
-| `src/features/space/components/SpaceLayout.tsx` | 역할 정보 전달 |
+| `src/features/space/components/video/ScreenShare.tsx` | 녹화 UI 추가 (타인 화면공유) |
+| `src/features/space/components/video/VideoTile.tsx` | 녹화 UI 추가 (본인 화면공유) |
+| `src/features/space/components/video/ParticipantPanel.tsx` | canRecord/spaceName props 전달 |
+| `src/features/space/components/SpaceLayout.tsx` | 역할 정보 및 녹화 권한 전달 |
 
 ---
 

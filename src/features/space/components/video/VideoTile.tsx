@@ -2,7 +2,8 @@
 
 import { useRef, useEffect, useState, useCallback } from "react"
 import { cn } from "@/lib/utils"
-import { Text } from "@/components/ui"
+import { Text, Button } from "@/components/ui"
+import { useScreenRecorder } from "../../hooks"
 import type { ParticipantTrack } from "../../livekit/types"
 
 const IS_DEV = process.env.NODE_ENV === "development"
@@ -60,6 +61,33 @@ const PipIcon = () => (
   </svg>
 )
 
+const RecordIcon = () => (
+  <svg className="size-3.5" fill="currentColor" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="8" />
+  </svg>
+)
+
+const StopIcon = () => (
+  <svg className="size-3.5" fill="currentColor" viewBox="0 0 24 24">
+    <rect x="6" y="6" width="12" height="12" rx="1" />
+  </svg>
+)
+
+/**
+ * 녹화 시간 포맷 (MM:SS 또는 HH:MM:SS)
+ */
+function formatRecordingTime(seconds: number): string {
+  const hrs = Math.floor(seconds / 3600)
+  const mins = Math.floor((seconds % 3600) / 60)
+  const secs = seconds % 60
+  const pad = (n: number) => n.toString().padStart(2, "0")
+
+  if (hrs > 0) {
+    return `${pad(hrs)}:${pad(mins)}:${pad(secs)}`
+  }
+  return `${pad(mins)}:${pad(secs)}`
+}
+
 // ============================================
 // VideoTile Props
 // ============================================
@@ -68,12 +96,23 @@ interface VideoTileProps {
   isLocal?: boolean
   isScreenShare?: boolean  // 화면공유 전용 타일
   className?: string
+  /** 🎬 녹화 권한 (본인 화면 공유일 때만 적용) */
+  canRecord?: boolean
+  /** 🏷️ 공간 이름 (녹화 파일명용) */
+  spaceName?: string
 }
 
 // ============================================
 // VideoTile Component
 // ============================================
-export function VideoTile({ track, isLocal = false, isScreenShare = false, className }: VideoTileProps) {
+export function VideoTile({
+  track,
+  isLocal = false,
+  isScreenShare = false,
+  className,
+  canRecord = false,
+  spaceName = "recording",
+}: VideoTileProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -81,6 +120,25 @@ export function VideoTile({ track, isLocal = false, isScreenShare = false, class
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [isPipActive, setIsPipActive] = useState(false)
   const [showControls, setShowControls] = useState(false)
+
+  // 🎬 녹화 훅 (본인 화면 공유일 때만 사용)
+  const {
+    recordingState,
+    recordingTime,
+    startRecording,
+    stopRecording,
+    error: recordingError,
+  } = useScreenRecorder({
+    spaceName,
+    onError: (err) => {
+      if (IS_DEV) {
+        console.error("[VideoTile] Recording error:", err)
+      }
+    },
+  })
+
+  const isRecording = recordingState === "recording" || recordingState === "paused"
+  const showRecordButton = isLocal && isScreenShare && canRecord
 
   // 화면공유 모드일 때는 screenTrack, 아니면 videoTrack 사용
   const activeVideoTrack = isScreenShare ? track.screenTrack : track.videoTrack
@@ -319,6 +377,15 @@ export function VideoTile({ track, isLocal = false, isScreenShare = false, class
     }
   }, [])
 
+  // 🎬 녹화 시작/중지 핸들러
+  const handleToggleRecording = useCallback(async () => {
+    if (isRecording) {
+      await stopRecording()
+    } else if (track.screenTrack) {
+      await startRecording(track.screenTrack, track.audioTrack)
+    }
+  }, [isRecording, track.screenTrack, track.audioTrack, startRecording, stopRecording])
+
   // hasAudio, isAudioMuted, canPip는 렌더링에서만 사용
   const hasAudio = !!track.audioTrack
   const isAudioMuted = track.isAudioMuted ?? !hasAudio
@@ -389,6 +456,23 @@ export function VideoTile({ track, isLocal = false, isScreenShare = false, class
         <audio ref={audioRef} autoPlay playsInline className="hidden" />
       )}
 
+      {/* 🔴 녹화 중 표시 - 화면 좌상단 */}
+      {isRecording && (
+        <div className="absolute left-2 top-2 flex items-center gap-2 rounded-md bg-red-600/90 px-2 py-1 text-white shadow-lg">
+          <div className="size-2 animate-pulse rounded-full bg-white" />
+          <Text size="xs" className="font-medium tracking-wider">
+            REC {formatRecordingTime(recordingTime)}
+          </Text>
+        </div>
+      )}
+
+      {/* 녹화 에러 표시 */}
+      {recordingError && (
+        <div className="absolute inset-x-2 top-2 rounded-md bg-red-600/90 px-2 py-1 text-white">
+          <Text size="xs">{recordingError}</Text>
+        </div>
+      )}
+
       {/* Video controls overlay (top-right) - visible on hover */}
       {/* 🔧 비디오 유무와 관계없이 항상 렌더링 (전체화면은 비디오 없이도 가능) */}
       <div
@@ -397,6 +481,23 @@ export function VideoTile({ track, isLocal = false, isScreenShare = false, class
           showControls || isFullscreen ? "opacity-100" : "opacity-0"
         )}
       >
+        {/* 🎬 녹화 버튼 - 본인 화면 공유일 때만 표시 */}
+        {showRecordButton && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleToggleRecording}
+            disabled={recordingState === "stopping"}
+            className={cn(
+              "size-7 p-0 text-white hover:bg-white/20",
+              isRecording && "bg-red-600/80 hover:bg-red-600"
+            )}
+            title={isRecording ? "녹화 중지" : "녹화 시작"}
+            aria-label={isRecording ? "화면 녹화 중지" : "화면 녹화 시작"}
+          >
+            {isRecording ? <StopIcon /> : <RecordIcon />}
+          </Button>
+        )}
         {/* PIP Button - 비디오가 있을 때만 */}
         {canPip && (
           <button

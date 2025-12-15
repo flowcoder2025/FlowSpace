@@ -593,6 +593,8 @@ function SpaceLayoutContent({
               localParticipantId={resolvedUserId}
               viewMode={participantViewMode}
               onViewModeChange={handleViewModeChange}
+              canRecord={userRole === "OWNER" || userRole === "STAFF" || isSuperAdmin}
+              spaceName={spaceName}
             />
           </div>
         )}
@@ -605,6 +607,8 @@ function SpaceLayoutContent({
               localParticipantId={resolvedUserId}
               viewMode={participantViewMode}
               onViewModeChange={handleViewModeChange}
+              canRecord={userRole === "OWNER" || userRole === "STAFF" || isSuperAdmin}
+              spaceName={spaceName}
               className="h-full"
             />
           </div>

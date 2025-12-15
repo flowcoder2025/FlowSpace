@@ -69,6 +69,10 @@ interface ParticipantPanelProps {
   /** 외부에서 뷰 모드 제어 (선택적) */
   viewMode?: ParticipantViewMode
   onViewModeChange?: (mode: ParticipantViewMode) => void
+  /** 🎬 녹화 권한 (본인 화면 공유 녹화용) */
+  canRecord?: boolean
+  /** 🏷️ 공간 이름 (녹화 파일명용) */
+  spaceName?: string
 }
 
 // ============================================
@@ -106,6 +110,8 @@ export function ParticipantPanel({
   className,
   viewMode: externalViewMode,
   onViewModeChange,
+  canRecord = false,
+  spaceName = "recording",
 }: ParticipantPanelProps) {
   // 내부 상태 (외부 제어가 없을 때 사용)
   const [internalViewMode, setInternalViewMode] = useState<ParticipantViewMode>("sidebar")
@@ -241,6 +247,8 @@ export function ParticipantPanel({
                   track={track}
                   isLocal={track.participantId === localParticipantId}
                   isScreenShare
+                  canRecord={canRecord}
+                  spaceName={spaceName}
                   className="ring-2 ring-primary/50"
                 />
               ))}
@@ -349,6 +357,8 @@ export function ParticipantPanel({
                 track={track}
                 isLocal={track.participantId === localParticipantId}
                 isScreenShare
+                canRecord={canRecord}
+                spaceName={spaceName}
                 className="ring-2 ring-primary/50 w-full aspect-video"
               />
             ))}
