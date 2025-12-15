@@ -13,12 +13,13 @@
 
 ```
 /src/lib
-├── claude.md          # [현재 파일]
-├── utils.ts           # 유틸리티 함수 (cn 등)
-├── prisma.ts          # Prisma 클라이언트 싱글톤
-├── auth.ts            # NextAuth 설정
-├── permissions.ts     # ReBAC 권한 시스템
-└── text-config.ts     # i18n 텍스트 설정
+├── claude.md            # [현재 파일]
+├── utils.ts             # 유틸리티 함수 (cn 등)
+├── prisma.ts            # Prisma 클라이언트 싱글톤
+├── auth.ts              # NextAuth 설정
+├── space-auth.ts        # 📌 공간 권한 미들웨어 (API용)
+├── space-permissions.ts # 📌 역할 비교 유틸리티
+└── text-config.ts       # i18n 텍스트 설정
 ```
 
 ---
@@ -326,6 +327,7 @@ export async function PATCH(req, { params }) {
 
 | 날짜 | 변경 |
 |-----|------|
+| 2025-12-15 | 파일 구조 업데이트 - permissions.ts → space-auth.ts, space-permissions.ts |
 | 2025-12-15 | 권한 시스템 문서 업데이트 - space-auth.ts, space-permissions.ts 추가 |
 | 2025-12-05 | 초기 생성 |
 | 2025-12-05 | /docs 참조 섹션 추가 |

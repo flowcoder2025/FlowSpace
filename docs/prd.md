@@ -279,12 +279,12 @@
 - [x] 채팅 시스템
 - [x] 🔒 세션 검증 및 서버 파생 ID (보안 강화)
 
-### Phase 4: 음성/영상 ✅ 완료 (⚠️ 이슈 있음)
+### Phase 4: 음성/영상 ✅ 완료
 - [x] LiveKit 연동 (LiveKitRoomProvider, useLiveKit)
 - [x] 참가자 비디오 그리드 (VideoTile)
 - [x] 마이크/카메라 토글
 - [x] 화면 공유 (ScreenShare)
-- ⚠️ **알려진 이슈**: 비디오 기능 일부 문제 → 별도 분석 필요
+- [x] 화면 공유 크롭 문제 해결 (VideoTile `object-contain` 적용)
 
 ### Phase 5: 통합 및 Polish 🔄 진행중
 - [x] 전체 플로우 통합
@@ -374,4 +374,5 @@
 - v0.2 (2025-12-06): 자체 개발 방향으로 전환 (Phaser 3 + Socket.io + LiveKit)
 - v0.3 (2025-12-08): Phase 1-4 완료 상태 반영, Phase 5 진행중 업데이트
 - v0.4 (2025-12-11): Phase 5 진행 상황 업데이트 (채팅 시스템, 아바타 색상), Phase 6 추가
+- v0.5 (2025-12-16): Phase 4 비디오 이슈 해결 (화면 공유 크롭 문제)
 

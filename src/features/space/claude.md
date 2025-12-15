@@ -420,10 +420,25 @@ eventBridge.on(GameEvents.PLAYER_MOVED, callback)
 
 ## 7. 알려진 이슈
 
-### 7.1 비디오 기능 문제 (⚠️ 분석 필요)
-- **증상**: [사용자가 보고한 구체적 증상 파악 필요]
-- **영향 범위**: LiveKit 연동, VideoTile
-- **상태**: 분석 예정
+### 7.1 화면 공유 크롭 문제 (✅ 해결됨 - 2025-12-16)
+
+**문제**:
+- 큰 모니터에서 화면 공유 시 영상이 잘려 보임 (aspect ratio 문제)
+- `object-cover`로 인해 비디오가 컨테이너에 맞춰 크롭됨
+
+**해결책 (VideoTile.tsx)**:
+```tsx
+// 화면 공유는 object-contain (잘리지 않음), 일반 비디오는 object-cover (꽉 채움)
+className={cn(
+  "absolute inset-0 size-full z-0",
+  isScreenShare ? "object-contain bg-black" : "object-cover",
+  ...
+)}
+```
+
+**영향 범위**:
+- `VideoTile.tsx` - 화면 공유 렌더링 스타일 변경
+- 본인 화면 공유는 VideoTile에서, 타인 화면 공유는 ScreenShareOverlay에서 렌더링
 
 ### 7.2 아바타 색상 검증 (✅ 해결됨 - 2025-12-09)
 

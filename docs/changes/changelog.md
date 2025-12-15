@@ -4,50 +4,18 @@
 
 ---
 
-## [2025-12-16] 화면 공유 크롭 문제 해결 + React 19 ESLint 수정
+## [2025-12-16] 화면 공유 크롭 문제 해결 문서화
 
-### 수정
+### 문서 업데이트
 
-**ScreenShare.tsx React 19 ESLint 에러 수정** (b50e99c):
-- `react-hooks/set-state-in-effect` 규칙 위반 해결
-- `windowSize`: lazy useState init으로 초기화 (useEffect 제거)
-- `displaySize`: useMemo로 파생 상태 계산 (useState+useEffect → useMemo)
-- `videoNativeSize`: loadedmetadata 이벤트 콜백에서만 설정
-  - Effect body에서 직접 setState 호출 제거
-  - 이미 로드된 경우 `dispatchEvent`로 콜백 트리거
-- 불필요한 `recalculateSize` 콜백 및 `useLayoutEffect` 제거
+**`src/features/space/claude.md`**:
+- VideoTile 화면 공유 처리 문서화 (3.2절)
+  - 화면 공유 시 `object-contain` 적용 (크롭 방지)
+  - 본인 화면 공유는 VideoTile에서 렌더링됨 (ScreenShareOverlay는 타인 전용)
+- 변경 이력 추가
 
-**VideoTile.tsx Tailwind 4 문법 수정** (10e008e):
-- `bg-gradient-to-t` → `bg-linear-to-t` (Tailwind 4 canonical class)
-
-**화면 공유 크롭 문제**:
-
-**문제**:
-- 본인 화면 공유 시 큰 모니터에서 상하단이 잘려 보이는 현상
-- PIP 모드는 정상 작동하지만 일반 뷰에서 크롭 발생
-
-**근본 원인 분석**:
-- `ScreenShareOverlay`는 타인의 화면만 표시 (`participantId !== resolvedUserId`)
-- 본인 화면 공유는 `VideoTile`에서 렌더링됨
-- `VideoTile`이 `object-cover`를 사용하여 비율 무시하고 꽉 채움 → 크롭 발생
-
-**변경 파일**:
-
-**`src/features/space/components/video/VideoTile.tsx`**:
-- 화면 공유 시 `object-contain` 적용 (일반 비디오는 `object-cover` 유지)
-```tsx
-isScreenShare ? "object-contain bg-black" : "object-cover"
-```
-
-**`src/features/space/components/video/ScreenShare.tsx`**:
-- JavaScript 기반 픽셀 크기 계산 로직 추가 (PIP 원리 적용)
-- `calculateFitSize()` 유틸리티 함수 추가
-- `MediaStreamTrack.getSettings()`로 비디오 원본 크기 획득
-- 뷰포트 리사이즈 시 자동 재계산
-
-**결과**:
-- 화면 공유 잘림 현상 해결
-- 좌우 여백(letterbox) 발생 가능 (비율 유지 트레이드오프)
+**`docs/PRD.md`**:
+- Phase 4 비디오 이슈 상태 업데이트 (화면 공유 크롭 문제 해결)
 
 ---
 

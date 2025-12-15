@@ -13,12 +13,22 @@
 ```
 /src/components
 ├── claude.md        # [현재 파일]
-└── /ui              # shadcn/ui + 커스텀 컴포넌트
-    ├── button.tsx
-    ├── card.tsx
-    ├── modal.tsx
-    ├── input.tsx
-    └── index.ts     # 통합 export
+├── /ui              # shadcn/ui + 커스텀 컴포넌트
+│   ├── button.tsx
+│   ├── card.tsx
+│   ├── modal.tsx
+│   ├── input.tsx
+│   └── index.ts     # 통합 export
+│
+├── /space           # 📌 공간 관리 컴포넌트 (SSOT)
+│   ├── MemberManagement.tsx   # 멤버 관리 통합 컴포넌트
+│   ├── MemberList.tsx         # 멤버 목록 (역할별 그룹핑)
+│   ├── MemberSearchInput.tsx  # 멤버 검색 (이메일/이름)
+│   ├── RoleBadge.tsx          # 역할 뱃지 (OWNER/STAFF/PARTICIPANT)
+│   └── index.ts               # 통합 export
+│
+├── /providers       # 전역 프로바이더
+└── UserNav.tsx      # 사용자 네비게이션
 ```
 
 ---
@@ -223,7 +233,79 @@ Transitions:
 
 ---
 
-## 7. 새 컴포넌트 추가 절차
+## 7. Space 컴포넌트 (/space)
+
+> 📌 **SSOT**: 공간 관리 UI의 단일 진실 소스
+
+### 7.1 MemberManagement
+
+멤버 관리 통합 컴포넌트 (Admin/Dashboard 공용)
+
+```tsx
+interface MemberManagementProps {
+  spaceId: string
+  isSuperAdmin?: boolean  // SuperAdmin 권한 (OWNER 임명 가능)
+  isOwner?: boolean       // OWNER 권한 (STAFF 임명/해제 가능)
+  compact?: boolean       // 컴팩트 모드
+  readOnly?: boolean      // 읽기 전용
+}
+```
+
+**사용처**:
+- `/admin/spaces/[id]` - SuperAdmin 공간 관리
+- `/dashboard/spaces/[id]` - OWNER/STAFF 대시보드
+
+### 7.2 MemberList
+
+멤버 목록 컴포넌트 (역할별 그룹핑)
+
+```tsx
+interface MemberListProps {
+  spaceId: string
+  isSuperAdmin?: boolean
+  isOwner?: boolean
+  onlinePlayers?: string[]  // 온라인 참가자 ID 목록
+  compact?: boolean
+  readOnly?: boolean
+}
+```
+
+### 7.3 MemberSearchInput
+
+멤버 검색 컴포넌트 (이메일/이름 검색)
+
+```tsx
+interface MemberSearchInputProps {
+  spaceId?: string          // 공간 내 displayName 검색 시
+  onSelect: (user) => void  // 선택 콜백
+  onCancel?: () => void     // 취소 콜백
+  placeholder?: string
+  compact?: boolean
+}
+```
+
+### 7.4 RoleBadge
+
+역할 뱃지 컴포넌트
+
+```tsx
+interface RoleBadgeProps {
+  role: "OWNER" | "STAFF" | "PARTICIPANT"
+  isSuperAdmin?: boolean  // SuperAdmin 표시
+}
+```
+
+**색상 규칙**:
+| 역할 | 색상 | 의미 |
+|-----|------|------|
+| SuperAdmin | 보라색 | 플랫폼 관리자 |
+| OWNER | 파란색 | 공간 소유자 |
+| STAFF | 초록색 | 운영 스태프 |
+| PARTICIPANT | 회색 | 일반 참가자 |
+
+---
+
+## 8. 새 컴포넌트 추가 절차
 
 > ⚠️ 토큰 효율 원칙: 문서는 요청 시만 작성
 
@@ -237,7 +319,7 @@ Transitions:
 
 ---
 
-## 8. 금지 사항
+## 9. 금지 사항
 
 - ❌ 루트 CLAUDE.md의 버튼 variant 재정의 금지
 - ❌ 토큰 하드코딩 금지 (`bg-[#xxx]` 금지)
@@ -254,3 +336,4 @@ Transitions:
 | 2025-12-05 | 버튼 규칙 동기화 (주사용/예비 분리) | Button 컴포넌트 |
 | 2025-12-05 | 모달 상태도 보강 | Modal 컴포넌트 |
 | 2025-12-05 | /docs 참조 섹션 추가, 토큰 효율 원칙 적용 | 절차 전체 |
+| 2025-12-15 | /space 컴포넌트 섹션 추가 (MemberManagement, RoleBadge 등) | Space 컴포넌트 |
