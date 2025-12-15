@@ -423,7 +423,7 @@ export function VideoTile({ track, isLocal = false, isScreenShare = false, class
       </div>
 
       {/* Overlay info (bottom) */}
-      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-2">
+      <div className="absolute inset-x-0 bottom-0 bg-linear-to-t from-black/70 to-transparent p-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
             {track.isSpeaking && (

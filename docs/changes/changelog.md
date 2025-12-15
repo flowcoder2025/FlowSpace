@@ -4,9 +4,14 @@
 
 ---
 
-## [2025-12-16] 화면 공유 크롭 문제 해결
+## [2025-12-16] 화면 공유 크롭 문제 해결 + Tailwind 4 마이그레이션
 
 ### 수정
+
+**VideoTile.tsx Tailwind 4 문법 수정**:
+- `bg-gradient-to-t` → `bg-linear-to-t` (Tailwind 4 canonical class)
+
+**화면 공유 크롭 문제**:
 
 **문제**:
 - 본인 화면 공유 시 큰 모니터에서 상하단이 잘려 보이는 현상
@@ -34,6 +39,70 @@ isScreenShare ? "object-contain bg-black" : "object-cover"
 **결과**:
 - 화면 공유 잘림 현상 해결
 - 좌우 여백(letterbox) 발생 가능 (비율 유지 트레이드오프)
+
+---
+
+## [2025-12-15] 멤버 관리 시스템 통합 및 닉네임 검증 강화
+
+### 주요 변경 (792aa60)
+
+**MemberManagement 컴포넌트 통합**:
+- `StaffManagement.tsx` 삭제 → `MemberManagement.tsx`로 통합
+- OWNER 권한 확장: SuperAdmin + OWNER 모두 OWNER 추가/강등 가능
+- dashboard/spaces 페이지 `isSuperAdmin` 동적 전달 수정
+
+**닉네임 띄어쓰기 금지** (귓속말 기능 지원):
+- `ParticipantEntryModal`: 입력 시 자동 제거 + 유효성 검사
+- `SpaceSettingsModal`: 입력 시 자동 제거 + 유효성 검사
+- `/api/guest`: 서버측 닉네임 검증 추가
+
+**API 추가**:
+- `/api/spaces/[id]/visit` - 공간 방문 시 자동 PARTICIPANT 등록
+
+**네비게이션 구조 정리**:
+- `/dashboard/page.tsx` 삭제 (불필요한 리디렉션 페이지)
+- 역할별 접근 제어 강화
+
+---
+
+## [2025-12-12] 역할별 네비게이션 시스템 구현 (Phase 1-5)
+
+### Phase 1: 자동 멤버십 생성 (fe89f9e)
+- 공간 생성 시 OWNER 자동 등록
+- 게스트/로그인 사용자 입장 시 PARTICIPANT 자동 등록
+
+### Phase 2: SuperAdmin 전용 /admin 접근 (b2508c3)
+- `/admin/*` 라우트 SuperAdmin 전용 제한
+- 미인증 사용자 리다이렉트 처리
+
+### Phase 3: Owner/Staff용 공간 관리 대시보드 (24d90dd)
+- `/dashboard/spaces/[id]` - 공간 상세 관리 페이지
+- 통계, 멤버 관리, 설정 통합
+
+### Phase 4: Member용 참여 공간 목록 (373cb32)
+- `/my-spaces` - 내가 참여한 공간 목록
+- 역할별 필터링 (OWNER/STAFF/PARTICIPANT)
+
+### Phase 5: 역할별 네비게이션 통합 (59c5bc7)
+- `UserNav` 컴포넌트 역할 기반 메뉴 표시
+- SuperAdmin: 관리자 대시보드 링크
+- Owner/Staff: 공간 관리 링크
+- 일반 사용자: 내 공간 링크
+
+### 멤버 관리 시스템 구현 (cf0a990)
+- `SpaceLayout`에 `isSuperAdmin` prop 추가
+- `MemberList`, `MemberSearchInput`, `RoleBadge` 공용 컴포넌트
+- OWNER/STAFF 임명/해제 기능
+- 온라인/오프라인 상태 표시
+
+### 8가지 버그 수정 (86e1acd)
+- `chatFilter`: all 탭에서 링크 포함 메시지도 표시
+- `admin/logs`: 로그 뷰어 UI 개선 및 타입 에러 수정
+- `admin/spaces`: 공간 설정 저장 시 불필요한 fetch 제거
+- `spaces/api`: 예외 처리 개선 (isOrganizer 누락 방지)
+- `socket-server`: whisper 메시지 타입 불일치 수정
+- `ParticipantPanel`: 그리드 드롭다운 클릭 이벤트 수정
+- `feat(chat)`: 글씨 크기 조절 기능 추가 (A-/A+ 버튼)
 
 ---
 
