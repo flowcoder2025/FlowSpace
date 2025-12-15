@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useEffect, useState, useCallback, useLayoutEffect } from "react"
+import { useRef, useEffect, useState, useMemo, useCallback } from "react"
 import { cn } from "@/lib/utils"
 import { Text, Button } from "@/components/ui"
 import type { ParticipantTrack } from "../../livekit/types"
@@ -88,9 +88,13 @@ export function ScreenShare({ track, onClose, className }: ScreenShareProps) {
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [isPipActive, setIsPipActive] = useState(false)
 
-  // 🔧 PIP 원리 기반: 비디오 원본 크기와 계산된 표시 크기
-  const [displaySize, setDisplaySize] = useState<DisplayDimensions | null>(null)
+  // 🔧 PIP 원리 기반: 비디오 원본 크기
   const [videoNativeSize, setVideoNativeSize] = useState<{ width: number; height: number } | null>(null)
+  // 윈도우 리사이즈 트리거용 상태 (lazy init으로 초기값 설정)
+  const [windowSize, setWindowSize] = useState(() => {
+    if (typeof window === "undefined") return { width: 0, height: 0 }
+    return { width: window.innerWidth, height: window.innerHeight }
+  })
 
   // Check PIP availability (lazy initialization for client-side only)
   const [canPip] = useState(() => {
@@ -98,13 +102,15 @@ export function ScreenShare({ track, onClose, className }: ScreenShareProps) {
     return !!document.pictureInPictureEnabled
   })
 
-  // 🔧 크기 재계산 함수 - 비디오 크기와 뷰포트 기반
-  const recalculateSize = useCallback(() => {
-    if (!videoNativeSize) return
+  // 🔧 클라이언트에서 윈도우 크기 초기화 (lazy useState init으로 이동됨)
+
+  // 🔧 displaySize를 useMemo로 계산 (setState 없이 파생 상태)
+  const displaySize = useMemo<DisplayDimensions | null>(() => {
+    if (!videoNativeSize || windowSize.width === 0) return null
 
     const padding = 64 // 좌우상하 패딩 (32px * 2)
-    const maxWidth = window.innerWidth - padding
-    const maxHeight = window.innerHeight - padding
+    const maxWidth = windowSize.width - padding
+    const maxHeight = windowSize.height - padding
 
     const newSize = calculateFitSize(
       videoNativeSize.width,
@@ -113,16 +119,16 @@ export function ScreenShare({ track, onClose, className }: ScreenShareProps) {
       maxHeight
     )
 
-    setDisplaySize(newSize)
-
     if (IS_DEV) {
-      console.log("[ScreenShare] Size recalculated:", {
+      console.log("[ScreenShare] Size calculated:", {
         videoNative: videoNativeSize,
-        viewport: { width: window.innerWidth, height: window.innerHeight },
+        viewport: windowSize,
         display: newSize,
       })
     }
-  }, [videoNativeSize])
+
+    return newSize
+  }, [videoNativeSize, windowSize])
 
   // Attach screen track to video element + 원본 크기 추출
   useEffect(() => {
@@ -130,24 +136,15 @@ export function ScreenShare({ track, onClose, className }: ScreenShareProps) {
     if (!video) return
 
     if (track.screenTrack) {
-      // 🔧 방법 1: MediaStreamTrack.getSettings()에서 직접 크기 가져오기 (더 신뢰성 높음)
-      const settings = track.screenTrack.getSettings()
-      if (settings.width && settings.height) {
-        setVideoNativeSize({ width: settings.width, height: settings.height })
-        if (IS_DEV) {
-          console.log("[ScreenShare] 🎯 Track settings size:", {
-            width: settings.width,
-            height: settings.height,
-          })
-        }
-      }
-
       // 비디오 스트림 연결
       const stream = new MediaStream([track.screenTrack])
       video.srcObject = stream
 
-      // 🔧 방법 2: video loadedmetadata에서 크기 가져오기 (백업)
+      // 🔧 loadedmetadata 이벤트 콜백에서만 크기 설정 (React 19 규칙 준수)
+      // - Effect body에서 직접 setState 호출 금지
+      // - 이벤트 콜백에서 setState 호출은 허용
       const handleLoadedMetadata = () => {
+        // 우선: video element의 크기 사용
         const { videoWidth, videoHeight } = video
         if (videoWidth > 0 && videoHeight > 0) {
           setVideoNativeSize({ width: videoWidth, height: videoHeight })
@@ -157,13 +154,25 @@ export function ScreenShare({ track, onClose, className }: ScreenShareProps) {
               height: videoHeight,
             })
           }
+          return
+        }
+        // 백업: track settings에서 크기 가져오기
+        const settings = track.screenTrack?.getSettings()
+        if (settings?.width && settings?.height) {
+          setVideoNativeSize({ width: settings.width, height: settings.height })
+          if (IS_DEV) {
+            console.log("[ScreenShare] 🎯 Track settings size:", {
+              width: settings.width,
+              height: settings.height,
+            })
+          }
         }
       }
 
       video.addEventListener("loadedmetadata", handleLoadedMetadata)
-      // 이미 로드된 경우 즉시 처리
+      // 이미 로드된 경우: 이벤트를 수동 디스패치하여 콜백 실행 (Effect body에서 직접 setState 방지)
       if (video.readyState >= 1 && video.videoWidth > 0) {
-        handleLoadedMetadata()
+        video.dispatchEvent(new Event("loadedmetadata"))
       }
 
       return () => {
@@ -177,20 +186,14 @@ export function ScreenShare({ track, onClose, className }: ScreenShareProps) {
     }
   }, [track.screenTrack])
 
-  // 🔧 비디오 원본 크기가 변경되면 표시 크기 재계산
-  useLayoutEffect(() => {
-    if (videoNativeSize) {
-      recalculateSize()
-    }
-  }, [videoNativeSize, recalculateSize])
-
-  // 🔧 윈도우 리사이즈 시 크기 재계산
+  // 🔧 윈도우 리사이즈 시 windowSize 상태 업데이트 → useMemo가 displaySize 자동 재계산
   useEffect(() => {
-    if (!videoNativeSize) return
-
-    window.addEventListener("resize", recalculateSize)
-    return () => window.removeEventListener("resize", recalculateSize)
-  }, [videoNativeSize, recalculateSize])
+    const handleResize = () => {
+      setWindowSize({ width: window.innerWidth, height: window.innerHeight })
+    }
+    window.addEventListener("resize", handleResize)
+    return () => window.removeEventListener("resize", handleResize)
+  }, [])
 
   // Fullscreen change detection
   useEffect(() => {
