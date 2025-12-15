@@ -4,6 +4,39 @@
 
 ---
 
+## [2025-12-16] 화면 공유 크롭 문제 해결
+
+### 수정
+
+**문제**:
+- 본인 화면 공유 시 큰 모니터에서 상하단이 잘려 보이는 현상
+- PIP 모드는 정상 작동하지만 일반 뷰에서 크롭 발생
+
+**근본 원인 분석**:
+- `ScreenShareOverlay`는 타인의 화면만 표시 (`participantId !== resolvedUserId`)
+- 본인 화면 공유는 `VideoTile`에서 렌더링됨
+- `VideoTile`이 `object-cover`를 사용하여 비율 무시하고 꽉 채움 → 크롭 발생
+
+**변경 파일**:
+
+**`src/features/space/components/video/VideoTile.tsx`**:
+- 화면 공유 시 `object-contain` 적용 (일반 비디오는 `object-cover` 유지)
+```tsx
+isScreenShare ? "object-contain bg-black" : "object-cover"
+```
+
+**`src/features/space/components/video/ScreenShare.tsx`**:
+- JavaScript 기반 픽셀 크기 계산 로직 추가 (PIP 원리 적용)
+- `calculateFitSize()` 유틸리티 함수 추가
+- `MediaStreamTrack.getSettings()`로 비디오 원본 크기 획득
+- 뷰포트 리사이즈 시 자동 재계산
+
+**결과**:
+- 화면 공유 잘림 현상 해결
+- 좌우 여백(letterbox) 발생 가능 (비율 유지 트레이드오프)
+
+---
+
 ## [2025-12-11] Phase 6 DB 스키마 확장 구현
 
 ### 데이터베이스 변경
