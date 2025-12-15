@@ -4,11 +4,20 @@
 
 ---
 
-## [2025-12-16] 화면 공유 크롭 문제 해결 + Tailwind 4 마이그레이션
+## [2025-12-16] 화면 공유 크롭 문제 해결 + React 19 ESLint 수정
 
 ### 수정
 
-**VideoTile.tsx Tailwind 4 문법 수정**:
+**ScreenShare.tsx React 19 ESLint 에러 수정** (b50e99c):
+- `react-hooks/set-state-in-effect` 규칙 위반 해결
+- `windowSize`: lazy useState init으로 초기화 (useEffect 제거)
+- `displaySize`: useMemo로 파생 상태 계산 (useState+useEffect → useMemo)
+- `videoNativeSize`: loadedmetadata 이벤트 콜백에서만 설정
+  - Effect body에서 직접 setState 호출 제거
+  - 이미 로드된 경우 `dispatchEvent`로 콜백 트리거
+- 불필요한 `recalculateSize` 콜백 및 `useLayoutEffect` 제거
+
+**VideoTile.tsx Tailwind 4 문법 수정** (10e008e):
 - `bg-gradient-to-t` → `bg-linear-to-t` (Tailwind 4 canonical class)
 
 **화면 공유 크롭 문제**:
