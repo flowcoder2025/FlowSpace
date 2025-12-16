@@ -8,12 +8,12 @@ import * as Phaser from "phaser"
 export const TILESET_CONFIG = {
   TILE_SIZE: 32,
   TILESET_COLS: 16, // 가로 16타일
-  TILESET_ROWS: 12, // 세로 12타일
+  TILESET_ROWS: 14, // 세로 14타일 (학습 공간 타일 추가)
   get WIDTH() {
     return this.TILE_SIZE * this.TILESET_COLS // 512px
   },
   get HEIGHT() {
-    return this.TILE_SIZE * this.TILESET_ROWS // 384px
+    return this.TILE_SIZE * this.TILESET_ROWS // 448px
   },
 }
 
@@ -152,6 +152,42 @@ export const TILE_INDEX = {
   PATH_2: 138,
   BENCH: 139,
   STREETLAMP: 140,
+
+  // Row 10: 학습 공간 - 강의실 타일
+  LECTURE_SEAT_1: 160,      // 강의실 좌석 (일반)
+  LECTURE_SEAT_2: 161,      // 강의실 좌석 (접힌 책상)
+  LECTURE_SEAT_FRONT: 162,  // 강의실 앞줄 좌석
+  PODIUM_L: 163,            // 연단 왼쪽
+  PODIUM_M: 164,            // 연단 중앙
+  PODIUM_R: 165,            // 연단 오른쪽
+  BLACKBOARD_L: 166,        // 칠판 왼쪽
+  BLACKBOARD_M: 167,        // 칠판 중앙
+  BLACKBOARD_R: 168,        // 칠판 오른쪽
+  SCREEN_L: 169,            // 스크린 왼쪽
+  SCREEN_M: 170,            // 스크린 중앙
+  SCREEN_R: 171,            // 스크린 오른쪽
+  PROJECTOR: 172,           // 빔프로젝터
+  LECTURE_DESK: 173,        // 교수 책상
+  STAGE_FLOOR: 174,         // 무대 바닥
+  AISLE: 175,               // 통로
+
+  // Row 11: 학습 공간 - 수업실/멘토링
+  STUDENT_DESK_L: 176,      // 학생 책상 왼쪽
+  STUDENT_DESK_R: 177,      // 학생 책상 오른쪽
+  GROUP_TABLE_TL: 178,      // 그룹 테이블 좌상
+  GROUP_TABLE_TR: 179,      // 그룹 테이블 우상
+  GROUP_TABLE_BL: 180,      // 그룹 테이블 좌하
+  GROUP_TABLE_BR: 181,      // 그룹 테이블 우하
+  MENTOR_TABLE: 182,        // 멘토링 테이블 (원형)
+  MENTOR_CHAIR: 183,        // 멘토링 의자
+  CLASSROOM_DOOR: 184,      // 수업실 문
+  PARTITION_V: 185,         // 세로 파티션
+  PARTITION_H: 186,         // 가로 파티션
+  FLOOR_LECTURE: 187,       // 강의실 바닥
+  FLOOR_CLASSROOM: 188,     // 수업실 바닥
+  FLOOR_MENTORING: 189,     // 멘토링방 바닥
+  CORRIDOR_FLOOR: 190,      // 복도 바닥
+  LOBBY_FLOOR: 191,         // 로비 바닥
 }
 
 // 모던 오피스 색상 팔레트
@@ -244,6 +280,7 @@ export function generateTilesetTexture(scene: Phaser.Scene): void {
   drawDecorationTiles(ctx, TILE_SIZE)
   drawSpecialTiles(ctx, TILE_SIZE)
   drawNatureTiles(ctx, TILE_SIZE)
+  drawLearningSpaceTiles(ctx, TILE_SIZE) // 학습 공간 타일
 
   // Phaser 텍스처로 등록
   scene.textures.addCanvas(key, canvas)
@@ -439,6 +476,428 @@ function drawNatureTiles(ctx: CanvasRenderingContext2D, size: number): void {
   drawStreetLamp(ctx, 12 * size, y1, size)
 
   drawTree(ctx, 0, y2, size, "trunk")
+}
+
+
+// ========================================
+// 학습 공간 타일 (Row 10-11)
+// ========================================
+
+function drawLearningSpaceTiles(ctx: CanvasRenderingContext2D, size: number): void {
+  const row10 = 10 * size // 강의실 타일
+  const row11 = 11 * size // 수업실/멘토링 타일
+
+  // Row 10: 강의실
+  drawLectureSeat(ctx, 0 * size, row10, size, "normal")
+  drawLectureSeat(ctx, 1 * size, row10, size, "desk")
+  drawLectureSeat(ctx, 2 * size, row10, size, "front")
+  drawPodium(ctx, 3 * size, row10, size, "left")
+  drawPodium(ctx, 4 * size, row10, size, "middle")
+  drawPodium(ctx, 5 * size, row10, size, "right")
+  drawBlackboard(ctx, 6 * size, row10, size, "left")
+  drawBlackboard(ctx, 7 * size, row10, size, "middle")
+  drawBlackboard(ctx, 8 * size, row10, size, "right")
+  drawScreen(ctx, 9 * size, row10, size, "left")
+  drawScreen(ctx, 10 * size, row10, size, "middle")
+  drawScreen(ctx, 11 * size, row10, size, "right")
+  drawProjector(ctx, 12 * size, row10, size)
+  drawLectureDesk(ctx, 13 * size, row10, size)
+  drawStageFloor(ctx, 14 * size, row10, size)
+  drawAisle(ctx, 15 * size, row10, size)
+
+  // Row 11: 수업실/멘토링
+  drawStudentDesk(ctx, 0 * size, row11, size, "left")
+  drawStudentDesk(ctx, 1 * size, row11, size, "right")
+  drawGroupTable(ctx, 2 * size, row11, size, "top-left")
+  drawGroupTable(ctx, 3 * size, row11, size, "top-right")
+  drawGroupTable(ctx, 4 * size, row11, size, "bottom-left")
+  drawGroupTable(ctx, 5 * size, row11, size, "bottom-right")
+  drawMentorTable(ctx, 6 * size, row11, size)
+  drawMentorChair(ctx, 7 * size, row11, size)
+  drawClassroomDoor(ctx, 8 * size, row11, size)
+  drawPartition(ctx, 9 * size, row11, size, "vertical")
+  drawPartition(ctx, 10 * size, row11, size, "horizontal")
+  drawLearningFloor(ctx, 11 * size, row11, size, "lecture")
+  drawLearningFloor(ctx, 12 * size, row11, size, "classroom")
+  drawLearningFloor(ctx, 13 * size, row11, size, "mentoring")
+  drawLearningFloor(ctx, 14 * size, row11, size, "corridor")
+  drawLearningFloor(ctx, 15 * size, row11, size, "lobby")
+}
+
+// 강의실 좌석 (극장식)
+function drawLectureSeat(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  size: number,
+  type: "normal" | "desk" | "front"
+): void {
+  const chairColor = "#4A5568" // 의자 색상
+  const deskColor = "#A0AEC0"  // 책상 색상
+  const seatPad = size * 0.15
+
+  // 의자 등받이
+  ctx.fillStyle = chairColor
+  ctx.fillRect(x + seatPad, y + seatPad, size - 2 * seatPad, size * 0.3)
+
+  // 의자 좌석
+  ctx.fillStyle = type === "front" ? "#2D3748" : chairColor
+  ctx.fillRect(x + seatPad, y + size * 0.35, size - 2 * seatPad, size * 0.35)
+
+  // 접이식 책상 (desk 타입만)
+  if (type === "desk") {
+    ctx.fillStyle = deskColor
+    ctx.fillRect(x + size * 0.1, y + size * 0.55, size * 0.8, size * 0.15)
+  }
+
+  // 의자 다리
+  ctx.fillStyle = "#1A202C"
+  ctx.fillRect(x + seatPad + 2, y + size * 0.7, 3, size * 0.25)
+  ctx.fillRect(x + size - seatPad - 5, y + size * 0.7, 3, size * 0.25)
+}
+
+// 연단/포디움
+function drawPodium(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  size: number,
+  part: "left" | "middle" | "right"
+): void {
+  const podiumColor = "#744210" // 나무 색상
+  const topColor = "#D69E2E"    // 상단 강조
+
+  ctx.fillStyle = podiumColor
+
+  if (part === "left") {
+    ctx.fillRect(x, y + size * 0.3, size, size * 0.7)
+    ctx.fillStyle = topColor
+    ctx.fillRect(x, y + size * 0.2, size, size * 0.1)
+  } else if (part === "middle") {
+    ctx.fillRect(x, y + size * 0.3, size, size * 0.7)
+    ctx.fillStyle = topColor
+    ctx.fillRect(x, y + size * 0.2, size, size * 0.1)
+    // 마이크
+    ctx.fillStyle = "#1A202C"
+    ctx.beginPath()
+    ctx.arc(x + size / 2, y + size * 0.4, 3, 0, Math.PI * 2)
+    ctx.fill()
+  } else {
+    ctx.fillRect(x, y + size * 0.3, size, size * 0.7)
+    ctx.fillStyle = topColor
+    ctx.fillRect(x, y + size * 0.2, size, size * 0.1)
+  }
+}
+
+// 칠판
+function drawBlackboard(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  size: number,
+  part: "left" | "middle" | "right"
+): void {
+  const boardColor = "#1A365D" // 진한 청록색
+  const frameColor = "#744210" // 프레임
+
+  // 프레임
+  ctx.fillStyle = frameColor
+  ctx.fillRect(x, y + size * 0.1, size, size * 0.8)
+
+  // 칠판 면
+  ctx.fillStyle = boardColor
+  ctx.fillRect(x + 2, y + size * 0.15, size - 4, size * 0.7)
+
+  // 분필 자국 (중앙에만)
+  if (part === "middle") {
+    ctx.strokeStyle = "#E2E8F0"
+    ctx.lineWidth = 1
+    ctx.beginPath()
+    ctx.moveTo(x + 6, y + size * 0.35)
+    ctx.lineTo(x + size - 6, y + size * 0.35)
+    ctx.stroke()
+    ctx.beginPath()
+    ctx.moveTo(x + 6, y + size * 0.55)
+    ctx.lineTo(x + size * 0.7, y + size * 0.55)
+    ctx.stroke()
+  }
+}
+
+// 스크린
+function drawScreen(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  size: number,
+  part: "left" | "middle" | "right"
+): void {
+  const screenColor = "#EDF2F7" // 밝은 회색
+  const frameColor = "#2D3748"
+
+  // 프레임
+  ctx.fillStyle = frameColor
+  ctx.fillRect(x, y + size * 0.05, size, size * 0.9)
+
+  // 스크린 면
+  ctx.fillStyle = screenColor
+  ctx.fillRect(x + 2, y + size * 0.1, size - 4, size * 0.8)
+
+  // 프레젠테이션 내용 (중앙에만)
+  if (part === "middle") {
+    ctx.fillStyle = "#4299E1"
+    ctx.fillRect(x + 6, y + size * 0.25, size * 0.6, size * 0.15)
+    ctx.fillStyle = "#A0AEC0"
+    ctx.fillRect(x + 6, y + size * 0.5, size * 0.5, size * 0.08)
+    ctx.fillRect(x + 6, y + size * 0.65, size * 0.7, size * 0.08)
+  }
+}
+
+// 빔프로젝터
+function drawProjector(ctx: CanvasRenderingContext2D, x: number, y: number, size: number): void {
+  const bodyColor = "#2D3748"
+
+  // 본체
+  ctx.fillStyle = bodyColor
+  ctx.fillRect(x + size * 0.2, y + size * 0.3, size * 0.6, size * 0.4)
+
+  // 렌즈
+  ctx.fillStyle = "#4299E1"
+  ctx.beginPath()
+  ctx.arc(x + size * 0.3, y + size * 0.5, size * 0.1, 0, Math.PI * 2)
+  ctx.fill()
+
+  // 빛 효과
+  ctx.fillStyle = "rgba(66, 153, 225, 0.3)"
+  ctx.beginPath()
+  ctx.moveTo(x + size * 0.2, y + size * 0.5)
+  ctx.lineTo(x, y + size * 0.8)
+  ctx.lineTo(x, y + size * 0.2)
+  ctx.closePath()
+  ctx.fill()
+}
+
+// 교수 책상
+function drawLectureDesk(ctx: CanvasRenderingContext2D, x: number, y: number, size: number): void {
+  const deskColor = "#744210"
+
+  ctx.fillStyle = deskColor
+  ctx.fillRect(x + size * 0.1, y + size * 0.4, size * 0.8, size * 0.5)
+
+  // 상판
+  ctx.fillStyle = "#D69E2E"
+  ctx.fillRect(x + size * 0.05, y + size * 0.35, size * 0.9, size * 0.1)
+
+  // 서랍
+  ctx.fillStyle = "#553C0E"
+  ctx.fillRect(x + size * 0.55, y + size * 0.5, size * 0.25, size * 0.3)
+}
+
+// 무대 바닥
+function drawStageFloor(ctx: CanvasRenderingContext2D, x: number, y: number, size: number): void {
+  ctx.fillStyle = "#553C0E"
+  ctx.fillRect(x, y, size, size)
+
+  // 나무결 패턴
+  ctx.strokeStyle = "#744210"
+  ctx.lineWidth = 1
+  for (let i = 0; i < 4; i++) {
+    ctx.beginPath()
+    ctx.moveTo(x, y + (size / 4) * i + size / 8)
+    ctx.lineTo(x + size, y + (size / 4) * i + size / 8)
+    ctx.stroke()
+  }
+}
+
+// 통로
+function drawAisle(ctx: CanvasRenderingContext2D, x: number, y: number, size: number): void {
+  ctx.fillStyle = "#718096"
+  ctx.fillRect(x, y, size, size)
+
+  // 카펫 패턴
+  ctx.fillStyle = "#4A5568"
+  ctx.fillRect(x + size * 0.1, y, size * 0.8, size)
+}
+
+// 학생 책상
+function drawStudentDesk(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  size: number,
+  side: "left" | "right"
+): void {
+  const deskColor = "#E2E8F0"
+  const legColor = "#718096"
+
+  // 책상 상판
+  ctx.fillStyle = deskColor
+  ctx.fillRect(x + size * 0.05, y + size * 0.3, size * 0.9, size * 0.4)
+
+  // 다리
+  ctx.fillStyle = legColor
+  if (side === "left") {
+    ctx.fillRect(x + size * 0.1, y + size * 0.7, size * 0.15, size * 0.25)
+  } else {
+    ctx.fillRect(x + size * 0.75, y + size * 0.7, size * 0.15, size * 0.25)
+  }
+
+  // 책/노트
+  ctx.fillStyle = "#4299E1"
+  ctx.fillRect(x + size * 0.3, y + size * 0.35, size * 0.4, size * 0.08)
+}
+
+// 그룹 테이블 (4분할)
+function drawGroupTable(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  size: number,
+  corner: "top-left" | "top-right" | "bottom-left" | "bottom-right"
+): void {
+  const tableColor = "#E2E8F0"
+  const borderColor = "#A0AEC0"
+
+  ctx.fillStyle = tableColor
+  ctx.fillRect(x, y, size, size)
+
+  // 테두리 (연결된 느낌)
+  ctx.strokeStyle = borderColor
+  ctx.lineWidth = 2
+
+  if (corner === "top-left") {
+    ctx.strokeRect(x, y, size, size)
+  } else if (corner === "top-right") {
+    ctx.beginPath()
+    ctx.moveTo(x, y)
+    ctx.lineTo(x + size, y)
+    ctx.lineTo(x + size, y + size)
+    ctx.stroke()
+  } else if (corner === "bottom-left") {
+    ctx.beginPath()
+    ctx.moveTo(x, y)
+    ctx.lineTo(x, y + size)
+    ctx.lineTo(x + size, y + size)
+    ctx.stroke()
+  } else {
+    ctx.beginPath()
+    ctx.moveTo(x + size, y)
+    ctx.lineTo(x + size, y + size)
+    ctx.lineTo(x, y + size)
+    ctx.stroke()
+  }
+}
+
+// 멘토링 테이블 (원형)
+function drawMentorTable(ctx: CanvasRenderingContext2D, x: number, y: number, size: number): void {
+  const tableColor = "#805AD5" // 보라색 테이블
+
+  ctx.fillStyle = tableColor
+  ctx.beginPath()
+  ctx.arc(x + size / 2, y + size / 2, size * 0.4, 0, Math.PI * 2)
+  ctx.fill()
+
+  // 테두리
+  ctx.strokeStyle = "#553C9A"
+  ctx.lineWidth = 2
+  ctx.stroke()
+}
+
+// 멘토링 의자
+function drawMentorChair(ctx: CanvasRenderingContext2D, x: number, y: number, size: number): void {
+  const chairColor = "#9F7AEA" // 밝은 보라
+
+  // 좌석
+  ctx.fillStyle = chairColor
+  ctx.beginPath()
+  ctx.arc(x + size / 2, y + size / 2, size * 0.3, 0, Math.PI * 2)
+  ctx.fill()
+
+  // 등받이
+  ctx.fillStyle = "#805AD5"
+  ctx.beginPath()
+  ctx.arc(x + size / 2, y + size * 0.25, size * 0.25, Math.PI, 0)
+  ctx.fill()
+}
+
+// 수업실 문
+function drawClassroomDoor(ctx: CanvasRenderingContext2D, x: number, y: number, size: number): void {
+  const doorColor = "#744210"
+  const glassColor = "rgba(66, 153, 225, 0.3)"
+
+  // 문틀
+  ctx.fillStyle = "#553C0E"
+  ctx.fillRect(x + size * 0.1, y, size * 0.8, size)
+
+  // 문
+  ctx.fillStyle = doorColor
+  ctx.fillRect(x + size * 0.15, y + size * 0.05, size * 0.7, size * 0.9)
+
+  // 유리창
+  ctx.fillStyle = glassColor
+  ctx.fillRect(x + size * 0.25, y + size * 0.15, size * 0.5, size * 0.35)
+
+  // 손잡이
+  ctx.fillStyle = "#D69E2E"
+  ctx.beginPath()
+  ctx.arc(x + size * 0.7, y + size * 0.55, size * 0.05, 0, Math.PI * 2)
+  ctx.fill()
+}
+
+// 파티션
+function drawPartition(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  size: number,
+  orientation: "vertical" | "horizontal"
+): void {
+  const partitionColor = "#CBD5E0"
+  const frameColor = "#A0AEC0"
+
+  if (orientation === "vertical") {
+    ctx.fillStyle = frameColor
+    ctx.fillRect(x + size * 0.4, y, size * 0.2, size)
+    ctx.fillStyle = partitionColor
+    ctx.fillRect(x + size * 0.42, y + size * 0.05, size * 0.16, size * 0.9)
+  } else {
+    ctx.fillStyle = frameColor
+    ctx.fillRect(x, y + size * 0.4, size, size * 0.2)
+    ctx.fillStyle = partitionColor
+    ctx.fillRect(x + size * 0.05, y + size * 0.42, size * 0.9, size * 0.16)
+  }
+}
+
+// 학습 공간 바닥
+function drawLearningFloor(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  size: number,
+  type: "lecture" | "classroom" | "mentoring" | "corridor" | "lobby"
+): void {
+  const colors: Record<string, string> = {
+    lecture: "#2D3748",    // 진한 회색 (강의실)
+    classroom: "#F7FAFC",  // 밝은 회색 (수업실)
+    mentoring: "#FAF5FF",  // 연한 보라 (멘토링)
+    corridor: "#EDF2F7",   // 중간 회색 (복도)
+    lobby: "#E2E8F0",      // 로비
+  }
+
+  ctx.fillStyle = colors[type] || "#FFFFFF"
+  ctx.fillRect(x, y, size, size)
+
+  // 타일 무늬
+  ctx.strokeStyle = type === "lecture" ? "#4A5568" : "#CBD5E0"
+  ctx.lineWidth = 0.5
+  ctx.strokeRect(x + 1, y + 1, size - 2, size - 2)
+
+  // 강의실은 카펫 느낌
+  if (type === "lecture") {
+    ctx.fillStyle = "rgba(74, 85, 104, 0.3)"
+    for (let i = 0; i < size; i += 4) {
+      ctx.fillRect(x + i, y, 2, size)
+    }
+  }
 }
 
 // ===== 개별 타일 그리기 함수들 =====

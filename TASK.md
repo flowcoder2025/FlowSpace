@@ -1,68 +1,126 @@
-# TASK: 화면공유 녹화 기능 구현
+# TASK: 학습 공간 맵 구현 (50명 강의실 + 수업실 + 멘토링방)
 
 > **상태**: ✅ 완료
 > **시작일**: 2025-12-16
-> **범위**: ScreenShare 컴포넌트에 녹화 기능 추가
+> **범위**: TilesetGenerator, MapData 확장 및 새 학습 공간 레이아웃 구현
 
 ---
 
 ## 🎯 목표
 
 ### 핵심 요구사항
-1. **녹화 권한 제어** - STAFF, OWNER, SuperAdmin만 녹화 가능
-2. **녹화 표시** - 공유 중인 화면에 🔴 녹화 중 표시
-3. **로컬 저장** - 사용자가 저장 위치 직접 선택
-4. **파일명 형식** - `YYYY_MM_DD_HH:MM:SS_공간이름.webm`
-5. **화면+음성 녹화** - 화면과 오디오 모두 포함
+1. **대형 강의실** - 50명 수용 가능한 극장식 좌석 배치
+2. **수업실 3개** - 그룹 책상 배치 (각 10-15명)
+3. **멘토링방 4개** - 소규모 미팅 공간 (각 4-6명)
+4. **복도/로비** - 각 공간을 연결하는 통로
 
-### 기술 스택
-- MediaRecorder API (클라이언트 측 녹화)
-- File System Access API (저장 위치 선택)
-- WebM 포맷 (video/webm;codecs=vp9,opus)
+### 참조 디자인
+- ZEP 스타일 학습 공간 (참조 이미지 기반)
+- 모던 오피스 색상 팔레트 유지
 
----
-
-## 📋 Phase 1: 분석 ✅
-
-- [x] ScreenShare 컴포넌트 구조 분석 (Serena)
-- [x] 역할/권한 정보 전달 경로 파악
-- [x] 오디오 트랙 접근 방법 확인
+### 기술 스펙
+- 맵 크기: 80x60 타일 (2560x1920px)
+- 타일 크기: 32x32px
+- 새 타일 타입: 강의실 좌석, 포디움, 칠판, 학생 책상
 
 ---
 
-## 📋 Phase 2: useScreenRecorder 훅 구현 ✅
+## 📋 Phase 1: 타일셋 확장 ⏳
 
-- [x] MediaRecorder 초기화 로직
-- [x] 녹화 시작/중지/일시정지 기능
-- [x] Blob 데이터 수집 및 파일 생성
-- [x] 파일명 생성 유틸리티 (날짜_공간명)
-- [x] showSaveFilePicker API 통합
+### 1.1 새 타일 인덱스 추가 (TilesetGenerator.ts)
+- [ ] TILESET_CONFIG 확장 (12행 → 14행)
+- [ ] 학습 공간 타일 인덱스 추가:
+  - LECTURE_SEAT_1, LECTURE_SEAT_2 (강의실 좌석)
+  - PODIUM_L, PODIUM_M, PODIUM_R (포디움/연단)
+  - BLACKBOARD_L, BLACKBOARD_M, BLACKBOARD_R (칠판)
+  - STUDENT_DESK_L, STUDENT_DESK_R (학생 책상)
+  - SCREEN_PROJECTOR (스크린/빔프로젝터)
 
----
-
-## 📋 Phase 3: ScreenShare UI 수정 ✅
-
-- [x] 녹화 버튼 추가 (권한 있는 사용자만 표시)
-- [x] 녹화 중 표시 UI (🔴 REC + 타이머)
-- [x] 녹화 컨트롤 (시작/중지)
-- [x] Props 확장 (역할 정보, 공간명)
-
----
-
-## 📋 Phase 4: 권한 연동 ✅
-
-- [x] SpaceLayout에서 역할 정보 전달
-- [x] canRecord 권한 계산 로직
-- [x] ScreenShareOverlay Props 확장
+### 1.2 타일 그리기 함수 구현
+- [ ] drawLectureSeat() - 극장식 좌석
+- [ ] drawPodium() - 강단/연단
+- [ ] drawBlackboard() - 칠판/화이트보드
+- [ ] drawStudentDesk() - 학생용 책상
+- [ ] drawProjectorScreen() - 스크린
 
 ---
 
-## 📋 Phase 5: 검증 ✅
+## 📋 Phase 2: 맵 설정 업데이트 ⏳
 
-- [x] 타입체크 통과
-- [x] 빌드 테스트 통과
-- [x] 본인 화면 공유 녹화 기능 추가 (VideoTile + ParticipantPanel)
-- [ ] 실제 녹화 테스트 (수동 확인 필요)
+### 2.1 MAP_CONFIG 변경 (MapData.ts)
+- [ ] WIDTH: 50 → 80
+- [ ] HEIGHT: 35 → 60
+
+### 2.2 레이아웃 설계
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              ENTRANCE / LOBBY                                │
+├───────────────────────┬────────────────────────────┬───────────────────────┤
+│                       │                            │  Mentoring 1 (M1)     │
+│    LECTURE HALL       │      CLASSROOM AREA        ├───────────────────────┤
+│    (50석 강의실)       │                            │  Mentoring 2 (M2)     │
+│                       │   ┌────┐ ┌────┐ ┌────┐    ├───────────────────────┤
+│  ▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄    │   │C1 │ │C2 │ │C3 │    │  Mentoring 3 (M3)     │
+│  ▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄    │   └────┘ └────┘ └────┘    ├───────────────────────┤
+│  ▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄    │                            │  Mentoring 4 (M4)     │
+│  ▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄    │                            │                       │
+│  ▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄    │                            │                       │
+│  [STAGE/칠판/스크린]   │                            │                       │
+│                       │                            │                       │
+├───────────────────────┴────────────────────────────┴───────────────────────┤
+│                              CORRIDOR (복도)                                │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 📋 Phase 3: 레이어 데이터 구현 ⏳
+
+### 3.1 Ground Layer (바닥)
+- [ ] 강의실: 카펫 바닥
+- [ ] 수업실: 나무 바닥
+- [ ] 멘토링방: 타일 바닥
+- [ ] 복도: 콘크리트
+
+### 3.2 Walls Layer (벽)
+- [ ] 외벽 (창문 포함)
+- [ ] 내부 파티션
+- [ ] 각 방 문
+
+### 3.3 Furniture Layer (가구)
+- [ ] 강의실: 50석 좌석 배치 (10열 x 5행)
+- [ ] 강의실: 포디움, 스크린
+- [ ] 수업실: 그룹 책상 배치
+- [ ] 멘토링방: 소규모 테이블 + 의자
+
+### 3.4 Collision Layer (충돌)
+- [ ] 벽 충돌
+- [ ] 가구 충돌
+- [ ] 문 통과 가능
+
+---
+
+## 📋 Phase 4: 스폰 포인트 및 상호작용 ⏳
+
+### 4.1 스폰 포인트
+- [ ] 메인 입구 (기본)
+- [ ] 강의실 입구
+- [ ] 각 수업실 입구
+- [ ] 멘토링방 입구
+
+### 4.2 상호작용 영역
+- [ ] 칠판 (공지)
+- [ ] 스크린 (링크)
+- [ ] 포탈 (다른 공간 이동)
+
+---
+
+## 📋 Phase 5: 테스트 및 검증 ⏳
+
+- [ ] 타입체크 (npx tsc --noEmit)
+- [ ] 빌드 테스트 (npm run build)
+- [ ] 브라우저 테스트 (Playwright)
+- [ ] 50명 동시 접속 테스트 (부하 확인)
 
 ---
 
@@ -70,11 +128,11 @@
 
 | Phase | 상태 | 완료일 |
 |-------|------|--------|
-| Phase 1: 분석 | ✅ 완료 | 2025-12-16 |
-| Phase 2: useScreenRecorder | ✅ 완료 | 2025-12-16 |
-| Phase 3: ScreenShare UI | ✅ 완료 | 2025-12-16 |
-| Phase 4: 권한 연동 | ✅ 완료 | 2025-12-16 |
-| Phase 5: 검증 | ✅ 완료 | 2025-12-16 |
+| Phase 1: 타일셋 확장 | ⏳ 대기 | - |
+| Phase 2: 맵 설정 | ⏳ 대기 | - |
+| Phase 3: 레이어 데이터 | ⏳ 대기 | - |
+| Phase 4: 스폰/상호작용 | ⏳ 대기 | - |
+| Phase 5: 테스트 | ⏳ 대기 | - |
 
 ---
 
@@ -82,11 +140,9 @@
 
 | 파일 | 변경 내용 |
 |-----|----------|
-| `src/features/space/hooks/useScreenRecorder.ts` | 신규 - 녹화 훅 |
-| `src/features/space/components/video/ScreenShare.tsx` | 녹화 UI 추가 (타인 화면공유) |
-| `src/features/space/components/video/VideoTile.tsx` | 녹화 UI 추가 (본인 화면공유) |
-| `src/features/space/components/video/ParticipantPanel.tsx` | canRecord/spaceName props 전달 |
-| `src/features/space/components/SpaceLayout.tsx` | 역할 정보 및 녹화 권한 전달 |
+| `src/features/space/game/tiles/TilesetGenerator.ts` | 학습 공간 타일 추가 |
+| `src/features/space/game/tiles/MapData.ts` | 80x60 학습 공간 맵 레이아웃 |
+| `src/features/space/game/tiles/TileSystem.ts` | 필요시 수정 |
 
 ---
 
@@ -94,6 +150,5 @@
 
 | 날짜 | 내용 |
 |-----|------|
-| 2025-12-16 | TASK.md 초기화 - 화면공유 녹화 기능 태스크 시작 |
-| 2025-12-16 | Phase 1-5 완료 - 녹화 기능 구현 및 검증 완료 |
+| 2025-12-16 | TASK.md 초기화 - 학습 공간 맵 구현 태스크 시작 |
 
