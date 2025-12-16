@@ -44,6 +44,14 @@ const MAX_MESSAGES = 200  // 최대 저장 메시지 수
 const CLEANUP_BATCH_SIZE = 50  // 용량 초과 시 삭제할 메시지 수
 
 /**
+ * tempId 패턴 확인 (msg-{timestamp}-{playerId})
+ * DB에 저장되기 전의 임시 ID는 저장하지 않음 (삭제 불가 문제 방지)
+ */
+function isTempId(id: string): boolean {
+  return id.startsWith("msg-") || id.startsWith("whisper-") || id.startsWith("party-") || id.startsWith("sys-")
+}
+
+/**
  * ChatMessage → 저장 가능한 형태로 변환
  */
 function serializeMessage(msg: ChatMessage): ChatMessageStorageData {
@@ -82,6 +90,7 @@ function deserializeMessage(data: ChatMessageStorageData): ChatMessage {
 
 /**
  * localStorage에서 채팅 데이터 로드
+ * ⚠️ tempId 패턴인 메시지는 필터링 (삭제 불가 문제 방지)
  */
 function loadFromStorage(spaceId: string): ChatMessage[] {
   if (typeof window === "undefined") return []
@@ -92,7 +101,10 @@ function loadFromStorage(spaceId: string): ChatMessage[] {
     if (!raw) return []
 
     const data: StorageData = JSON.parse(raw)
-    return data.messages.map(deserializeMessage)
+    // 🔒 tempId 패턴인 메시지는 제외 (DB에 저장되지 않은 메시지)
+    return data.messages
+      .filter(msg => !isTempId(msg.id))
+      .map(deserializeMessage)
   } catch (error) {
     console.warn("[ChatStorage] Failed to load from localStorage:", error)
     return []
@@ -102,6 +114,7 @@ function loadFromStorage(spaceId: string): ChatMessage[] {
 /**
  * localStorage에 채팅 데이터 저장
  * 용량 초과 시 과거 데이터 자동 삭제
+ * ⚠️ tempId 패턴인 메시지는 저장하지 않음 (삭제 불가 문제 방지)
  */
 function saveToStorage(spaceId: string, messages: ChatMessage[]): boolean {
   if (typeof window === "undefined") return false
@@ -109,8 +122,9 @@ function saveToStorage(spaceId: string, messages: ChatMessage[]): boolean {
   const key = `${STORAGE_KEY_PREFIX}${spaceId}`
 
   // 시스템 메시지는 저장하지 않음 (가이드 메시지 등)
+  // 🔒 tempId 패턴인 메시지도 저장하지 않음 (DB에 저장되지 않은 메시지)
   const filteredMessages = messages.filter(
-    msg => msg.type !== "system" && msg.senderId !== "system"
+    msg => msg.type !== "system" && msg.senderId !== "system" && !isTempId(msg.id)
   )
 
   // 최대 개수 제한
