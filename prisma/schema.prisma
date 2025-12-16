@@ -26,6 +26,10 @@ model User {
   // Phase 6: 플랫폼 관리자 플래그
   isSuperAdmin  Boolean   @default(false)
 
+  // 녹화 동의 (법적 준수)
+  agreedToRecording   Boolean   @default(false)
+  agreedToRecordingAt DateTime?
+
   // Relations
   accounts            Account[]
   sessions            Session[]

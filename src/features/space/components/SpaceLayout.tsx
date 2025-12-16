@@ -10,10 +10,11 @@ import { ControlBar } from "./controls/ControlBar"
 import { GameCanvas } from "./game/GameCanvas"
 import { SpaceSettingsModal } from "./SpaceSettingsModal"
 import { MemberPanel } from "./MemberPanel"
+import { RecordingIndicator } from "./RecordingIndicator"
 import { useSocket } from "../socket"
 import { LiveKitRoomProvider, useLiveKitMedia } from "../livekit"
 import { useNotificationSound, useChatStorage } from "../hooks"
-import type { ChatMessageData, AvatarColor, ReplyToData, AnnouncementData, MessageDeletedData } from "../socket/types"
+import type { ChatMessageData, AvatarColor, ReplyToData, AnnouncementData, MessageDeletedData, RecordingStatusData } from "../socket/types"
 import type { ChatMessage } from "../types/space.types"
 import type { SpaceRole } from "@prisma/client"
 
@@ -221,6 +222,45 @@ function SpaceLayoutContent({
     )
   }, [])
 
+  // 🎬 녹화 시작 핸들러 (법적 고지 시스템 메시지)
+  const handleRecordingStarted = useCallback((data: RecordingStatusData) => {
+    const recordingMessage: ChatMessage = {
+      id: `recording-start-${Date.now()}`,
+      senderId: "system",
+      senderNickname: "시스템",
+      content: `🔴 ${data.recorderNickname}님이 녹화를 시작했습니다. 이 공간의 모든 내용이 녹화됩니다.`,
+      timestamp: new Date(),
+      type: "system",
+    }
+    setMessages((prev) => [...prev, recordingMessage])
+  }, [])
+
+  // 🎬 녹화 중지 핸들러
+  const handleRecordingStopped = useCallback((data: RecordingStatusData) => {
+    const recordingMessage: ChatMessage = {
+      id: `recording-stop-${Date.now()}`,
+      senderId: "system",
+      senderNickname: "시스템",
+      content: `⬛ ${data.recorderNickname}님이 녹화를 중지했습니다.`,
+      timestamp: new Date(),
+      type: "system",
+    }
+    setMessages((prev) => [...prev, recordingMessage])
+  }, [])
+
+  // 🎬 녹화 에러 핸들러
+  const handleRecordingError = useCallback((message: string) => {
+    const errorMessage: ChatMessage = {
+      id: `recording-error-${Date.now()}`,
+      senderId: "system",
+      senderNickname: "시스템",
+      content: `❌ 녹화 오류: ${message}`,
+      timestamp: new Date(),
+      type: "system",
+    }
+    setMessages((prev) => [...prev, errorMessage])
+  }, [])
+
   // Socket connection for game position sync (🔒 sessionToken으로 서버 검증)
   const {
     players,
@@ -235,6 +275,8 @@ function SpaceLayoutContent({
     sendKickCommand,
     sendAnnounce,
     deleteMessage,
+    // 🎬 녹화 상태 및 제어 (법적 준수)
+    recordingStatus,
   } = useSocket({
     spaceId,
     playerId: userId,
@@ -250,6 +292,9 @@ function SpaceLayoutContent({
     onMessageIdUpdate: handleMessageIdUpdate, // ⚡ Optimistic ID 업데이트
     onAdminError: handleAdminError,          // 🛡️ 관리 에러
     onChatError: handleChatError,            // 🔇 채팅 에러 (음소거 등)
+    onRecordingStarted: handleRecordingStarted,   // 🎬 녹화 시작
+    onRecordingStopped: handleRecordingStopped,   // 🎬 녹화 중지
+    onRecordingError: handleRecordingError,       // 🎬 녹화 에러
   })
 
   // LiveKit for audio/video (@livekit/components-react 공식 훅 기반)
@@ -575,6 +620,11 @@ function SpaceLayoutContent({
           playerNickname={currentNickname}
           avatarColor={currentAvatarColor}
         />
+
+        {/* 🎬 녹화 중 표시 (상단 중앙) - 법적 준수: 모든 참가자에게 REC 표시 */}
+        <div className="pointer-events-none absolute left-1/2 top-2 z-30 -translate-x-1/2">
+          <RecordingIndicator recordingStatus={recordingStatus} />
+        </div>
 
         {/* 플로팅 채팅 오버레이 (좌측 하단) */}
         <FloatingChatOverlay

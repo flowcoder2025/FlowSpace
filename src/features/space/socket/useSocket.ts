@@ -18,6 +18,8 @@ import type {
   MemberKickedData,
   AnnouncementData,
   MessageDeletedData,
+  // 녹화 이벤트 타입 (법적 준수)
+  RecordingStatusData,
 } from "./types"
 import { eventBridge, GameEvents } from "../game/events"
 
@@ -47,6 +49,10 @@ interface UseSocketOptions {
   onMessageDeleted?: (data: MessageDeletedData) => void  // 🗑️ 메시지 삭제
   onAnnouncement?: (data: AnnouncementData) => void  // 📢 공지사항
   onAdminError?: (action: string, message: string) => void  // ⚠️ 관리 에러
+  // 🔴 녹화 이벤트 콜백 (법적 준수)
+  onRecordingStarted?: (data: RecordingStatusData) => void  // 녹화 시작됨
+  onRecordingStopped?: (data: RecordingStatusData) => void  // 녹화 중지됨
+  onRecordingError?: (message: string) => void  // 녹화 에러
 }
 
 // 🔒 Socket 에러 타입 (세션 검증 실패 등)
@@ -67,6 +73,7 @@ interface UseSocketReturn {
   socketError: SocketError | null // 🔒 세션 검증 실패 시 에러
   effectivePlayerId: string | null // 🔒 서버에서 파생된 실제 플레이어 ID
   partyState: PartyState // 🎉 현재 파티 상태
+  recordingStatus: RecordingStatusData | null // 🔴 현재 녹화 상태 (법적 준수)
   sendMessage: (content: string, replyTo?: ReplyToData) => void  // 답장 지원
   sendWhisper: (targetNickname: string, content: string, replyTo?: ReplyToData) => void  // 📬 귓속말 전송 (답장 지원)
   joinParty: (partyId: string, partyName: string) => void  // 🎉 파티 입장
@@ -80,6 +87,9 @@ interface UseSocketReturn {
   sendKickCommand: (targetNickname: string, reason?: string, ban?: boolean) => void  // 👢 강퇴/차단
   sendAnnounce: (content: string) => void  // 📢 공지사항
   deleteMessage: (messageId: string) => void  // 🗑️ 메시지 삭제
+  // 🔴 녹화 명령어 (법적 준수)
+  startRecording: () => void  // 녹화 시작
+  stopRecording: () => void   // 녹화 중지
 }
 
 export function useSocket({
@@ -105,6 +115,10 @@ export function useSocket({
   onMessageDeleted,
   onAnnouncement,
   onAdminError,
+  // 🔴 녹화 이벤트 콜백 (법적 준수)
+  onRecordingStarted,
+  onRecordingStopped,
+  onRecordingError,
 }: UseSocketOptions): UseSocketReturn {
   const socketRef = useRef<Socket<ServerToClientEvents, ClientToServerEvents> | null>(null)
   const [isConnected, setIsConnected] = useState(false)
@@ -115,6 +129,8 @@ export function useSocket({
   const [effectivePlayerId, setEffectivePlayerId] = useState<string | null>(null)
   // 🎉 파티 상태 (현재 참가 중인 파티)
   const [partyState, setPartyState] = useState<PartyState>({ partyId: null, partyName: null })
+  // 🔴 녹화 상태 (법적 준수 - REC 표시용)
+  const [recordingStatus, setRecordingStatus] = useState<RecordingStatusData | null>(null)
 
   // Use refs to persist state across useEffect re-runs (fixes timing race condition)
   const pendingPlayersRef = useRef<PlayerPosition[]>([])
@@ -139,6 +155,10 @@ export function useSocket({
   const onMessageDeletedRef = useRef(onMessageDeleted)
   const onAnnouncementRef = useRef(onAnnouncement)
   const onAdminErrorRef = useRef(onAdminError)
+  // 🔴 녹화 이벤트 콜백 refs (법적 준수)
+  const onRecordingStartedRef = useRef(onRecordingStarted)
+  const onRecordingStoppedRef = useRef(onRecordingStopped)
+  const onRecordingErrorRef = useRef(onRecordingError)
 
   // 🔄 Store nickname and avatarColor in refs to enable hot update without reconnection
   const nicknameRef = useRef(nickname)
@@ -163,6 +183,10 @@ export function useSocket({
     onMessageDeletedRef.current = onMessageDeleted
     onAnnouncementRef.current = onAnnouncement
     onAdminErrorRef.current = onAdminError
+    // 🔴 녹화 이벤트 콜백 refs 업데이트
+    onRecordingStartedRef.current = onRecordingStarted
+    onRecordingStoppedRef.current = onRecordingStopped
+    onRecordingErrorRef.current = onRecordingError
     // 🔄 Update profile refs (used for movement events)
     nicknameRef.current = nickname
     avatarColorRef.current = avatarColor
@@ -433,6 +457,33 @@ export function useSocket({
       onAdminErrorRef.current?.(data.action, data.message)
     })
 
+    // ============================================
+    // 🔴 녹화 이벤트 리스너 (법적 준수)
+    // ============================================
+    socket.on("recording:started", (data: RecordingStatusData) => {
+      console.log("[Socket] 🔴 Recording started by:", data.recorderNickname)
+      setRecordingStatus(data)
+      onRecordingStartedRef.current?.(data)
+    })
+
+    socket.on("recording:stopped", (data: RecordingStatusData) => {
+      console.log("[Socket] ⬛ Recording stopped by:", data.recorderNickname)
+      setRecordingStatus(null)
+      onRecordingStoppedRef.current?.(data)
+    })
+
+    socket.on("recording:status", (data: RecordingStatusData) => {
+      if (IS_DEV) {
+        console.log("[Socket] Recording status:", data.isRecording ? "recording" : "not recording")
+      }
+      setRecordingStatus(data.isRecording ? data : null)
+    })
+
+    socket.on("recording:error", (data: { message: string }) => {
+      console.warn("[Socket] Recording error:", data.message)
+      onRecordingErrorRef.current?.(data.message)
+    })
+
     // 🔄 Profile update events (다른 플레이어의 닉네임/아바타 변경)
     socket.on("player:profileUpdated", (data) => {
       if (IS_DEV) {
@@ -672,6 +723,30 @@ export function useSocket({
     }
   }, [isConnected])
 
+  // ============================================
+  // 🔴 녹화 명령어 (법적 준수)
+  // ============================================
+
+  // 녹화 시작
+  const startRecording = useCallback(() => {
+    if (socketRef.current && isConnected) {
+      socketRef.current.emit("recording:start", {})
+      if (IS_DEV) {
+        console.log("[Socket] Requesting recording start")
+      }
+    }
+  }, [isConnected])
+
+  // 녹화 중지
+  const stopRecording = useCallback(() => {
+    if (socketRef.current && isConnected) {
+      socketRef.current.emit("recording:stop", {})
+      if (IS_DEV) {
+        console.log("[Socket] Requesting recording stop")
+      }
+    }
+  }, [isConnected])
+
   return {
     isConnected,
     players,
@@ -691,5 +766,9 @@ export function useSocket({
     sendKickCommand, // 👢 강퇴/차단
     sendAnnounce, // 📢 공지사항
     deleteMessage, // 🗑️ 메시지 삭제
+    // 🔴 녹화 명령어 (법적 준수)
+    recordingStatus, // 현재 녹화 상태
+    startRecording, // 녹화 시작
+    stopRecording, // 녹화 중지
   }
 }

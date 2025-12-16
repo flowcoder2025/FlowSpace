@@ -38,15 +38,30 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     error: "/login",
   },
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger }) {
       if (user) {
         token.id = user.id
+        // 첫 로그인 시 DB에서 동의 상태 조회
+        const dbUser = await prisma.user.findUnique({
+          where: { id: user.id },
+          select: { agreedToRecording: true },
+        })
+        token.agreedToRecording = dbUser?.agreedToRecording ?? false
+      }
+      // update 트리거 시 (동의 후) 토큰 갱신
+      if (trigger === "update" && token.id) {
+        const dbUser = await prisma.user.findUnique({
+          where: { id: token.id as string },
+          select: { agreedToRecording: true },
+        })
+        token.agreedToRecording = dbUser?.agreedToRecording ?? false
       }
       return token
     },
     async session({ session, token }) {
       if (token && session.user) {
         session.user.id = token.id as string
+        session.user.agreedToRecording = token.agreedToRecording as boolean
       }
       return session
     },
@@ -61,6 +76,9 @@ declare module "next-auth" {
       name?: string | null
       email?: string | null
       image?: string | null
+      agreedToRecording?: boolean
     }
   }
 }
+
+// JWT 타입은 next-auth 내부에서 자동 추론됨

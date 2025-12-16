@@ -117,6 +117,26 @@ export interface AdminAnnounceRequest {
   content: string
 }
 
+// ============================================
+// 녹화 관련 타입 (법적 준수)
+// ============================================
+
+// 녹화 상태 데이터
+export interface RecordingStatusData {
+  isRecording: boolean
+  recorderId: string       // 녹화 시작한 사람 ID
+  recorderNickname: string // 녹화 시작한 사람 닉네임
+  startedAt?: number       // 녹화 시작 시각 (timestamp)
+}
+
+// 녹화 시작 요청 (향후 확장 가능)
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+export interface RecordingStartRequest {}
+
+// 녹화 중지 요청 (향후 확장 가능)
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+export interface RecordingStopRequest {}
+
 // 답장 대상 정보 (Socket 전송용)
 export interface ReplyToData {
   id: string                  // 원본 메시지 ID
@@ -198,6 +218,12 @@ export interface ClientToServerEvents {
   "admin:kick": (data: AdminKickRequest) => void
   "admin:deleteMessage": (data: AdminDeleteMessageRequest) => void
   "admin:announce": (data: AdminAnnounceRequest) => void
+
+  // ============================================
+  // 녹화 이벤트 (Client → Server) - 법적 준수
+  // ============================================
+  "recording:start": (data: RecordingStartRequest) => void
+  "recording:stop": (data: RecordingStopRequest) => void
 }
 
 // Server to Client events
@@ -250,6 +276,14 @@ export interface ServerToClientEvents {
 
   // 관리 액션 에러 (권한 부족 등)
   "admin:error": (data: { action: string; message: string }) => void
+
+  // ============================================
+  // 녹화 이벤트 (Server → Client) - 법적 준수
+  // ============================================
+  "recording:started": (data: RecordingStatusData) => void   // 녹화 시작됨 (전체 브로드캐스트)
+  "recording:stopped": (data: RecordingStatusData) => void   // 녹화 중지됨 (전체 브로드캐스트)
+  "recording:status": (data: RecordingStatusData) => void    // 현재 녹화 상태 (입장 시 수신)
+  "recording:error": (data: { message: string }) => void     // 녹화 에러 (권한 부족 등)
 }
 
 // Inter-server events (not used in MVP)

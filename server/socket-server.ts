@@ -32,6 +32,8 @@ import type {
   MemberKickedData,
   MessageDeletedData,
   AnnouncementData,
+  // 녹화 이벤트 타입 (법적 준수)
+  RecordingStatusData,
 } from "../src/features/space/socket/types"
 
 const PORT = parseInt(process.env.PORT || process.env.SOCKET_PORT || "3001", 10)
@@ -291,6 +293,10 @@ const rooms = new Map<string, Map<string, PlayerPosition>>()
 // partyRoomId format: "{spaceId}:party:{partyId}"
 const partyRooms = new Map<string, Set<string>>()
 
+// 🔴 Recording state: spaceId -> RecordingStatusData
+// 각 공간별 녹화 상태 추적 (법적 준수)
+const recordingStates = new Map<string, RecordingStatusData>()
+
 function getOrCreateRoom(spaceId: string): Map<string, PlayerPosition> {
   if (!rooms.has(spaceId)) {
     rooms.set(spaceId, new Map())
@@ -435,6 +441,12 @@ io.on("connection", (socket) => {
       players: Array.from(room.values()),
       yourPlayerId: verifiedPlayerId,
     })
+
+    // 🔴 현재 녹화 상태 전달 (법적 준수 - REC 표시를 위해)
+    const currentRecordingState = recordingStates.get(spaceId)
+    if (currentRecordingState?.isRecording) {
+      socket.emit("recording:status", currentRecordingState)
+    }
 
     // Notify other players in room
     socket.to(spaceId).emit("player:joined", playerPosition)
@@ -1304,6 +1316,101 @@ io.on("connection", (socket) => {
     console.log(`[Socket] Announcement by ${nickname} in space ${spaceId}: ${data.content.substring(0, 50)}...`)
   })
 
+  // ============================================
+  // 🔴 녹화 이벤트 핸들러 (법적 준수)
+  // Staff, Owner, SuperAdmin만 녹화 가능
+  // 녹화 시작/중지 시 공간 내 모든 참가자에게 REC 상태 브로드캐스트
+  // ============================================
+
+  // 녹화 시작
+  socket.on("recording:start", async () => {
+    const { spaceId, playerId, nickname, sessionToken } = socket.data
+
+    if (!spaceId || !playerId) {
+      socket.emit("recording:error", { message: "공간 정보가 없습니다." })
+      return
+    }
+
+    // 🔒 권한 검증: STAFF 이상만 녹화 가능
+    if (sessionToken) {
+      const verification = await verifyAdminPermission(spaceId, sessionToken, "recording")
+      if (!verification.valid) {
+        socket.emit("recording:error", { message: verification.error || "녹화 권한이 없습니다. STAFF 이상만 녹화할 수 있습니다." })
+        return
+      }
+    } else if (!IS_DEV) {
+      // 운영 환경에서 세션 없으면 거부
+      socket.emit("recording:error", { message: "인증이 필요합니다." })
+      return
+    }
+
+    // 이미 녹화 중인지 확인
+    const existingRecording = recordingStates.get(spaceId)
+    if (existingRecording?.isRecording) {
+      socket.emit("recording:error", { message: `이미 ${existingRecording.recorderNickname}님이 녹화 중입니다.` })
+      return
+    }
+
+    // 녹화 상태 저장
+    const recordingStatus: RecordingStatusData = {
+      isRecording: true,
+      recorderId: playerId,
+      recorderNickname: nickname || "Unknown",
+      startedAt: Date.now(),
+    }
+    recordingStates.set(spaceId, recordingStatus)
+
+    // 📢 공간 내 모든 참가자에게 브로드캐스트 (REC 표시)
+    io.to(spaceId).emit("recording:started", recordingStatus)
+
+    console.log(`[Socket] 🔴 Recording STARTED by ${nickname} in space ${spaceId}`)
+  })
+
+  // 녹화 중지
+  socket.on("recording:stop", async () => {
+    const { spaceId, playerId, nickname, sessionToken } = socket.data
+
+    if (!spaceId || !playerId) {
+      socket.emit("recording:error", { message: "공간 정보가 없습니다." })
+      return
+    }
+
+    const existingRecording = recordingStates.get(spaceId)
+
+    // 녹화 중이 아닌 경우
+    if (!existingRecording?.isRecording) {
+      socket.emit("recording:error", { message: "현재 녹화 중이 아닙니다." })
+      return
+    }
+
+    // 🔒 권한 검증: 녹화 시작한 사람 또는 STAFF 이상만 중지 가능
+    const isRecorder = existingRecording.recorderId === playerId
+    if (!isRecorder && sessionToken) {
+      const verification = await verifyAdminPermission(spaceId, sessionToken, "recording")
+      if (!verification.valid) {
+        socket.emit("recording:error", { message: "녹화 중지 권한이 없습니다." })
+        return
+      }
+    } else if (!isRecorder && !IS_DEV) {
+      socket.emit("recording:error", { message: "녹화 중지 권한이 없습니다." })
+      return
+    }
+
+    // 녹화 상태 업데이트
+    const stoppedStatus: RecordingStatusData = {
+      isRecording: false,
+      recorderId: existingRecording.recorderId,
+      recorderNickname: existingRecording.recorderNickname,
+      startedAt: existingRecording.startedAt,
+    }
+    recordingStates.delete(spaceId)
+
+    // 📢 공간 내 모든 참가자에게 브로드캐스트 (REC 해제)
+    io.to(spaceId).emit("recording:stopped", stoppedStatus)
+
+    console.log(`[Socket] ⬛ Recording STOPPED by ${nickname} in space ${spaceId}`)
+  })
+
   // 멤버 ID로 소켓 찾기 헬퍼
   function findSocketByMemberId(spaceId: string, memberId: string) {
     const socketsInRoom = io.sockets.adapter.rooms.get(spaceId)
@@ -1361,6 +1468,20 @@ io.on("connection", (socket) => {
 
     if (spaceId && playerId) {
       removePlayerFromRoom(spaceId, playerId)
+
+      // 🔴 녹화 정리: 녹화자가 연결 종료하면 녹화 중지
+      const existingRecording = recordingStates.get(spaceId)
+      if (existingRecording?.isRecording && existingRecording.recorderId === playerId) {
+        const stoppedStatus: RecordingStatusData = {
+          isRecording: false,
+          recorderId: existingRecording.recorderId,
+          recorderNickname: existingRecording.recorderNickname,
+          startedAt: existingRecording.startedAt,
+        }
+        recordingStates.delete(spaceId)
+        io.to(spaceId).emit("recording:stopped", stoppedStatus)
+        console.log(`[Socket] ⬛ Recording auto-stopped (${nickname} disconnected) in space ${spaceId}`)
+      }
 
       // 🎉 파티 정리: 파티에 참가 중이었다면 룸에서 제거
       if (partyId) {
