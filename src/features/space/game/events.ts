@@ -68,6 +68,13 @@ export const GameEvents = {
 
   // Chat events (채팅 모드 전환)
   CHAT_FOCUS_CHANGED: "chat:focusChanged",
+
+  // 🎨 Editor events (맵 에디터)
+  EDITOR_MODE_CHANGED: "editor:modeChanged",
+  EDITOR_ASSET_SELECTED: "editor:assetSelected",
+  EDITOR_CANVAS_CLICK: "editor:canvasClick",
+  EDITOR_PLACE_OBJECT: "editor:placeObject",
+  EDITOR_DELETE_OBJECT: "editor:deleteObject",
 } as const
 
 // Player position type
@@ -82,4 +89,29 @@ export interface PlayerPosition {
 // Chat focus payload type
 export interface ChatFocusPayload {
   isActive: boolean
+}
+
+// 🎨 Editor payload types
+export interface EditorModePayload {
+  isActive: boolean
+  selectedAssetId?: string | null
+}
+
+export interface EditorAssetPayload {
+  assetId: string | null
+  assetName?: string
+}
+
+export interface EditorCanvasClickPayload {
+  gridX: number
+  gridY: number
+  worldX: number
+  worldY: number
+}
+
+export interface EditorPlaceObjectPayload {
+  assetId: string
+  gridX: number
+  gridY: number
+  rotation?: number
 }

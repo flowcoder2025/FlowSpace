@@ -29,6 +29,7 @@ import { filterMessagesByTab, calculateUnreadCounts } from "../../utils/chatFilt
 import type { ChatMessage, ReactionType, ChatTab, ReplyTo, ChatFontSize } from "../../types/space.types"
 import type { ReplyToData, PlayerPosition } from "../../socket/types"
 import type { SpaceRole } from "@prisma/client"
+import type { ParsedEditorCommand } from "../../types/editor.types"
 
 // ============================================
 // FloatingChatOverlay Props
@@ -40,6 +41,7 @@ interface FloatingChatOverlayProps {
   onSendWhisper?: (targetNickname: string, content: string, replyTo?: ReplyToData) => void  // 📬 귓속말 전송 + 답장
   onReact?: (messageId: string, type: ReactionType) => void
   onAdminCommand?: (result: AdminCommandResult) => void  // 🛡️ 관리 명령어
+  onEditorCommand?: (command: ParsedEditorCommand) => void  // 🎨 에디터 명령어
   onDeleteMessage?: (messageId: string) => void  // 🗑️ 메시지 삭제 (OWNER/STAFF)
   currentUserId: string
   userRole?: SpaceRole  // 🛡️ 사용자 역할 (OWNER/STAFF/PARTICIPANT)
@@ -58,6 +60,7 @@ export function FloatingChatOverlay({
   onSendWhisper,
   onReact,
   onAdminCommand,
+  onEditorCommand,
   onDeleteMessage,
   currentUserId,
   userRole,
@@ -424,6 +427,7 @@ export function FloatingChatOverlay({
         onSend={handleSendMessage}
         onSendWhisper={handleSendWhisper}
         onAdminCommand={onAdminCommand}
+        onEditorCommand={onEditorCommand}
         onDeactivate={handleDeactivate}
         isActive={isActive}
         replyTo={replyTo}

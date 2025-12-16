@@ -8,7 +8,7 @@
 
 import { createServer } from "http"
 import { Server } from "socket.io"
-import { PrismaClient } from "@prisma/client"
+import { PrismaClient, type MapObject } from "@prisma/client"
 import type {
   ClientToServerEvents,
   ServerToClientEvents,
@@ -34,6 +34,11 @@ import type {
   AnnouncementData,
   // 녹화 이벤트 타입 (법적 준수)
   RecordingStatusData,
+  // 맵 오브젝트 이벤트 타입 (에디터)
+  MapObjectData,
+  ObjectPlaceRequest,
+  ObjectUpdateRequest,
+  ObjectDeleteRequest,
 } from "../src/features/space/socket/types"
 
 const PORT = parseInt(process.env.PORT || process.env.SOCKET_PORT || "3001", 10)
@@ -441,6 +446,35 @@ io.on("connection", (socket) => {
       players: Array.from(room.values()),
       yourPlayerId: verifiedPlayerId,
     })
+
+    // 🗺️ 맵 오브젝트 동기화 (에디터 - 입장 시 기존 오브젝트 전달)
+    try {
+      const mapObjects = await prisma.mapObject.findMany({
+        where: { spaceId },
+        orderBy: { createdAt: "asc" },
+      })
+
+      if (mapObjects.length > 0) {
+        const objectsData: MapObjectData[] = mapObjects.map((obj: MapObject) => ({
+          id: obj.id,
+          assetId: obj.assetId,
+          position: { x: obj.positionX, y: obj.positionY },
+          rotation: obj.rotation as 0 | 90 | 180 | 270,
+          linkedObjectId: obj.linkedObjectId || undefined,
+          customData: obj.customData as Record<string, unknown> | undefined,
+          placedBy: obj.placedBy,
+          placedAt: obj.createdAt.toISOString(),
+        }))
+
+        socket.emit("objects:sync", { objects: objectsData })
+
+        if (IS_DEV) {
+          console.log(`[Socket] 🗺️ Synced ${mapObjects.length} objects for ${nickname}`)
+        }
+      }
+    } catch (error) {
+      console.error("[Socket] Objects sync error:", error)
+    }
 
     // 🔴 현재 녹화 상태 전달 (법적 준수 - REC 표시를 위해)
     const currentRecordingState = recordingStates.get(spaceId)
@@ -1409,6 +1443,200 @@ io.on("connection", (socket) => {
     io.to(spaceId).emit("recording:stopped", stoppedStatus)
 
     console.log(`[Socket] ⬛ Recording STOPPED by ${nickname} in space ${spaceId}`)
+  })
+
+  // ============================================
+  // 🗺️ 맵 오브젝트 이벤트 (에디터)
+  // ============================================
+
+  // 오브젝트 배치
+  socket.on("object:place", async (data: ObjectPlaceRequest) => {
+    const { spaceId, playerId, nickname, sessionToken } = socket.data
+    if (!spaceId || !sessionToken) {
+      socket.emit("object:error", { message: "공간에 먼저 입장해야 합니다." })
+      return
+    }
+
+    // 🔒 권한 검증 (STAFF 이상만 허용)
+    const verification = await verifyAdminPermission(spaceId, sessionToken, "placeObject")
+    if (!verification.valid) {
+      socket.emit("object:error", { message: verification.error || "오브젝트 배치 권한이 없습니다." })
+      return
+    }
+
+    try {
+      // DB에 오브젝트 저장
+      const mapObject = await prisma.mapObject.create({
+        data: {
+          spaceId,
+          assetId: data.assetId,
+          positionX: data.position.x,
+          positionY: data.position.y,
+          rotation: data.rotation || 0,
+          linkedObjectId: data.linkedObjectId,
+          customData: data.customData as object | undefined,
+          placedBy: playerId,
+          placedByType: sessionToken.startsWith("auth-") ? "USER" : "GUEST",
+        },
+      })
+
+      // MapObjectData로 변환
+      const objectData: MapObjectData = {
+        id: mapObject.id,
+        assetId: mapObject.assetId,
+        position: { x: mapObject.positionX, y: mapObject.positionY },
+        rotation: mapObject.rotation as 0 | 90 | 180 | 270,
+        linkedObjectId: mapObject.linkedObjectId || undefined,
+        customData: mapObject.customData as Record<string, unknown> | undefined,
+        placedBy: mapObject.placedBy,
+        placedAt: mapObject.createdAt.toISOString(),
+      }
+
+      // 공간 내 모든 클라이언트에게 브로드캐스트
+      io.to(spaceId).emit("object:placed", {
+        object: objectData,
+        placedByNickname: nickname,
+      })
+
+      if (IS_DEV) {
+        console.log(`[Socket] 📦 Object placed by ${nickname}: ${data.assetId} at (${data.position.x}, ${data.position.y})`)
+      }
+    } catch (error) {
+      console.error("[Socket] Object place error:", error)
+      socket.emit("object:error", { message: "오브젝트 배치에 실패했습니다." })
+    }
+  })
+
+  // 오브젝트 업데이트
+  socket.on("object:update", async (data: ObjectUpdateRequest) => {
+    const { spaceId, playerId, nickname, sessionToken } = socket.data
+    if (!spaceId || !sessionToken) {
+      socket.emit("object:error", { message: "공간에 먼저 입장해야 합니다." })
+      return
+    }
+
+    // 🔒 권한 검증 (STAFF 이상만 허용)
+    const verification = await verifyAdminPermission(spaceId, sessionToken, "updateObject")
+    if (!verification.valid) {
+      socket.emit("object:error", { message: verification.error || "오브젝트 수정 권한이 없습니다." })
+      return
+    }
+
+    try {
+      // 기존 오브젝트 확인
+      const existing = await prisma.mapObject.findFirst({
+        where: { id: data.objectId, spaceId },
+      })
+
+      if (!existing) {
+        socket.emit("object:error", { message: "오브젝트를 찾을 수 없습니다." })
+        return
+      }
+
+      // 업데이트 데이터 준비 (Prisma 타입 호환)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const updateData: Record<string, any> = {}
+
+      if (data.position) {
+        updateData.positionX = data.position.x
+        updateData.positionY = data.position.y
+      }
+      if (data.rotation !== undefined) {
+        updateData.rotation = data.rotation
+      }
+      if (data.linkedObjectId !== undefined) {
+        updateData.linkedObjectId = data.linkedObjectId || null
+      }
+      if (data.customData !== undefined) {
+        updateData.customData = data.customData || undefined
+      }
+
+      // DB 업데이트
+      const mapObject = await prisma.mapObject.update({
+        where: { id: data.objectId },
+        data: updateData as Parameters<typeof prisma.mapObject.update>[0]["data"],
+      })
+
+      // MapObjectData로 변환
+      const objectData: MapObjectData = {
+        id: mapObject.id,
+        assetId: mapObject.assetId,
+        position: { x: mapObject.positionX, y: mapObject.positionY },
+        rotation: mapObject.rotation as 0 | 90 | 180 | 270,
+        linkedObjectId: mapObject.linkedObjectId || undefined,
+        customData: mapObject.customData as Record<string, unknown> | undefined,
+        placedBy: mapObject.placedBy,
+        placedAt: mapObject.createdAt.toISOString(),
+      }
+
+      // 공간 내 모든 클라이언트에게 브로드캐스트
+      io.to(spaceId).emit("object:updated", {
+        object: objectData,
+        updatedByNickname: nickname,
+      })
+
+      if (IS_DEV) {
+        console.log(`[Socket] 📦 Object updated by ${nickname}: ${data.objectId}`)
+      }
+    } catch (error) {
+      console.error("[Socket] Object update error:", error)
+      socket.emit("object:error", { message: "오브젝트 수정에 실패했습니다." })
+    }
+  })
+
+  // 오브젝트 삭제
+  socket.on("object:delete", async (data: ObjectDeleteRequest) => {
+    const { spaceId, playerId, nickname, sessionToken } = socket.data
+    if (!spaceId || !sessionToken) {
+      socket.emit("object:error", { message: "공간에 먼저 입장해야 합니다." })
+      return
+    }
+
+    // 🔒 권한 검증 (STAFF 이상만 허용)
+    const verification = await verifyAdminPermission(spaceId, sessionToken, "deleteObject")
+    if (!verification.valid) {
+      socket.emit("object:error", { message: verification.error || "오브젝트 삭제 권한이 없습니다." })
+      return
+    }
+
+    try {
+      // 기존 오브젝트 확인
+      const existing = await prisma.mapObject.findFirst({
+        where: { id: data.objectId, spaceId },
+      })
+
+      if (!existing) {
+        socket.emit("object:error", { message: "오브젝트를 찾을 수 없습니다." })
+        return
+      }
+
+      // 연결된 오브젝트가 있으면 링크 해제
+      if (existing.linkedObjectId) {
+        await prisma.mapObject.updateMany({
+          where: { linkedObjectId: existing.id },
+          data: { linkedObjectId: null },
+        })
+      }
+
+      // DB에서 삭제
+      await prisma.mapObject.delete({
+        where: { id: data.objectId },
+      })
+
+      // 공간 내 모든 클라이언트에게 브로드캐스트
+      io.to(spaceId).emit("object:deleted", {
+        objectId: data.objectId,
+        deletedBy: playerId,
+        deletedByNickname: nickname,
+      })
+
+      if (IS_DEV) {
+        console.log(`[Socket] 🗑️ Object deleted by ${nickname}: ${data.objectId}`)
+      }
+    } catch (error) {
+      console.error("[Socket] Object delete error:", error)
+      socket.emit("object:error", { message: "오브젝트 삭제에 실패했습니다." })
+    }
   })
 
   // 멤버 ID로 소켓 찾기 헬퍼

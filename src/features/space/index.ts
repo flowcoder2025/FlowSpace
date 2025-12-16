@@ -14,6 +14,51 @@ export { ControlBar } from "./components/controls/ControlBar"
 export { GameCanvas } from "./components/game/GameCanvas"
 
 // ============================================
+// Editor Components
+// ============================================
+export {
+  EditorPanel,
+  EditorStatusBar,
+  EditorModeIndicator,
+  EditorSystemMessage,
+  useEditorSystemMessages,
+} from "./components/editor"
+export type {
+  EditorPanelProps,
+  EditorStatusBarProps,
+  EditorModeIndicatorProps,
+  EditorSystemMessageProps,
+  SystemMessage,
+  SystemMessageType,
+} from "./components/editor"
+
+// ============================================
+// Editor Stores
+// ============================================
+export {
+  useEditorStore,
+  useEditorActive,
+  useSelectedTool,
+  useSelectedAsset,
+  usePairPlacement as useEditorPairPlacement,
+  useEditorPanel,
+  usePlacedObjects,
+  useHistoryState,
+} from "./stores"
+
+// ============================================
+// Editor Hooks
+// ============================================
+export {
+  useEditorCommands,
+  usePairPlacement,
+  type UseEditorCommandsOptions,
+  type UseEditorCommandsReturn,
+  type UsePairPlacementOptions,
+  type UsePairPlacementReturn,
+} from "./hooks"
+
+// ============================================
 // Socket (Multiplayer)
 // ============================================
 export { useSocket } from "./socket"
@@ -43,3 +88,16 @@ export type {
   MediaControls,
   PanelVisibility,
 } from "./types/space.types"
+
+// Editor Types
+export type {
+  EditorStore,
+  EditorStoreState,
+  EditorModeState,
+  EditorPanelState,
+  EditorTool,
+  PairPlacementPhase,
+  PlacedObject,
+  HistoryEntry,
+  GridPosition,
+} from "./types/editor.types"

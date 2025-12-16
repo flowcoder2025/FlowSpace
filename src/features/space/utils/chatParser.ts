@@ -1,6 +1,6 @@
 /**
  * Chat Input Parser
- * 채팅 입력을 분석하여 일반 메시지, 귓속말, 관리 명령어를 구분
+ * 채팅 입력을 분석하여 일반 메시지, 귓속말, 관리/에디터 명령어를 구분
  *
  * 형식:
  * - 일반 메시지: "안녕하세요"
@@ -12,9 +12,22 @@
  *   - @ban / @차단 <닉네임> [사유]
  *   - @announce / @공지 <메시지>
  *   - @help / @도움말
+ * - 에디터 명령어 (설정 파일 기반):
+ *   - @편집기 / @editor
+ *   - @생성 / @create / @spawn <이름> [x,y]
+ *   - @삭제 / @delete / @remove
+ *   - @목록 / @list [카테고리]
+ *   - ... (editor-commands.ts 참조)
  */
 
-export type ParsedInputType = "message" | "whisper" | "command"
+import {
+  EDITOR_COMMANDS,
+  getCommandByAlias,
+  type EditorCommandConfig,
+} from "@/config/editor-commands"
+import type { ParsedEditorCommand } from "../types/editor.types"
+
+export type ParsedInputType = "message" | "whisper" | "command" | "editor_command"
 export type AdminCommandType = "mute" | "unmute" | "kick" | "ban" | "announce" | "help"
 
 export interface ParsedInput {
@@ -29,6 +42,128 @@ export interface ParsedInput {
     reason?: string
     message?: string   // 공지사항 내용
   }
+  // 에디터 명령어 전용 필드
+  editorCommand?: ParsedEditorCommand
+}
+
+/**
+ * 에디터 명령어 파싱
+ * 설정 기반 (editor-commands.ts)으로 동적 파싱
+ *
+ * @param input 사용자 입력 문자열
+ * @returns ParsedInput 또는 null (에디터 명령어가 아닌 경우)
+ */
+function parseEditorCommand(input: string): ParsedInput | null {
+  const trimmed = input.trim()
+
+  // @로 시작하지 않으면 에디터 명령어가 아님
+  if (!trimmed.startsWith("@")) return null
+
+  // @뒤의 명령어와 인자 분리
+  // 예: "@생성 의자 10,20" → ["생성", "의자 10,20"]
+  const withoutAt = trimmed.slice(1)
+  const spaceIndex = withoutAt.indexOf(" ")
+
+  const commandAlias = spaceIndex === -1 ? withoutAt : withoutAt.slice(0, spaceIndex)
+  const argsString = spaceIndex === -1 ? "" : withoutAt.slice(spaceIndex + 1).trim()
+
+  // 설정에서 명령어 조회
+  const commandConfig = getCommandByAlias(commandAlias)
+  if (!commandConfig) {
+    // 에디터 명령어가 아님 → 관리 명령어일 수 있음
+    return null
+  }
+
+  // 인자 파싱
+  const parsedArgs = parseEditorCommandArgs(commandConfig, argsString)
+
+  return {
+    type: "editor_command",
+    content: trimmed,
+    editorCommand: {
+      commandId: commandConfig.id,
+      rawInput: trimmed,
+      args: parsedArgs,
+    },
+  }
+}
+
+/**
+ * 에디터 명령어 인자 파싱
+ * 명령어 설정의 argPattern에 따라 파싱
+ */
+function parseEditorCommandArgs(
+  config: EditorCommandConfig,
+  argsString: string
+): ParsedEditorCommand["args"] {
+  const args: ParsedEditorCommand["args"] = {}
+
+  // 인자가 없는 명령어
+  if (!argsString) return args
+
+  // argPattern이 없으면 첫 번째 토큰을 assetName으로 처리
+  if (!config.argPattern) {
+    args.assetName = argsString
+    return args
+  }
+
+  // 명령어별 특화 파싱
+  switch (config.id) {
+    case "create": {
+      // @생성 name [x,y] 형식
+      // 예: "의자", "의자 10,20", "포털 5,10"
+      const createMatch = argsString.match(/^(.+?)(?:\s+(\d+),(\d+))?$/)
+      if (createMatch) {
+        args.assetName = createMatch[1].trim()
+        if (createMatch[2] && createMatch[3]) {
+          args.coordinates = {
+            x: parseInt(createMatch[2], 10),
+            y: parseInt(createMatch[3], 10),
+          }
+        }
+      }
+      break
+    }
+
+    case "list": {
+      // @목록 [카테고리] 형식
+      // 예: "", "가구", "furniture"
+      if (argsString) {
+        args.category = argsString
+      }
+      break
+    }
+
+    case "search": {
+      // @검색 keyword 형식
+      args.keyword = argsString
+      break
+    }
+
+    case "select": {
+      // @선택 반경 n / @select radius n 형식
+      const selectMatch = argsString.match(/^(?:반경|radius)\s+(\d+)$/i)
+      if (selectMatch) {
+        args.radius = parseInt(selectMatch[1], 10)
+      }
+      break
+    }
+
+    case "edit": {
+      // @수정 objectId 형식
+      args.objectId = argsString
+      break
+    }
+
+    default:
+      // 기본: 인자 전체를 assetName으로 처리
+      if (argsString) {
+        args.assetName = argsString
+      }
+      break
+  }
+
+  return args
 }
 
 /**
@@ -136,6 +271,8 @@ function parseAdminCommand(input: string): ParsedInput | null {
  * parseChatInput("/홍길동") // { type: "message", content: "/홍길동" } // 메시지 없으면 일반 메시지로
  * parseChatInput("@mute 홍길동 10") // { type: "command", command: "mute", ... }
  * parseChatInput("@announce 공지사항입니다") // { type: "command", command: "announce", ... }
+ * parseChatInput("@편집기") // { type: "editor_command", editorCommand: { commandId: "editor", ... } }
+ * parseChatInput("@생성 의자") // { type: "editor_command", editorCommand: { commandId: "create", args: { assetName: "의자" } } }
  */
 export function parseChatInput(input: string): ParsedInput {
   const trimmedInput = input.trim()
@@ -145,13 +282,19 @@ export function parseChatInput(input: string): ParsedInput {
     return { type: "message", content: "" }
   }
 
-  // 1. 관리 명령어 (@로 시작) 체크 - 우선순위 높음
+  // 1. 에디터 명령어 (@로 시작, 설정 기반) 체크 - 최우선
+  const editorResult = parseEditorCommand(trimmedInput)
+  if (editorResult) {
+    return editorResult
+  }
+
+  // 2. 관리 명령어 (@로 시작) 체크
   const commandResult = parseAdminCommand(trimmedInput)
   if (commandResult) {
     return commandResult
   }
 
-  // 2. 귓속말 패턴: /닉네임 메시지
+  // 3. 귓속말 패턴: /닉네임 메시지
   // - 슬래시로 시작
   // - 공백이 아닌 문자들(닉네임)
   // - 하나 이상의 공백
@@ -203,4 +346,50 @@ export function extractTargetNickname(input: string): string | null {
   }
 
   return null
+}
+
+/**
+ * 에디터 명령어 형식인지 확인
+ *
+ * @param input 사용자 입력 문자열
+ * @returns 에디터 명령어 여부
+ */
+export function isEditorCommandFormat(input: string): boolean {
+  const trimmed = input.trim()
+  if (!trimmed.startsWith("@")) return false
+
+  const withoutAt = trimmed.slice(1)
+  const spaceIndex = withoutAt.indexOf(" ")
+  const commandAlias = spaceIndex === -1 ? withoutAt : withoutAt.slice(0, spaceIndex)
+
+  return getCommandByAlias(commandAlias) !== undefined
+}
+
+/**
+ * 에디터 명령어 자동완성 후보 반환
+ *
+ * @param input 사용자 입력 문자열 (@로 시작하는 부분 입력)
+ * @returns 매칭되는 명령어 별칭 목록
+ */
+export function getEditorCommandSuggestions(input: string): string[] {
+  const trimmed = input.trim()
+  if (!trimmed.startsWith("@")) return []
+
+  const partial = trimmed.slice(1).toLowerCase()
+  if (!partial) {
+    // @만 입력된 경우 모든 에디터 명령어의 첫 번째 별칭 반환
+    return EDITOR_COMMANDS.map((cmd) => cmd.aliases[0])
+  }
+
+  // 부분 매칭되는 별칭 반환
+  const suggestions: string[] = []
+  for (const cmd of EDITOR_COMMANDS) {
+    for (const alias of cmd.aliases) {
+      if (alias.toLowerCase().startsWith(partial)) {
+        suggestions.push(alias)
+      }
+    }
+  }
+
+  return suggestions
 }

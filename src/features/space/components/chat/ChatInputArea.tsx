@@ -20,6 +20,7 @@ import { useState, useRef, useEffect, useCallback } from "react"
 import { cn } from "@/lib/utils"
 import { parseChatInput, isWhisperFormat, type AdminCommandType, type ParsedInput } from "../../utils/chatParser"
 import type { ReplyTo } from "../../types/space.types"
+import type { ParsedEditorCommand } from "../../types/editor.types"
 
 // ============================================
 // Admin Command 결과 타입
@@ -60,6 +61,7 @@ interface ChatInputAreaProps {
   onSend: (message: string, replyTo?: ReplyTo) => void  // 답장 정보 포함 가능
   onSendWhisper?: (targetNickname: string, content: string, replyTo?: ReplyTo) => void  // 📬 귓속말 전송
   onAdminCommand?: (result: AdminCommandResult) => void  // 🛡️ 관리 명령어 (Phase 6)
+  onEditorCommand?: (command: ParsedEditorCommand) => void  // 🎨 에디터 명령어
   onDeactivate: () => void
   isActive: boolean
   replyTo?: ReplyTo | null  // 답장 중인 메시지
@@ -74,6 +76,7 @@ export function ChatInputArea({
   onSend,
   onSendWhisper,
   onAdminCommand,
+  onEditorCommand,
   onDeactivate,
   isActive,
   replyTo,
@@ -145,7 +148,10 @@ export function ChatInputArea({
           // 📬 입력 파싱하여 일반 메시지/귓속말/관리 명령어 구분
           const parsed = parseChatInput(value)
 
-          if (parsed.type === "command" && parsed.command && onAdminCommand) {
+          if (parsed.type === "editor_command" && parsed.editorCommand && onEditorCommand) {
+            // 🎨 에디터 명령어 처리
+            onEditorCommand(parsed.editorCommand)
+          } else if (parsed.type === "command" && parsed.command && onAdminCommand) {
             // 🛡️ 관리 명령어 처리 (Phase 6)
             onAdminCommand({
               command: parsed.command,
@@ -181,7 +187,7 @@ export function ChatInputArea({
       }
       // WASD, 방향키 등 다른 키는 기본 동작 (텍스트 입력) 허용
     },
-    [value, onSend, onSendWhisper, onAdminCommand, onDeactivate, replyTo, onCancelReply, canNavigateHistory, historyIndex, whisperHistory]
+    [value, onSend, onSendWhisper, onAdminCommand, onEditorCommand, onDeactivate, replyTo, onCancelReply, canNavigateHistory, historyIndex, whisperHistory]
   )
 
   if (!isActive) return null

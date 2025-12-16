@@ -11,9 +11,14 @@ import { GameCanvas } from "./game/GameCanvas"
 import { SpaceSettingsModal } from "./SpaceSettingsModal"
 import { MemberPanel } from "./MemberPanel"
 import { RecordingIndicator } from "./RecordingIndicator"
+import { EditorPanel, EditorModeIndicator } from "./editor"
 import { useSocket } from "../socket"
 import { LiveKitRoomProvider, useLiveKitMedia } from "../livekit"
 import { useNotificationSound, useChatStorage } from "../hooks"
+import { useEditorCommands } from "../hooks/useEditorCommands"
+import { useEditorStore } from "../stores/editorStore"
+import { eventBridge, GameEvents, type EditorCanvasClickPayload } from "../game/events"
+import type { ParsedEditorCommand, GridPosition } from "../types/editor.types"
 import type { ChatMessageData, AvatarColor, ReplyToData, AnnouncementData, MessageDeletedData, RecordingStatusData } from "../socket/types"
 import type { ChatMessage } from "../types/space.types"
 import type { SpaceRole } from "@prisma/client"
@@ -131,6 +136,10 @@ function SpaceLayoutContent({
 
   // 🔔 알림음 훅
   const { playWhisperSound } = useNotificationSound()
+
+  // 🎮 캐릭터 위치/방향 상태 (Phaser에서 eventBridge로 업데이트)
+  const [characterPosition, setCharacterPosition] = useState<GridPosition>({ x: 5, y: 5 })
+  const [characterDirection, setCharacterDirection] = useState<"up" | "down" | "left" | "right">("down")
 
   // Socket message handlers
   const handleChatMessage = useCallback((data: ChatMessageData) => {
@@ -307,6 +316,449 @@ function SpaceLayoutContent({
     participantTracks,
     localParticipantId,
   } = useLiveKitMedia()
+
+  // 🎨 에디터 상태 구독
+  const isEditorActive = useEditorStore((state) => state.mode.isActive)
+  const isEditorPanelOpen = useEditorStore((state) => state.panel.isOpen)
+  const toggleEditor = useEditorStore((state) => state.toggleEditor)
+  const selectedAsset = useEditorStore((state) => state.mode.selectedAsset)
+  const placeObject = useEditorStore((state) => state.placeObject)
+  const placedObjects = useEditorStore((state) => state.objects)
+
+  // 🎨 페어 오브젝트 상태
+  const pairPhase = useEditorStore((state) => state.mode.pairPhase)
+  const pairFirstPosition = useEditorStore((state) => state.mode.pairFirstPosition)
+  const setPairPhase = useEditorStore((state) => state.setPairPhase)
+  const setPairFirstPosition = useEditorStore((state) => state.setPairFirstPosition)
+
+  // 🎨 에디터 패널도 함께 닫기 위한 togglePanel
+  const toggleEditorPanel = useEditorStore((state) => state.togglePanel)
+
+  // 🎨 에디터 오브젝트 동기화
+  const syncObjects = useEditorStore((state) => state.syncObjects)
+
+  // 🎨 공간 로드 시 DB에서 오브젝트 불러오기
+  useEffect(() => {
+    const loadMapObjects = async () => {
+      // 테스트 공간에서는 로드하지 않음
+      if (spaceId === "test") {
+        console.log("[SpaceLayout] Test space - skipping object load from DB")
+        return
+      }
+
+      try {
+        const response = await fetch(`/api/spaces/${spaceId}/objects`)
+        if (!response.ok) {
+          console.warn("[SpaceLayout] Failed to load map objects:", response.status)
+          return
+        }
+
+        const data = await response.json()
+        const objects = data.objects || []
+
+        if (objects.length > 0) {
+          // editorStore에 오브젝트 동기화
+          const mappedObjects = objects.map((obj: {
+            id: string
+            assetId: string
+            positionX: number
+            positionY: number
+            rotation: number
+            linkedObjectId?: string
+            customData?: Record<string, unknown>
+            placedBy: string
+            createdAt: string
+          }) => ({
+            id: obj.id,
+            assetId: obj.assetId,
+            position: { x: obj.positionX, y: obj.positionY },
+            rotation: obj.rotation,
+            linkedObjectId: obj.linkedObjectId,
+            customData: obj.customData,
+            placedBy: obj.placedBy,
+            placedAt: new Date(obj.createdAt),
+          }))
+
+          syncObjects(mappedObjects)
+
+          // Phaser에 렌더링 이벤트 전송
+          for (const obj of mappedObjects) {
+            eventBridge.emit(GameEvents.EDITOR_PLACE_OBJECT, {
+              objectId: obj.id,
+              assetId: obj.assetId,
+              gridX: obj.position.x,
+              gridY: obj.position.y,
+              rotation: obj.rotation,
+            })
+          }
+
+          console.log(`[SpaceLayout] Loaded ${objects.length} map objects from DB`)
+        }
+      } catch (error) {
+        console.error("[SpaceLayout] Error loading map objects:", error)
+      }
+    }
+
+    // 약간의 지연 후 로드 (Phaser 초기화 대기)
+    const timer = setTimeout(loadMapObjects, 1000)
+    return () => clearTimeout(timer)
+  }, [spaceId, syncObjects])
+
+  // 🎨 에디터 ESC 키 핸들러 (시스템 메시지 출력용 상태)
+  const [pendingEditorClose, setPendingEditorClose] = useState(false)
+
+  // 🎨 에디터 ESC 키 핸들러
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // 채팅 입력 중이거나 다른 입력 필드에 포커스 시 무시
+      const activeElement = document.activeElement
+      const isInputFocused =
+        activeElement?.tagName === "INPUT" ||
+        activeElement?.tagName === "TEXTAREA" ||
+        activeElement?.getAttribute("contenteditable") === "true"
+
+      if (isInputFocused) return
+
+      // ESC 키로 에디터 종료
+      if (e.key === "Escape" && isEditorActive) {
+        e.preventDefault()
+        e.stopPropagation()
+        toggleEditor()
+        // 패널도 함께 닫기
+        if (isEditorPanelOpen) {
+          toggleEditorPanel()
+        }
+        // 시스템 메시지 출력 예약 (상태 변경 후 출력)
+        setPendingEditorClose(true)
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [isEditorActive, isEditorPanelOpen, toggleEditor, toggleEditorPanel])
+
+  // 🎨 에디터 종료 시 시스템 메시지 출력
+  useEffect(() => {
+    if (pendingEditorClose && !isEditorActive) {
+      const editorCloseMessage: ChatMessage = {
+        id: `editor-close-${Date.now()}`,
+        senderId: "system",
+        senderNickname: "에디터",
+        content: "ℹ️ 에디터 모드가 종료되었습니다.",
+        timestamp: new Date(),
+        type: "system",
+      }
+      setMessages((prev) => [...prev, editorCloseMessage])
+      setPendingEditorClose(false)
+    }
+  }, [pendingEditorClose, isEditorActive])
+
+  // 🎨 에디터 모드 변경 시 Phaser 게임에 이벤트 전송
+  useEffect(() => {
+    eventBridge.emit(GameEvents.EDITOR_MODE_CHANGED, {
+      isActive: isEditorActive,
+      selectedAssetId: selectedAsset?.id ?? null,
+    })
+  }, [isEditorActive, selectedAsset])
+
+  // 🎨 에디터 캔버스 클릭 이벤트 처리 (오브젝트 배치)
+  useEffect(() => {
+    const handleCanvasClick = async (payload: unknown) => {
+      const clickData = payload as EditorCanvasClickPayload
+      const { gridX, gridY } = clickData
+
+      // 에디터 모드가 아니거나 선택된 에셋이 없으면 무시
+      if (!isEditorActive || !selectedAsset) {
+        return
+      }
+
+      // 🚫 중복 배치 방지: 같은 위치에 오브젝트가 있는지 확인
+      const existingObject = Array.from(placedObjects.values()).find(
+        (obj) => obj.position.x === gridX && obj.position.y === gridY
+      )
+      if (existingObject) {
+        const warningMessage: ChatMessage = {
+          id: `editor-duplicate-${Date.now()}`,
+          senderId: "system",
+          senderNickname: "에디터",
+          content: `⚠️ (${gridX}, ${gridY})에 이미 오브젝트가 있습니다. 삭제 후 다시 배치하세요.`,
+          timestamp: new Date(),
+          type: "system",
+        }
+        setMessages((prev) => [...prev, warningMessage])
+        return
+      }
+
+      // 🔗 페어 오브젝트 처리 (포털 등)
+      if (selectedAsset.requiresPair) {
+        const pairConfig = selectedAsset.pairConfig
+
+        if (pairPhase === "idle") {
+          // 첫 번째 위치 배치
+          setPairFirstPosition({ x: gridX, y: gridY })
+          setPairPhase("placing_second")
+
+          // 첫 번째 위치 안내 메시지
+          const firstMessage: ChatMessage = {
+            id: `editor-pair-first-${Date.now()}`,
+            senderId: "system",
+            senderNickname: "에디터",
+            content: `📍 ${pairConfig?.labels.first ?? "첫 번째 위치 선택됨"} (${gridX}, ${gridY})\n👆 ${pairConfig?.labels.second ?? "두 번째 위치를 클릭하세요."}`,
+            timestamp: new Date(),
+            type: "system",
+          }
+          setMessages((prev) => [...prev, firstMessage])
+          return
+        } else if (pairPhase === "placing_second" && pairFirstPosition) {
+          // 같은 위치에 두 번째 배치 불가
+          if (pairFirstPosition.x === gridX && pairFirstPosition.y === gridY) {
+            const samePositionMessage: ChatMessage = {
+              id: `editor-pair-same-${Date.now()}`,
+              senderId: "system",
+              senderNickname: "에디터",
+              content: `⚠️ 첫 번째 위치와 다른 곳을 선택하세요.`,
+              timestamp: new Date(),
+              type: "system",
+            }
+            setMessages((prev) => [...prev, samePositionMessage])
+            return
+          }
+
+          // 🗄️ 테스트 공간이 아닐 경우 DB에 저장
+          const isTestSpace = spaceId === "test"
+
+          let firstDbId: string | undefined
+          let secondDbId: string | undefined
+
+          if (!isTestSpace) {
+            try {
+              // 첫 번째 오브젝트 DB 저장
+              const firstResponse = await fetch(`/api/spaces/${spaceId}/objects`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  assetId: selectedAsset.id,
+                  positionX: pairFirstPosition.x,
+                  positionY: pairFirstPosition.y,
+                  customData: { pairType: pairConfig?.type, pairRole: "entrance" },
+                }),
+              })
+
+              if (!firstResponse.ok) {
+                const error = await firstResponse.json()
+                throw new Error(error.error || "Failed to save first object")
+              }
+
+              const firstData = await firstResponse.json()
+              firstDbId = firstData.object.id
+
+              // 두 번째 오브젝트 DB 저장 (linkedObjectId 포함)
+              const secondResponse = await fetch(`/api/spaces/${spaceId}/objects`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  assetId: selectedAsset.id,
+                  positionX: gridX,
+                  positionY: gridY,
+                  linkedObjectId: firstDbId,
+                  customData: { pairType: pairConfig?.type, pairRole: "exit" },
+                }),
+              })
+
+              if (!secondResponse.ok) {
+                const error = await secondResponse.json()
+                throw new Error(error.error || "Failed to save second object")
+              }
+
+              const secondData = await secondResponse.json()
+              secondDbId = secondData.object.id
+
+              // 첫 번째 오브젝트에 linkedObjectId 업데이트 (양방향 연결)
+              await fetch(`/api/spaces/${spaceId}/objects`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  objectId: firstDbId,
+                  linkedObjectId: secondDbId,
+                }),
+              })
+            } catch (error) {
+              console.error("[SpaceLayout] Failed to save pair objects to DB:", error)
+              const errorMessage: ChatMessage = {
+                id: `editor-save-error-${Date.now()}`,
+                senderId: "system",
+                senderNickname: "에디터",
+                content: `❌ DB 저장 실패: ${error instanceof Error ? error.message : "알 수 없는 오류"}`,
+                timestamp: new Date(),
+                type: "system",
+              }
+              setMessages((prev) => [...prev, errorMessage])
+              // 페어 상태 초기화 후 리턴
+              setPairPhase("idle")
+              setPairFirstPosition(null)
+              return
+            }
+          }
+
+          // 첫 번째 오브젝트 로컬 스토어 배치 (DB ID 사용)
+          const firstObject = await placeObject({
+            assetId: selectedAsset.id,
+            position: pairFirstPosition,
+            customData: { pairType: pairConfig?.type, pairRole: "entrance", dbId: firstDbId },
+          })
+
+          // 두 번째 오브젝트 로컬 스토어 배치 (DB ID 사용)
+          const secondObject = await placeObject({
+            assetId: selectedAsset.id,
+            position: { x: gridX, y: gridY },
+            linkedObjectId: firstObject?.id,
+            customData: { pairType: pairConfig?.type, pairRole: "exit", dbId: secondDbId },
+          })
+
+          if (firstObject && secondObject) {
+            // Phaser에 렌더링 이벤트 전송 (두 개 모두)
+            eventBridge.emit(GameEvents.EDITOR_PLACE_OBJECT, {
+              objectId: firstDbId || firstObject.id,
+              assetId: firstObject.assetId,
+              gridX: pairFirstPosition.x,
+              gridY: pairFirstPosition.y,
+              rotation: 0,
+            })
+            eventBridge.emit(GameEvents.EDITOR_PLACE_OBJECT, {
+              objectId: secondDbId || secondObject.id,
+              assetId: secondObject.assetId,
+              gridX,
+              gridY,
+              rotation: 0,
+            })
+
+            // 페어 배치 완료 메시지
+            const saveStatus = isTestSpace ? "(테스트 공간 - 저장 안됨)" : "(💾 저장됨)"
+            const pairCompleteMessage: ChatMessage = {
+              id: `editor-pair-complete-${Date.now()}`,
+              senderId: "system",
+              senderNickname: "에디터",
+              content: `✅ '${selectedAsset.name}' 페어 배치 완료! ${saveStatus}\n   📍 입구: (${pairFirstPosition.x}, ${pairFirstPosition.y})\n   📍 출구: (${gridX}, ${gridY})`,
+              timestamp: new Date(),
+              type: "system",
+            }
+            setMessages((prev) => [...prev, pairCompleteMessage])
+          }
+
+          // 페어 상태 초기화
+          setPairPhase("idle")
+          setPairFirstPosition(null)
+          return
+        }
+      }
+
+      // 일반 오브젝트 배치
+      const isTestSpace = spaceId === "test"
+      let dbObjectId: string | undefined
+
+      // 🗄️ 테스트 공간이 아닐 경우 DB에 저장
+      if (!isTestSpace) {
+        try {
+          const response = await fetch(`/api/spaces/${spaceId}/objects`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              assetId: selectedAsset.id,
+              positionX: gridX,
+              positionY: gridY,
+            }),
+          })
+
+          if (!response.ok) {
+            const error = await response.json()
+            throw new Error(error.error || "Failed to save object")
+          }
+
+          const data = await response.json()
+          dbObjectId = data.object.id
+        } catch (error) {
+          console.error("[SpaceLayout] Failed to save object to DB:", error)
+          const errorMessage: ChatMessage = {
+            id: `editor-save-error-${Date.now()}`,
+            senderId: "system",
+            senderNickname: "에디터",
+            content: `❌ DB 저장 실패: ${error instanceof Error ? error.message : "알 수 없는 오류"}`,
+            timestamp: new Date(),
+            type: "system",
+          }
+          setMessages((prev) => [...prev, errorMessage])
+          return
+        }
+      }
+
+      // 로컬 스토어 배치
+      const placedObject = await placeObject({
+        assetId: selectedAsset.id,
+        position: { x: gridX, y: gridY },
+        customData: { dbId: dbObjectId },
+      })
+
+      if (placedObject) {
+        // Phaser에 렌더링 이벤트 전송
+        eventBridge.emit(GameEvents.EDITOR_PLACE_OBJECT, {
+          objectId: dbObjectId || placedObject.id,
+          assetId: placedObject.assetId,
+          gridX,
+          gridY,
+          rotation: placedObject.rotation,
+        })
+
+        // 배치 성공 시스템 메시지
+        const saveStatus = isTestSpace ? "(테스트 공간 - 저장 안됨)" : "(💾 저장됨)"
+        const successMessage: ChatMessage = {
+          id: `editor-place-${Date.now()}`,
+          senderId: "system",
+          senderNickname: "에디터",
+          content: `✅ '${selectedAsset.name}'을(를) (${gridX}, ${gridY})에 배치했습니다. ${saveStatus}`,
+          timestamp: new Date(),
+          type: "system",
+        }
+        setMessages((prev) => [...prev, successMessage])
+      }
+    }
+
+    eventBridge.on(GameEvents.EDITOR_CANVAS_CLICK, handleCanvasClick)
+    return () => {
+      eventBridge.off(GameEvents.EDITOR_CANVAS_CLICK, handleCanvasClick)
+    }
+  }, [isEditorActive, selectedAsset, placeObject, placedObjects, pairPhase, pairFirstPosition, setPairPhase, setPairFirstPosition, spaceId])
+
+  // 🎨 에디터 시스템 메시지 핸들러
+  const handleEditorSystemMessage = useCallback((message: string, type: "info" | "success" | "warning" | "error") => {
+    const typeEmoji = type === "success" ? "✅" : type === "warning" ? "⚠️" : type === "error" ? "❌" : "ℹ️"
+    const editorMessage: ChatMessage = {
+      id: `editor-${Date.now()}`,
+      senderId: "system",
+      senderNickname: "에디터",
+      content: `${typeEmoji} ${message}`,
+      timestamp: new Date(),
+      type: "system",
+    }
+    setMessages((prev) => [...prev, editorMessage])
+  }, [])
+
+  // 🎨 에디터 명령어 훅
+  const { executeCommand: executeEditorCommand, canUseEditor } = useEditorCommands({
+    userRole: userRole || "PARTICIPANT",
+    characterPosition,
+    characterDirection,
+    userId,
+    onSystemMessage: handleEditorSystemMessage,
+  })
+
+  // 🎨 에디터 명령어 핸들러
+  const handleEditorCommand = useCallback(async (command: ParsedEditorCommand) => {
+    if (!canUseEditor) {
+      handleEditorSystemMessage("에디터 사용 권한이 없습니다.", "error")
+      return
+    }
+    await executeEditorCommand(command)
+  }, [canUseEditor, executeEditorCommand, handleEditorSystemMessage])
 
   // 🔒 서버 파생 ID 통합: Socket → LiveKit → 원본 userId 순서로 우선순위
   // Socket과 LiveKit 모두 서버에서 검증된 ID를 반환하므로 둘 중 하나를 사용
@@ -626,6 +1078,20 @@ function SpaceLayoutContent({
           <RecordingIndicator recordingStatus={recordingStatus} />
         </div>
 
+        {/* 🎨 에디터 모드 인디케이터 (상단 좌측) */}
+        {isEditorActive && (
+          <div className="absolute left-4 top-2 z-30">
+            <EditorModeIndicator />
+          </div>
+        )}
+
+        {/* 🎨 에디터 패널 (좌측) */}
+        {isEditorPanelOpen && (
+          <div className="pointer-events-auto absolute left-2 top-14 z-30 max-h-[calc(100%-120px)]">
+            <EditorPanel />
+          </div>
+        )}
+
         {/* 플로팅 채팅 오버레이 (좌측 하단) */}
         <FloatingChatOverlay
           messages={messages}
@@ -633,6 +1099,7 @@ function SpaceLayoutContent({
           onSendMessage={handleSendMessage}
           onSendWhisper={handleSendWhisper}
           onAdminCommand={handleAdminCommand}
+          onEditorCommand={handleEditorCommand}
           onDeleteMessage={deleteMessage}
           currentUserId={resolvedUserId}
           userRole={userRole}

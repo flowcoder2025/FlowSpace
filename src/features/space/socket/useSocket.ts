@@ -74,6 +74,7 @@ interface UseSocketReturn {
   effectivePlayerId: string | null // 🔒 서버에서 파생된 실제 플레이어 ID
   partyState: PartyState // 🎉 현재 파티 상태
   recordingStatus: RecordingStatusData | null // 🔴 현재 녹화 상태 (법적 준수)
+  socket: Socket<ServerToClientEvents, ClientToServerEvents> | null // 📦 Socket 인스턴스 (에디터 동기화용)
   sendMessage: (content: string, replyTo?: ReplyToData) => void  // 답장 지원
   sendWhisper: (targetNickname: string, content: string, replyTo?: ReplyToData) => void  // 📬 귓속말 전송 (답장 지원)
   joinParty: (partyId: string, partyName: string) => void  // 🎉 파티 입장
@@ -753,6 +754,7 @@ export function useSocket({
     socketError, // 🔒 세션 검증 실패 시 에러
     effectivePlayerId, // 🔒 서버에서 파생된 실제 플레이어 ID
     partyState, // 🎉 현재 파티 상태
+    socket: socketRef.current, // 📦 Socket 인스턴스 (에디터 동기화용)
     sendMessage,
     sendWhisper, // 📬 귓속말 전송
     joinParty, // 🎉 파티 입장

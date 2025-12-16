@@ -321,6 +321,7 @@ model Space {
   guestSessions GuestSession[]
   members       SpaceMember[]    // Phase 6: 공간 멤버
   chatMessages  ChatMessage[]    // Phase 6: 채팅 메시지
+  mapObjects    MapObject[]      // 맵 오브젝트 (에디터 배치)
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -475,7 +476,42 @@ model SpaceMember {
 }
 
 // ============================================
-// 17. ChatMessage (채팅 메시지 영속화)
+// 17. MapObject (맵 오브젝트 - 에디터 배치)
+// ============================================
+model MapObject {
+  id             String   @id @default(cuid())
+  spaceId        String
+  assetId        String   // 에셋 레지스트리 ID (e.g., "portal", "chair")
+
+  // 위치 정보
+  positionX      Int      // 그리드 X 좌표
+  positionY      Int      // 그리드 Y 좌표
+  rotation       Int      @default(0) // 0, 90, 180, 270
+
+  // 페어 오브젝트 연결 (포털 등)
+  linkedObjectId String?    @unique // 연결된 오브젝트 ID (1:1 관계)
+  linkedObject   MapObject? @relation("ObjectPair", fields: [linkedObjectId], references: [id], onDelete: SetNull)
+  linkedBy       MapObject? @relation("ObjectPair")
+
+  // 커스텀 데이터
+  customData     Json?    // pairType, pairRole 등
+
+  // 배치 정보
+  placedBy       String   // userId 또는 guestSessionId
+  placedByType   SenderType @default(USER) // USER or GUEST
+
+  space          Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([spaceId])
+  @@index([assetId])
+  @@index([linkedObjectId])
+}
+
+// ============================================
+// 18. ChatMessage (채팅 메시지 영속화)
 // ============================================
 model ChatMessage {
   id          String      @id @default(cuid())

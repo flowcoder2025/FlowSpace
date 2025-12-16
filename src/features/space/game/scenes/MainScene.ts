@@ -11,6 +11,8 @@ import {
   GameEvents,
   type PlayerPosition,
   type ChatFocusPayload,
+  type EditorModePayload,
+  type EditorCanvasClickPayload,
 } from "../events"
 import {
   createCharacterAnimationsFromSpritesheet,
@@ -23,6 +25,7 @@ import {
   createInteractiveObjects,
   type InteractiveObjectConfig,
 } from "../objects"
+import { getAssetById, type AssetMetadata } from "@/config/asset-registry"
 
 // Development mode flag for debug logs
 const IS_DEV = process.env.NODE_ENV === "development"
@@ -75,6 +78,7 @@ export class MainScene extends Phaser.Scene {
   private isJumping = false
   private jumpCooldown = false
   private isChatActive = false // 채팅 활성화 시 게임 입력 차단
+  private isEditorActive = false // 🎨 에디터 모드 활성화 시 클릭 → 배치
   private playerId: string = ""
   private playerNickname: string = ""
   private playerAvatarColor: AvatarColor = "default"
@@ -95,6 +99,16 @@ export class MainScene extends Phaser.Scene {
   private handleLocalProfileUpdate!: (data: unknown) => void
   private handleRemoteProfileUpdate!: (data: unknown) => void
   private handleChatFocusChanged!: (data: unknown) => void
+  private handleEditorModeChanged!: (data: unknown) => void // 🎨 에디터 모드 이벤트
+  private handleEditorPlaceObject!: (data: unknown) => void // 🎨 오브젝트 배치 이벤트
+
+  // 🎨 배치된 오브젝트 관리
+  private placedObjects: Map<string, Phaser.GameObjects.Container> = new Map()
+
+  // 🎨 좌표 표시 UI (에디터 모드)
+  private coordinateDisplay!: Phaser.GameObjects.Container
+  private coordinateText!: Phaser.GameObjects.Text
+  private coordinateBg!: Phaser.GameObjects.Rectangle
 
   // Jump configuration
   private readonly JUMP_HEIGHT = 20
@@ -194,6 +208,9 @@ export class MainScene extends Phaser.Scene {
 
     // Setup camera
     this.setupCamera()
+
+    // 🎨 Setup coordinate display for editor mode
+    this.setupCoordinateDisplay()
 
     // Mark scene as active
     this.isSceneActive = true
@@ -420,6 +437,36 @@ export class MainScene extends Phaser.Scene {
     this.interactKey = this.input.keyboard!.addKey(
       Phaser.Input.Keyboard.KeyCodes.E
     )
+
+    // 🎨 에디터 모드 클릭 핸들러 (캔버스 클릭 → 배치 좌표 전송)
+    this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+      if (!this.isEditorActive) return
+
+      // 월드 좌표 (카메라 스크롤 반영)
+      const worldX = pointer.worldX
+      const worldY = pointer.worldY
+
+      // 그리드 좌표 계산
+      const mapConfig = this.tileMapSystem.getMapConfig()
+      const TILE_SIZE = mapConfig.TILE_SIZE
+      const gridX = Math.floor(worldX / TILE_SIZE)
+      const gridY = Math.floor(worldY / TILE_SIZE)
+
+      if (IS_DEV) {
+        console.log(
+          `[MainScene] Editor click: grid(${gridX}, ${gridY}), world(${worldX.toFixed(0)}, ${worldY.toFixed(0)})`
+        )
+      }
+
+      // 에디터 캔버스 클릭 이벤트 전송
+      const clickPayload: EditorCanvasClickPayload = {
+        gridX,
+        gridY,
+        worldX,
+        worldY,
+      }
+      eventBridge.emit(GameEvents.EDITOR_CANVAS_CLICK, clickPayload)
+    })
   }
 
   private jump() {
@@ -488,6 +535,91 @@ export class MainScene extends Phaser.Scene {
     this.cameras.main.startFollow(this.playerContainer, true, 0.1, 0.1)
     this.cameras.main.setBounds(0, 0, worldBounds.width, worldBounds.height)
     this.cameras.main.setZoom(1.2)
+  }
+
+  /**
+   * 🎨 에디터 모드용 좌표 표시 UI 설정
+   * 마우스 커서 위치에 그리드 좌표를 실시간으로 표시
+   */
+  private setupCoordinateDisplay() {
+    // 좌표 텍스트 생성
+    this.coordinateText = this.add.text(0, 0, "(0, 0)", {
+      fontSize: "11px",
+      fontFamily: "monospace",
+      color: "#ffffff",
+      padding: { x: 6, y: 3 },
+    })
+    this.coordinateText.setOrigin(0, 0)
+
+    // 배경 사각형 생성 (텍스트 크기에 맞춤)
+    const textBounds = this.coordinateText.getBounds()
+    this.coordinateBg = this.add.rectangle(
+      0,
+      0,
+      textBounds.width + 4,
+      textBounds.height + 2,
+      0x000000,
+      0.75
+    )
+    this.coordinateBg.setOrigin(0, 0)
+
+    // 컨테이너로 묶기
+    this.coordinateDisplay = this.add.container(0, 0, [
+      this.coordinateBg,
+      this.coordinateText,
+    ])
+    this.coordinateDisplay.setDepth(1000) // 모든 것 위에 표시
+    this.coordinateDisplay.setScrollFactor(0) // 카메라 스크롤 무시 (화면 고정)
+    this.coordinateDisplay.setVisible(false) // 초기에는 숨김
+
+    // 마우스 이동 이벤트 핸들러
+    this.input.on("pointermove", (pointer: Phaser.Input.Pointer) => {
+      if (!this.isEditorActive) {
+        this.coordinateDisplay.setVisible(false)
+        return
+      }
+
+      // 그리드 좌표 계산
+      const mapConfig = this.tileMapSystem.getMapConfig()
+      const TILE_SIZE = mapConfig.TILE_SIZE
+      const gridX = Math.floor(pointer.worldX / TILE_SIZE)
+      const gridY = Math.floor(pointer.worldY / TILE_SIZE)
+
+      // 좌표 텍스트 업데이트
+      this.coordinateText.setText(`(${gridX}, ${gridY})`)
+
+      // 배경 크기 업데이트
+      const newBounds = this.coordinateText.getBounds()
+      this.coordinateBg.setSize(newBounds.width + 4, newBounds.height + 2)
+
+      // 화면 좌표로 위치 설정 (커서 오른쪽 아래)
+      const offsetX = 15
+      const offsetY = 15
+
+      // 화면 경계 체크 (오른쪽/아래로 넘어가면 반대쪽에 표시)
+      const displayWidth = newBounds.width + 4
+      const displayHeight = newBounds.height + 2
+      const screenWidth = this.cameras.main.width
+      const screenHeight = this.cameras.main.height
+
+      let posX = pointer.x + offsetX
+      let posY = pointer.y + offsetY
+
+      if (posX + displayWidth > screenWidth) {
+        posX = pointer.x - displayWidth - 5
+      }
+      if (posY + displayHeight > screenHeight) {
+        posY = pointer.y - displayHeight - 5
+      }
+
+      this.coordinateDisplay.setPosition(posX, posY)
+      this.coordinateDisplay.setVisible(true)
+    })
+
+    // 마우스가 캔버스를 벗어나면 숨김
+    this.input.on("pointerout", () => {
+      this.coordinateDisplay.setVisible(false)
+    })
   }
 
   private isSceneTrulyActive(): boolean {
@@ -575,6 +707,99 @@ export class MainScene extends Phaser.Scene {
       }
     }
 
+    // 🎨 에디터 모드 이벤트 핸들러
+    this.handleEditorModeChanged = (data: unknown) => {
+      const { isActive } = data as EditorModePayload
+      this.isEditorActive = isActive
+      if (IS_DEV) {
+        console.log(
+          `[MainScene] Editor mode changed: ${isActive ? "ACTIVE" : "INACTIVE"}`
+        )
+      }
+    }
+
+    // 🎨 오브젝트 배치 이벤트 핸들러
+    this.handleEditorPlaceObject = (data: unknown) => {
+      const { objectId, assetId, gridX, gridY } = data as {
+        objectId: string
+        assetId: string
+        gridX: number
+        gridY: number
+        rotation?: number
+      }
+
+      // 씬이 비활성화 상태면 무시
+      if (!this.isSceneTrulyActive()) {
+        console.warn(`[MainScene] ⚠️ Scene not active, skipping object placement`)
+        return
+      }
+
+      // 에셋 메타데이터 조회
+      const assetMeta = getAssetById(assetId)
+
+      // 타일 크기 가져오기
+      const mapConfig = this.tileMapSystem.getMapConfig()
+      const TILE_SIZE = mapConfig.TILE_SIZE
+
+      // 에셋 크기 (타일 단위)
+      const assetWidth = assetMeta?.size?.width ?? 1
+      const assetHeight = assetMeta?.size?.height ?? 1
+
+      // 월드 좌표 계산 (에셋 크기 반영)
+      const worldX = gridX * TILE_SIZE + (TILE_SIZE * assetWidth) / 2
+      const worldY = gridY * TILE_SIZE + (TILE_SIZE * assetHeight) / 2
+
+      // 카테고리별 색상 매핑
+      const categoryColors: Record<string, { fill: number; stroke: number; icon: string }> = {
+        interactive: { fill: 0xfbbf24, stroke: 0xf59e0b, icon: "⚡" }, // 노란색
+        furniture: { fill: 0xa3866a, stroke: 0x8b6f5c, icon: "🪑" },   // 갈색
+        decoration: { fill: 0x4ade80, stroke: 0x22c55e, icon: "🌳" }, // 초록색
+        wall: { fill: 0x9ca3af, stroke: 0x6b7280, icon: "🧱" },       // 회색
+        floor: { fill: 0x60a5fa, stroke: 0x3b82f6, icon: "🏠" },      // 파란색
+      }
+
+      const category = assetMeta?.categoryId ?? "decoration"
+      const colors = categoryColors[category] ?? categoryColors.decoration
+
+      // 오브젝트 컨테이너 생성
+      const container = this.add.container(worldX, worldY)
+      container.setDepth(50 + gridY) // Y좌표 기반 깊이 (자연스러운 정렬)
+
+      // 배경 사각형 (에셋 크기 반영)
+      const bgWidth = TILE_SIZE * assetWidth - 4
+      const bgHeight = TILE_SIZE * assetHeight - 4
+      const background = this.add.rectangle(0, 0, bgWidth, bgHeight, colors.fill, 0.85)
+      background.setStrokeStyle(2, colors.stroke)
+
+      // 아이콘 표시
+      const iconText = this.add.text(0, -4, colors.icon, {
+        fontSize: assetWidth > 1 || assetHeight > 1 ? "18px" : "14px",
+      })
+      iconText.setOrigin(0.5, 0.5)
+
+      // 에셋 이름 표시 (짧게)
+      const displayName = assetMeta?.name ?? assetId
+      const shortName = displayName.length > 4 ? displayName.slice(0, 4) : displayName
+      const nameText = this.add.text(0, 8, shortName, {
+        fontSize: "9px",
+        fontFamily: "sans-serif",
+        color: "#ffffff",
+        stroke: "#000000",
+        strokeThickness: 2,
+      })
+      nameText.setOrigin(0.5, 0.5)
+
+      // 컨테이너에 추가
+      container.add([background, iconText, nameText])
+
+      // 저장 (컨테이너로 저장)
+      this.placedObjects.set(objectId, container)
+
+      if (IS_DEV) {
+        console.log(`[MainScene] 🎯 Object placed: ${assetId} (${category}) at grid(${gridX}, ${gridY}), size: ${assetWidth}x${assetHeight}`)
+      }
+    }
+
     eventBridge.on(GameEvents.REMOTE_PLAYER_UPDATE, this.handleRemotePlayerUpdate)
     eventBridge.on(GameEvents.REMOTE_PLAYER_JOIN, this.handleRemotePlayerJoin)
     eventBridge.on(GameEvents.REMOTE_PLAYER_LEAVE, this.handleRemotePlayerLeave)
@@ -582,6 +807,8 @@ export class MainScene extends Phaser.Scene {
     eventBridge.on(GameEvents.LOCAL_PROFILE_UPDATE, this.handleLocalProfileUpdate)
     eventBridge.on(GameEvents.REMOTE_PROFILE_UPDATE, this.handleRemoteProfileUpdate)
     eventBridge.on(GameEvents.CHAT_FOCUS_CHANGED, this.handleChatFocusChanged)
+    eventBridge.on(GameEvents.EDITOR_MODE_CHANGED, this.handleEditorModeChanged)
+    eventBridge.on(GameEvents.EDITOR_PLACE_OBJECT, this.handleEditorPlaceObject)
   }
 
   private processPendingRemotePlayerEvents() {
@@ -1054,6 +1281,16 @@ export class MainScene extends Phaser.Scene {
     if (this.handleChatFocusChanged) {
       eventBridge.off(GameEvents.CHAT_FOCUS_CHANGED, this.handleChatFocusChanged)
     }
+    if (this.handleEditorModeChanged) {
+      eventBridge.off(GameEvents.EDITOR_MODE_CHANGED, this.handleEditorModeChanged)
+    }
+    if (this.handleEditorPlaceObject) {
+      eventBridge.off(GameEvents.EDITOR_PLACE_OBJECT, this.handleEditorPlaceObject)
+    }
+
+    // 🎨 배치된 오브젝트 정리
+    this.placedObjects.forEach((obj) => obj.destroy())
+    this.placedObjects.clear()
 
     this.remotePlayers.forEach((container) => container.destroy())
     this.remotePlayers.clear()

@@ -118,6 +118,75 @@ export interface AdminAnnounceRequest {
 }
 
 // ============================================
+// 맵 오브젝트 관련 타입 (에디터)
+// ============================================
+
+// 맵 오브젝트 그리드 위치
+export interface GridPosition {
+  x: number
+  y: number
+}
+
+// 맵 오브젝트 데이터 (Socket 전송용)
+export interface MapObjectData {
+  id: string
+  assetId: string
+  position: GridPosition
+  rotation: 0 | 90 | 180 | 270
+  linkedObjectId?: string
+  customData?: Record<string, unknown>
+  placedBy: string
+  placedAt: string  // ISO 8601
+}
+
+// 오브젝트 배치 요청
+export interface ObjectPlaceRequest {
+  assetId: string
+  position: GridPosition
+  rotation?: 0 | 90 | 180 | 270
+  linkedObjectId?: string
+  customData?: Record<string, unknown>
+}
+
+// 오브젝트 업데이트 요청
+export interface ObjectUpdateRequest {
+  objectId: string
+  position?: GridPosition
+  rotation?: 0 | 90 | 180 | 270
+  linkedObjectId?: string
+  customData?: Record<string, unknown>
+}
+
+// 오브젝트 삭제 요청
+export interface ObjectDeleteRequest {
+  objectId: string
+}
+
+// 오브젝트 배치 결과 (서버 → 클라이언트)
+export interface ObjectPlacedData {
+  object: MapObjectData
+  placedByNickname: string
+}
+
+// 오브젝트 업데이트 결과 (서버 → 클라이언트)
+export interface ObjectUpdatedData {
+  object: MapObjectData
+  updatedByNickname: string
+}
+
+// 오브젝트 삭제 결과 (서버 → 클라이언트)
+export interface ObjectDeletedData {
+  objectId: string
+  deletedBy: string
+  deletedByNickname: string
+}
+
+// 오브젝트 동기화 데이터 (입장 시 전체 목록)
+export interface ObjectsSyncData {
+  objects: MapObjectData[]
+}
+
+// ============================================
 // 녹화 관련 타입 (법적 준수)
 // ============================================
 
@@ -224,6 +293,13 @@ export interface ClientToServerEvents {
   // ============================================
   "recording:start": (data: RecordingStartRequest) => void
   "recording:stop": (data: RecordingStopRequest) => void
+
+  // ============================================
+  // 맵 오브젝트 이벤트 (Client → Server) - 에디터
+  // ============================================
+  "object:place": (data: ObjectPlaceRequest) => void
+  "object:update": (data: ObjectUpdateRequest) => void
+  "object:delete": (data: ObjectDeleteRequest) => void
 }
 
 // Server to Client events
@@ -284,6 +360,15 @@ export interface ServerToClientEvents {
   "recording:stopped": (data: RecordingStatusData) => void   // 녹화 중지됨 (전체 브로드캐스트)
   "recording:status": (data: RecordingStatusData) => void    // 현재 녹화 상태 (입장 시 수신)
   "recording:error": (data: { message: string }) => void     // 녹화 에러 (권한 부족 등)
+
+  // ============================================
+  // 맵 오브젝트 이벤트 (Server → Client) - 에디터
+  // ============================================
+  "object:placed": (data: ObjectPlacedData) => void          // 오브젝트 배치됨
+  "object:updated": (data: ObjectUpdatedData) => void        // 오브젝트 업데이트됨
+  "object:deleted": (data: ObjectDeletedData) => void        // 오브젝트 삭제됨
+  "objects:sync": (data: ObjectsSyncData) => void            // 전체 오브젝트 동기화 (입장 시)
+  "object:error": (data: { message: string }) => void        // 오브젝트 에러 (권한 부족 등)
 }
 
 // Inter-server events (not used in MVP)
