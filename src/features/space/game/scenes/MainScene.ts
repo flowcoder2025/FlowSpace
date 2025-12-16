@@ -1,21 +1,23 @@
 /**
  * Main Game Scene
  * Handles map rendering, player movement, and camera
+ *
+ * @version 2.0.0 - 고품질 타일맵 시스템 적용
  */
 import * as Phaser from "phaser"
 import { MAP_CONFIG } from "../config"
-import { eventBridge, GameEvents, type PlayerPosition, type ChatFocusPayload } from "../events"
+import {
+  eventBridge,
+  GameEvents,
+  type PlayerPosition,
+  type ChatFocusPayload,
+} from "../events"
 import {
   createCharacterAnimationsFromSpritesheet,
   getAnimationKey,
   CHARACTER_CONFIG,
 } from "../sprites"
-import {
-  generateAllTileTextures,
-  getRandomFloorKey,
-  getRandomWallKey,
-  TILE_CONFIG,
-} from "../tiles"
+import { TileMapSystem } from "../tiles"
 import {
   InteractiveObject,
   createInteractiveObjects,
@@ -26,9 +28,21 @@ import {
 const IS_DEV = process.env.NODE_ENV === "development"
 
 // Avatar color type - must match CHARACTER_CONFIG.COLORS keys
-type AvatarColor = "default" | "red" | "green" | "purple" | "orange" | "pink" | "yellow" | "blue"
+type AvatarColor =
+  | "default"
+  | "red"
+  | "green"
+  | "purple"
+  | "orange"
+  | "pink"
+  | "yellow"
+  | "blue"
 
 export class MainScene extends Phaser.Scene {
+  // 타일맵 시스템
+  private tileMapSystem!: TileMapSystem
+  private collisionLayer: Phaser.Tilemaps.TilemapLayer | null = null
+
   private playerContainer!: Phaser.GameObjects.Container
   private playerSprite!: Phaser.GameObjects.Sprite
   private playerShadow!: Phaser.GameObjects.Ellipse
@@ -41,15 +55,19 @@ export class MainScene extends Phaser.Scene {
   }
   private spaceKey!: Phaser.Input.Keyboard.Key
   private interactKey!: Phaser.Input.Keyboard.Key
-  private walls!: Phaser.Physics.Arcade.StaticGroup
   private interactiveObjects: InteractiveObject[] = []
   private nearbyObject: InteractiveObject | null = null
   private remotePlayers: Map<string, Phaser.GameObjects.Container> = new Map()
-  private remotePlayerSprites: Map<string, Phaser.GameObjects.Sprite> = new Map()
-  private remotePlayerShadows: Map<string, Phaser.GameObjects.Ellipse> = new Map()
+  private remotePlayerSprites: Map<string, Phaser.GameObjects.Sprite> =
+    new Map()
+  private remotePlayerShadows: Map<string, Phaser.GameObjects.Ellipse> =
+    new Map()
   private remotePlayerNames: Map<string, Phaser.GameObjects.Text> = new Map()
   // Track failed remote player additions to prevent infinite retry loops
-  private failedRemotePlayers: Map<string, { timestamp: number; retryCount: number }> = new Map()
+  private failedRemotePlayers: Map<
+    string,
+    { timestamp: number; retryCount: number }
+  > = new Map()
   private readonly MAX_RETRY_COUNT = 3
   private readonly RETRY_COOLDOWN_MS = 5000
   private playerDirection: "up" | "down" | "left" | "right" = "down"
@@ -87,68 +105,82 @@ export class MainScene extends Phaser.Scene {
     super({ key: "MainScene" })
   }
 
-  init(data: { playerId: string; nickname: string; avatarColor?: AvatarColor }) {
+  init(data: {
+    playerId: string
+    nickname: string
+    avatarColor?: AvatarColor
+  }) {
     this.playerId = data.playerId || "local-player"
     this.playerNickname = data.nickname || "Player"
     this.playerAvatarColor = data.avatarColor || "default"
+
+    // 타일맵 시스템 초기화
+    this.tileMapSystem = new TileMapSystem(this)
   }
 
   preload() {
-    // Generate tile textures (procedural, can be done in preload)
-    generateAllTileTextures(this)
+    // 타일셋 텍스처 생성 (새로운 시스템)
+    this.tileMapSystem.generateTextures()
 
     // Add load error handler for debugging
     this.load.on("loaderror", (fileObj: Phaser.Loader.File) => {
-      console.error(`[MainScene] Failed to load: ${fileObj.key} from ${fileObj.url}`)
+      console.error(
+        `[MainScene] Failed to load: ${fileObj.key} from ${fileObj.url}`
+      )
     })
 
     // Load character sprite sheets from static PNG files
-    // This ensures consistent behavior across development and production environments
-    // NOTE: Phaser's loader automatically handles duplicate keys - no need to manually remove textures
-    // Manual texture removal can cause issues with Phaser's global texture cache, especially in React Strict Mode
-    const colors: AvatarColor[] = ["default", "red", "green", "purple", "orange", "pink", "yellow", "blue"]
+    const colors: AvatarColor[] = [
+      "default",
+      "red",
+      "green",
+      "purple",
+      "orange",
+      "pink",
+      "yellow",
+      "blue",
+    ]
     colors.forEach((color) => {
       const textureKey = `character-${color}`
-      // Always add to load queue - Phaser handles duplicates internally
-      this.load.spritesheet(textureKey, `/assets/game/sprites/character-${color}.png`, {
-        frameWidth: CHARACTER_CONFIG.WIDTH,
-        frameHeight: CHARACTER_CONFIG.HEIGHT,
-      })
+      this.load.spritesheet(
+        textureKey,
+        `/assets/game/sprites/character-${color}.png`,
+        {
+          frameWidth: CHARACTER_CONFIG.WIDTH,
+          frameHeight: CHARACTER_CONFIG.HEIGHT,
+        }
+      )
     })
 
-    // Log when loading completes with detailed frame info
+    // Log when loading completes
     this.load.on("complete", () => {
       console.log("[MainScene] All assets loaded successfully")
-      colors.forEach((color) => {
-        const textureKey = `character-${color}`
-        const exists = this.textures.exists(textureKey)
-        const texture = this.textures.get(textureKey)
-        const frameCount = texture ? texture.frameTotal : 0
-        console.log(`[MainScene] Texture ${textureKey}: exists=${exists}, frames=${frameCount}`)
-      })
     })
   }
 
   create() {
-    // Character textures are loaded from static PNG files in preload()
-    // Now create animations for all loaded sprite sheets
-    const colors: AvatarColor[] = ["default", "red", "green", "purple", "orange", "pink", "yellow", "blue"]
+    // Character animations setup
+    const colors: AvatarColor[] = [
+      "default",
+      "red",
+      "green",
+      "purple",
+      "orange",
+      "pink",
+      "yellow",
+      "blue",
+    ]
 
     colors.forEach((color) => {
       const textureKey = `character-${color}`
-
-      // Verify texture was loaded successfully
       if (!this.textures.exists(textureKey)) {
         console.error(`[MainScene] Character texture not loaded: ${textureKey}`)
         return
       }
-
-      // Create animations using spritesheet frame indices
-      // Spritesheet layout: 4 frames per row, 4 rows (down, left, right, up)
       createCharacterAnimationsFromSpritesheet(this, textureKey, color)
     })
 
-    // Create procedural tilemap
+    // 새로운 타일맵 시스템으로 맵 생성
     this.createMap()
 
     // Create interactive objects
@@ -172,8 +204,7 @@ export class MainScene extends Phaser.Scene {
     // Process any remote player events that arrived before scene was ready
     this.processPendingRemotePlayerEvents()
 
-    // Emit game ready event after a frame delay to ensure Phaser scene is fully active
-    // This prevents race conditions where GAME_READY is emitted before the scene can handle events
+    // Emit game ready event
     this.time.delayedCall(0, () => {
       if (IS_DEV) {
         console.log("[MainScene] Emitting GAME_READY after scene is fully active")
@@ -183,249 +214,102 @@ export class MainScene extends Phaser.Scene {
   }
 
   private createMap() {
-    const { MAP_WIDTH, MAP_HEIGHT } = MAP_CONFIG
-    const TILE_SIZE = TILE_CONFIG.SIZE
+    // 타일맵 생성
+    const tilemap = this.tileMapSystem.createTilemap()
 
-    // Store tile texture assignments for consistent floor rendering
-    const floorTileMap: string[][] = []
-    for (let y = 0; y < MAP_HEIGHT; y++) {
-      floorTileMap[y] = []
-      for (let x = 0; x < MAP_WIDTH; x++) {
-        floorTileMap[y][x] = getRandomFloorKey()
-      }
+    if (!tilemap) {
+      console.error("[MainScene] Failed to create tilemap")
+      return
     }
 
-    // Create floor tiles using generated textures
-    for (let y = 0; y < MAP_HEIGHT; y++) {
-      for (let x = 0; x < MAP_WIDTH; x++) {
-        const tileX = x * TILE_SIZE + TILE_SIZE / 2
-        const tileY = y * TILE_SIZE + TILE_SIZE / 2
+    // 충돌 레이어 설정
+    this.collisionLayer = this.tileMapSystem.setupCollisions()
 
-        // Use procedurally generated floor texture
-        this.add.image(tileX, tileY, floorTileMap[y][x]).setOrigin(0.5).setDepth(-2)
-      }
+    if (IS_DEV) {
+      console.log(
+        "[MainScene] Tilemap created:",
+        tilemap.width,
+        "x",
+        tilemap.height
+      )
     }
-
-    // Create walls (boundary and some interior)
-    this.walls = this.physics.add.staticGroup()
-
-    // Boundary walls
-    for (let x = 0; x < MAP_WIDTH; x++) {
-      this.createWall(x, 0)
-      this.createWall(x, MAP_HEIGHT - 1)
-    }
-    for (let y = 1; y < MAP_HEIGHT - 1; y++) {
-      this.createWall(0, y)
-      this.createWall(MAP_WIDTH - 1, y)
-    }
-
-    // Interior walls (enhanced room layout) - 확장된 맵 크기에 맞게 조정
-    // 좌측 상단 회의실 벽
-    for (let y = 3; y < 10; y++) {
-      if (y !== 6) { // Door gap at y=6
-        this.createWall(12, y)
-      }
-    }
-
-    // 중앙 가로 벽
-    for (let x = 18; x < 32; x++) {
-      if (x !== 25) { // Door gap at x=25
-        this.createWall(x, 15)
-      }
-    }
-
-    // 우측 상단 회의실 벽
-    for (let x = 35; x < 42; x++) {
-      this.createWall(x, 6)
-    }
-    for (let y = 6; y < 14; y++) {
-      if (y !== 10) { // Door gap
-        this.createWall(35, y)
-      }
-    }
-
-    // 좌측 하단 휴게실 벽
-    for (let x = 5; x < 15; x++) {
-      if (x !== 10) { // Door gap
-        this.createWall(x, 22)
-      }
-    }
-
-    // 우측 하단 세미나실 벽
-    for (let y = 22; y < 30; y++) {
-      if (y !== 26) { // Door gap
-        this.createWall(40, y)
-      }
-    }
-
-    // Add decorative elements
-    // Accent tiles (entry points and special areas)
-    this.createAccentTile(8, 8, 0) // Diamond accent
-    this.createAccentTile(25, 10, 1) // Circle accent
-    this.createAccentTile(38, 20, 2) // Corner accent
-    this.createAccentTile(15, 25, 0) // Additional accent
-
-    // Spawn point indicator at center
-    this.createSpawnPoint(Math.floor(MAP_WIDTH / 2), Math.floor(MAP_HEIGHT / 2))
-
-    // Carpet areas - 확장된 공간에 맞게 배치
-    this.createCarpetArea(5, 12, 5, 4) // Reception area
-    this.createCarpetArea(36, 7, 4, 5) // Meeting room
-    this.createCarpetArea(20, 25, 6, 4) // Lounge area
-    this.createCarpetArea(6, 23, 6, 4) // Break room
-
-    // Plants/decorations - 모서리와 주요 포인트에 배치
-    this.createPlant(2, 2)
-    this.createPlant(MAP_WIDTH - 3, 2)
-    this.createPlant(2, MAP_HEIGHT - 3)
-    this.createPlant(MAP_WIDTH - 3, MAP_HEIGHT - 3)
-    this.createPlant(15, 6)
-    this.createPlant(30, 8)
-    this.createPlant(42, 12)
-    this.createPlant(8, 20)
-    this.createPlant(32, 28)
-    this.createPlant(18, 18)
-  }
-
-  private createWall(tileX: number, tileY: number) {
-    const TILE_SIZE = TILE_CONFIG.SIZE
-    const x = tileX * TILE_SIZE + TILE_SIZE / 2
-    const y = tileY * TILE_SIZE + TILE_SIZE / 2
-
-    // Use procedurally generated wall texture
-    const wallKey = getRandomWallKey()
-    this.add.image(x, y, wallKey).setOrigin(0.5).setDepth(-1)
-
-    // Create invisible physics body
-    const wall = this.add.rectangle(x, y, TILE_SIZE, TILE_SIZE, 0x000000, 0)
-    this.physics.add.existing(wall, true)
-    this.walls.add(wall)
-  }
-
-  private createAccentTile(tileX: number, tileY: number, variant: number = 0) {
-    const TILE_SIZE = TILE_CONFIG.SIZE
-    const x = tileX * TILE_SIZE + TILE_SIZE / 2
-    const y = tileY * TILE_SIZE + TILE_SIZE / 2
-
-    // Use procedurally generated accent texture
-    const accentKey = `tile-accent-${variant % 3}`
-    this.add.image(x, y, accentKey).setOrigin(0.5).setDepth(-1)
-  }
-
-  private createSpawnPoint(tileX: number, tileY: number) {
-    const TILE_SIZE = TILE_CONFIG.SIZE
-    const x = tileX * TILE_SIZE + TILE_SIZE / 2
-    const y = tileY * TILE_SIZE + TILE_SIZE / 2
-
-    // Use spawn texture
-    this.add.image(x, y, "tile-spawn").setOrigin(0.5).setDepth(-1)
-  }
-
-  private createCarpetArea(startX: number, startY: number, width: number, height: number) {
-    const TILE_SIZE = TILE_CONFIG.SIZE
-
-    for (let dy = 0; dy < height; dy++) {
-      for (let dx = 0; dx < width; dx++) {
-        const x = (startX + dx) * TILE_SIZE + TILE_SIZE / 2
-        const y = (startY + dy) * TILE_SIZE + TILE_SIZE / 2
-
-        this.add.image(x, y, "tile-carpet").setOrigin(0.5).setDepth(-1)
-      }
-    }
-  }
-
-  private createPlant(tileX: number, tileY: number) {
-    const TILE_SIZE = TILE_CONFIG.SIZE
-    const x = tileX * TILE_SIZE + TILE_SIZE / 2
-    const y = tileY * TILE_SIZE + TILE_SIZE / 2
-
-    // Use plant texture (decorative, no collision)
-    this.add.image(x, y, "tile-plant").setOrigin(0.5).setDepth(-1)
   }
 
   private createInteractiveObjects() {
-    const TILE_SIZE = TILE_CONFIG.SIZE
+    const mapConfig = this.tileMapSystem.getMapConfig()
+    const TILE_SIZE = mapConfig.TILE_SIZE
 
-    // Define interactive objects for this map - 확장된 맵에 맞게 배치
+    // 상호작용 오브젝트 정의
     const objectConfigs: InteractiveObjectConfig[] = [
-      // Info sign at entrance (중앙 상단)
+      // 로비 안내
       {
         id: "info-welcome",
-        x: 25,
-        y: 5,
+        x: 8,
+        y: 8,
         type: "info",
         label: "환영 메시지",
         data: { message: "FLOW 메타버스에 오신 것을 환영합니다!" },
       },
-      // Portal to meeting room (좌측 회의실 입구)
+      // 회의실 입구
       {
         id: "portal-meeting",
-        x: 12,
-        y: 6,
+        x: 34,
+        y: 15,
         type: "portal",
         label: "회의실 이동",
         data: { destination: "meeting-room" },
       },
-      // NPC guide (중앙)
-      {
-        id: "npc-guide",
-        x: 20,
-        y: 18,
-        type: "npc",
-        label: "가이드 대화",
-        data: { name: "가이드 봇", dialogue: ["안녕하세요!", "도움이 필요하시면 말씀해주세요."] },
-      },
-      // Collectible item (우측 회의실)
-      {
-        id: "item-badge",
-        x: 38,
-        y: 10,
-        type: "item",
-        label: "배지 획득",
-        data: { itemId: "welcome-badge", itemName: "환영 배지" },
-      },
-      // Door to seminar room (우측 하단)
-      {
-        id: "door-seminar",
-        x: 40,
-        y: 26,
-        type: "door",
-        label: "세미나실 입장",
-        data: { locked: false, targetRoom: "seminar-room" },
-      },
-      // Info sign at lounge (좌측 하단 휴게실)
+      // 휴게 공간 안내
       {
         id: "info-lounge",
-        x: 10,
-        y: 22,
+        x: 26,
+        y: 26,
         type: "info",
-        label: "휴게실 안내",
+        label: "휴게 공간",
         data: { message: "편하게 쉬어가세요! ☕" },
       },
-      // Portal to central area (중앙 가로벽 입구)
+      // 화이트보드 (공지)
       {
-        id: "portal-center",
-        x: 25,
-        y: 15,
-        type: "portal",
-        label: "중앙홀 이동",
-        data: { destination: "central-hall" },
+        id: "whiteboard-notice",
+        x: 44,
+        y: 7,
+        type: "info",
+        label: "공지사항",
+        data: { message: "오늘 회의: 14:00 전략 회의" },
+      },
+      // NPC 가이드
+      {
+        id: "npc-guide",
+        x: 16,
+        y: 18,
+        type: "npc",
+        label: "가이드",
+        data: {
+          name: "가이드 봇",
+          dialogue: ["안녕하세요!", "도움이 필요하시면 말씀해주세요."],
+        },
       },
     ]
 
-    // Create interactive objects
-    this.interactiveObjects = createInteractiveObjects(this, objectConfigs, TILE_SIZE)
+    this.interactiveObjects = createInteractiveObjects(
+      this,
+      objectConfigs,
+      TILE_SIZE
+    )
   }
 
   private checkObjectInteraction() {
-    // Reset nearby object
     this.nearbyObject = null
 
-    // Check proximity to each interactive object
     for (const obj of this.interactiveObjects) {
-      if (obj.checkPlayerProximity(this.playerContainer.x, this.playerContainer.y)) {
+      if (
+        obj.checkPlayerProximity(
+          this.playerContainer.x,
+          this.playerContainer.y
+        )
+      ) {
         this.nearbyObject = obj
-        break // Only one object can be interacted with at a time
+        break
       }
     }
   }
@@ -436,11 +320,8 @@ export class MainScene extends Phaser.Scene {
     }
 
     const interactionData = this.nearbyObject.getInteractionData()
-
-    // Play feedback animation
     this.nearbyObject.playInteractionFeedback()
 
-    // Emit interaction event to React
     eventBridge.emit(GameEvents.OBJECT_INTERACT, {
       playerId: this.playerId,
       object: interactionData,
@@ -448,13 +329,14 @@ export class MainScene extends Phaser.Scene {
   }
 
   private createPlayer() {
-    const { TILE_SIZE, MAP_WIDTH, MAP_HEIGHT } = MAP_CONFIG
+    // 스폰 포인트에서 시작
+    const spawnPoint = this.tileMapSystem.getDefaultSpawnPoint()
+    const spawnPos = this.tileMapSystem.spawnToPixel(spawnPoint)
 
-    // Start in center of map
-    const startX = (MAP_WIDTH / 2) * TILE_SIZE
-    const startY = (MAP_HEIGHT / 2) * TILE_SIZE
+    const startX = spawnPos.x
+    const startY = spawnPos.y
 
-    // Create player shadow (rendered below the player)
+    // Create player shadow
     this.playerShadow = this.add.ellipse(
       startX,
       startY + CHARACTER_CONFIG.HEIGHT / 2,
@@ -463,24 +345,26 @@ export class MainScene extends Phaser.Scene {
       0x000000,
       0.3
     )
-    this.playerShadow.setDepth(0)
+    this.playerShadow.setDepth(3)
 
-    // Create player sprite (local coords 0,0 inside container)
+    // Create player sprite
     const textureKey = `character-${this.playerAvatarColor}`
 
-    // Debug: Log sprite creation details
-    const textureExists = this.textures.exists(textureKey)
-    const texture = this.textures.get(textureKey)
-    const frameCount = texture ? texture.frameTotal : 0
-    console.log(`[MainScene] Creating player sprite: key=${textureKey}, avatarColor=${this.playerAvatarColor}, exists=${textureExists}, frames=${frameCount}`)
+    if (IS_DEV) {
+      const textureExists = this.textures.exists(textureKey)
+      console.log(
+        `[MainScene] Creating player sprite: key=${textureKey}, exists=${textureExists}`
+      )
+    }
 
     this.playerSprite = this.add.sprite(0, 0, textureKey)
     this.playerSprite.setOrigin(0.5, 0.5)
 
-    // Create container to hold sprite (physics applied to container)
-    this.playerContainer = this.add.container(startX, startY, [this.playerSprite])
-    // Note: Don't call setSize() on container - it affects physics body positioning
-    this.playerContainer.setDepth(1)
+    // Create container
+    this.playerContainer = this.add.container(startX, startY, [
+      this.playerSprite,
+    ])
+    this.playerContainer.setDepth(5) // 가구 위, 장식 아래
 
     // Play initial idle animation
     const idleAnim = getAnimationKey("down", false, this.playerAvatarColor)
@@ -488,41 +372,41 @@ export class MainScene extends Phaser.Scene {
       this.playerSprite.play(idleAnim)
     }
 
-    // Add physics to container (NOT sprite)
+    // Add physics to container
     this.physics.add.existing(this.playerContainer)
     const playerBody = this.playerContainer.body as Phaser.Physics.Arcade.Body
 
-    // Physics body size (slightly smaller than sprite for better collision feel)
     const bodyWidth = CHARACTER_CONFIG.WIDTH - 8
     const bodyHeight = CHARACTER_CONFIG.HEIGHT - 8
     playerBody.setSize(bodyWidth, bodyHeight)
-
-    // Center the body on the container
-    // Container origin is center, body default position is top-left of container
-    // So we need to offset by half the body size to center it
     playerBody.setOffset(-bodyWidth / 2, -bodyHeight / 2)
     playerBody.setCollideWorldBounds(true)
 
-    // Add collision with walls
-    this.physics.add.collider(this.playerContainer, this.walls)
+    // 충돌 레이어와 충돌 설정
+    if (this.collisionLayer) {
+      this.physics.add.collider(this.playerContainer, this.collisionLayer)
+    }
 
-    // Add nickname text above player
+    // Add nickname text
     this.nicknameText = this.add
-      .text(startX, startY - CHARACTER_CONFIG.HEIGHT / 2 - 8, this.playerNickname, {
-        fontSize: "12px",
-        color: "#ffffff",
-        backgroundColor: "#00000080",
-        padding: { x: 4, y: 2 },
-      })
+      .text(
+        startX,
+        startY - CHARACTER_CONFIG.HEIGHT / 2 - 8,
+        this.playerNickname,
+        {
+          fontSize: "12px",
+          color: "#ffffff",
+          backgroundColor: "#00000080",
+          padding: { x: 4, y: 2 },
+        }
+      )
       .setOrigin(0.5, 1)
-      .setDepth(2)
+      .setDepth(6)
   }
 
   private setupInput() {
-    // Arrow keys
     this.cursors = this.input.keyboard!.createCursorKeys()
 
-    // WASD keys
     this.wasd = {
       W: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.W),
       A: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.A),
@@ -530,11 +414,12 @@ export class MainScene extends Phaser.Scene {
       D: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.D),
     }
 
-    // Space key for jump
-    this.spaceKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE)
-
-    // E key for interaction
-    this.interactKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.E)
+    this.spaceKey = this.input.keyboard!.addKey(
+      Phaser.Input.Keyboard.KeyCodes.SPACE
+    )
+    this.interactKey = this.input.keyboard!.addKey(
+      Phaser.Input.Keyboard.KeyCodes.E
+    )
   }
 
   private jump() {
@@ -542,20 +427,17 @@ export class MainScene extends Phaser.Scene {
 
     this.isJumping = true
 
-    // Jump animation on SPRITE's local Y (independent from physics container)
-    // Sprite starts at y=0 (local), jumps to y=-JUMP_HEIGHT, returns to y=0
     this.tweens.add({
       targets: this.playerSprite,
-      y: -this.JUMP_HEIGHT,  // Local Y offset (relative to container)
+      y: -this.JUMP_HEIGHT,
       scaleX: 1.1,
       scaleY: 0.9,
       duration: this.JUMP_DURATION / 2,
       ease: "Quad.easeOut",
       onComplete: () => {
-        // Fall down animation
         this.tweens.add({
           targets: this.playerSprite,
-          y: 0,  // Return to local origin
+          y: 0,
           scaleX: 1,
           scaleY: 1,
           duration: this.JUMP_DURATION / 2,
@@ -564,7 +446,6 @@ export class MainScene extends Phaser.Scene {
             this.isJumping = false
             this.jumpCooldown = true
 
-            // Landing effect - squash
             this.tweens.add({
               targets: this.playerSprite,
               scaleX: 1.15,
@@ -574,7 +455,6 @@ export class MainScene extends Phaser.Scene {
               ease: "Quad.easeOut",
             })
 
-            // Reset cooldown
             this.time.delayedCall(this.JUMP_COOLDOWN, () => {
               this.jumpCooldown = false
             })
@@ -583,7 +463,6 @@ export class MainScene extends Phaser.Scene {
       },
     })
 
-    // Shadow animation (shrink while jumping)
     this.tweens.add({
       targets: this.playerShadow,
       scaleX: 0.6,
@@ -594,7 +473,6 @@ export class MainScene extends Phaser.Scene {
       yoyo: true,
     })
 
-    // Emit jump event for multiplayer sync
     eventBridge.emit(GameEvents.PLAYER_JUMPED, {
       id: this.playerId,
       x: this.playerContainer.x,
@@ -603,36 +481,27 @@ export class MainScene extends Phaser.Scene {
   }
 
   private setupCamera() {
-    const { TILE_SIZE, MAP_WIDTH, MAP_HEIGHT } = MAP_CONFIG
+    const worldBounds = this.tileMapSystem.getWorldBounds()
 
-    // Set world bounds
-    this.physics.world.setBounds(0, 0, MAP_WIDTH * TILE_SIZE, MAP_HEIGHT * TILE_SIZE)
+    this.physics.world.setBounds(0, 0, worldBounds.width, worldBounds.height)
 
-    // Camera follows player container
     this.cameras.main.startFollow(this.playerContainer, true, 0.1, 0.1)
-    this.cameras.main.setBounds(0, 0, MAP_WIDTH * TILE_SIZE, MAP_HEIGHT * TILE_SIZE)
-    // 줌 레벨: 1.2 (더 넓은 시야 확보, 맵 전체가 잘 보이도록)
+    this.cameras.main.setBounds(0, 0, worldBounds.width, worldBounds.height)
     this.cameras.main.setZoom(1.2)
   }
 
-  /**
-   * Check if scene is truly active and can create game objects
-   * This checks both our flag AND Phaser's internal displayList
-   * (displayList becomes null when scene is destroyed, but this.add object still exists)
-   */
   private isSceneTrulyActive(): boolean {
     return this.isSceneActive && !!this.sys?.displayList
   }
 
   private setupMultiplayerEvents() {
-    // Store handler references for cleanup
     this.handleRemotePlayerUpdate = (data: unknown) => {
-      const position = data as PlayerPosition & { avatarColor?: AvatarColor; nickname?: string }
-      // Queue event if scene is not ready yet or being destroyed
+      const position = data as PlayerPosition & {
+        avatarColor?: AvatarColor
+        nickname?: string
+      }
       if (!this.isSceneTrulyActive()) {
-        // Only queue if scene is still initializing (not shutting down)
         if (this.isSceneActive && !this.sys?.displayList) {
-          // Scene is shutting down, ignore the event
           return
         }
         this.pendingRemotePlayerEvents.push({ type: "update", data: position })
@@ -642,12 +511,12 @@ export class MainScene extends Phaser.Scene {
     }
 
     this.handleRemotePlayerJoin = (data: unknown) => {
-      const position = data as PlayerPosition & { avatarColor?: AvatarColor; nickname?: string }
-      // Queue event if scene is not ready yet or being destroyed
+      const position = data as PlayerPosition & {
+        avatarColor?: AvatarColor
+        nickname?: string
+      }
       if (!this.isSceneTrulyActive()) {
-        // Only queue if scene is still initializing (not shutting down)
         if (this.isSceneActive && !this.sys?.displayList) {
-          // Scene is shutting down, ignore the event
           return
         }
         this.pendingRemotePlayerEvents.push({ type: "join", data: position })
@@ -658,14 +527,14 @@ export class MainScene extends Phaser.Scene {
 
     this.handleRemotePlayerLeave = (data: unknown) => {
       const { id } = data as { id: string }
-      // Queue event if scene is not ready yet or being destroyed
       if (!this.isSceneTrulyActive()) {
-        // Only queue if scene is still initializing (not shutting down)
         if (this.isSceneActive && !this.sys?.displayList) {
-          // Scene is shutting down, ignore the event
           return
         }
-        this.pendingRemotePlayerEvents.push({ type: "leave", data: { id } as PlayerPosition })
+        this.pendingRemotePlayerEvents.push({
+          type: "leave",
+          data: { id } as PlayerPosition,
+        })
         return
       }
       this.removeRemotePlayer(id)
@@ -673,50 +542,49 @@ export class MainScene extends Phaser.Scene {
 
     this.handleRemotePlayerJump = (data: unknown) => {
       const { id } = data as { id: string; x: number; y: number }
-      // Skip if scene is not ready or being destroyed
       if (!this.isSceneTrulyActive()) return
       this.playRemotePlayerJump(id)
     }
 
-    // 🔄 Local profile update handler (nickname/avatar hot reload)
     this.handleLocalProfileUpdate = (data: unknown) => {
-      const { nickname, avatarColor } = data as { nickname: string; avatarColor: AvatarColor }
+      const { nickname, avatarColor } = data as {
+        nickname: string
+        avatarColor: AvatarColor
+      }
       if (!this.isSceneTrulyActive()) return
       this.updateLocalProfile(nickname, avatarColor)
     }
 
-    // 🔄 Remote profile update handler (other player's nickname/avatar changed)
     this.handleRemoteProfileUpdate = (data: unknown) => {
-      const { id, nickname, avatarColor } = data as { id: string; nickname: string; avatarColor: AvatarColor }
+      const { id, nickname, avatarColor } = data as {
+        id: string
+        nickname: string
+        avatarColor: AvatarColor
+      }
       if (!this.isSceneTrulyActive()) return
       this.updateRemoteProfile(id, nickname, avatarColor)
     }
 
-    // 💬 Chat focus handler (채팅 활성화 시 게임 입력 차단)
     this.handleChatFocusChanged = (data: unknown) => {
       const { isActive } = data as ChatFocusPayload
       this.isChatActive = isActive
       if (IS_DEV) {
-        console.log(`[MainScene] Chat focus changed: ${isActive ? "ACTIVE" : "INACTIVE"}`)
+        console.log(
+          `[MainScene] Chat focus changed: ${isActive ? "ACTIVE" : "INACTIVE"}`
+        )
       }
     }
 
-    // Listen for remote player events
     eventBridge.on(GameEvents.REMOTE_PLAYER_UPDATE, this.handleRemotePlayerUpdate)
     eventBridge.on(GameEvents.REMOTE_PLAYER_JOIN, this.handleRemotePlayerJoin)
     eventBridge.on(GameEvents.REMOTE_PLAYER_LEAVE, this.handleRemotePlayerLeave)
     eventBridge.on(GameEvents.REMOTE_PLAYER_JUMPED, this.handleRemotePlayerJump)
-
-    // 🔄 Listen for profile update events
     eventBridge.on(GameEvents.LOCAL_PROFILE_UPDATE, this.handleLocalProfileUpdate)
     eventBridge.on(GameEvents.REMOTE_PROFILE_UPDATE, this.handleRemoteProfileUpdate)
-
-    // 💬 Listen for chat focus events
     eventBridge.on(GameEvents.CHAT_FOCUS_CHANGED, this.handleChatFocusChanged)
   }
 
   private processPendingRemotePlayerEvents() {
-    // Process all pending events now that scene is ready
     while (this.pendingRemotePlayerEvents.length > 0) {
       const event = this.pendingRemotePlayerEvents.shift()
       if (!event) continue
@@ -735,40 +603,37 @@ export class MainScene extends Phaser.Scene {
     }
   }
 
-  private addRemotePlayer(position: PlayerPosition & { avatarColor?: AvatarColor; nickname?: string }): boolean {
-    // Safety check - verify scene is truly active (including Phaser's internal displayList)
-    // This prevents TypeError when React Strict Mode destroys the first Phaser instance
+  private addRemotePlayer(
+    position: PlayerPosition & { avatarColor?: AvatarColor; nickname?: string }
+  ): boolean {
     if (!this.isSceneTrulyActive()) {
-      // Silently ignore if scene is shutting down (React Strict Mode can cause this)
       return false
     }
     if (this.remotePlayers.has(position.id)) {
-      return true // Already exists, considered success
+      return true
     }
 
-    // Check if this player failed recently and is in cooldown
     const failedEntry = this.failedRemotePlayers.get(position.id)
     if (failedEntry) {
       const timeSinceFailure = Date.now() - failedEntry.timestamp
       if (failedEntry.retryCount >= this.MAX_RETRY_COUNT) {
-        // Max retries exceeded, only retry after full cooldown
         if (timeSinceFailure < this.RETRY_COOLDOWN_MS) {
-          return false // Still in cooldown, skip silently
+          return false
         }
-        // Cooldown passed, reset and allow retry
         this.failedRemotePlayers.delete(position.id)
       }
     }
 
     if (IS_DEV) {
-      console.log(`[MainScene] Adding remote player: ${position.id}, nickname: ${position.nickname}`)
+      console.log(
+        `[MainScene] Adding remote player: ${position.id}, nickname: ${position.nickname}`
+      )
     }
 
     try {
       const avatarColor = position.avatarColor || "default"
       const textureKey = `character-${avatarColor}`
 
-      // Create shadow (at ground level below container)
       const shadow = this.add.ellipse(
         position.x,
         position.y + CHARACTER_CONFIG.HEIGHT / 2,
@@ -777,47 +642,50 @@ export class MainScene extends Phaser.Scene {
         0x000000,
         0.3
       )
-      shadow.setDepth(0)
+      shadow.setDepth(3)
       this.remotePlayerShadows.set(position.id, shadow)
 
-      // Create sprite at local origin (0, 0) - will be placed inside container
       const sprite = this.add.sprite(0, 0, textureKey)
       sprite.setOrigin(0.5, 0.5)
 
-      // Create container to hold sprite (position tween applied to container)
       const container = this.add.container(position.x, position.y, [sprite])
-      container.setDepth(1)
+      container.setDepth(5)
       this.remotePlayers.set(position.id, container)
       this.remotePlayerSprites.set(position.id, sprite)
 
-      // Play idle animation
-      const idleAnim = getAnimationKey(position.direction || "down", false, avatarColor)
+      const idleAnim = getAnimationKey(
+        position.direction || "down",
+        false,
+        avatarColor
+      )
       if (this.anims?.exists(idleAnim)) {
         sprite.play(idleAnim)
       }
 
-      // Create nickname text
       if (position.nickname) {
         const nameText = this.add
-          .text(position.x, position.y - CHARACTER_CONFIG.HEIGHT / 2 - 8, position.nickname, {
-            fontSize: "12px",
-            color: "#ffffff",
-            backgroundColor: "#00000080",
-            padding: { x: 4, y: 2 },
-          })
+          .text(
+            position.x,
+            position.y - CHARACTER_CONFIG.HEIGHT / 2 - 8,
+            position.nickname,
+            {
+              fontSize: "12px",
+              color: "#ffffff",
+              backgroundColor: "#00000080",
+              padding: { x: 4, y: 2 },
+            }
+          )
           .setOrigin(0.5, 1)
-          .setDepth(2)
+          .setDepth(6)
         this.remotePlayerNames.set(position.id, nameText)
       }
 
-      // Success - remove from failed list if present
       this.failedRemotePlayers.delete(position.id)
       if (IS_DEV) {
         console.log(`[MainScene] Remote player added: ${position.id}`)
       }
       return true
     } catch (error) {
-      // Track this failure to prevent infinite retry loop
       const existing = this.failedRemotePlayers.get(position.id)
       const retryCount = existing ? existing.retryCount + 1 : 1
       this.failedRemotePlayers.set(position.id, {
@@ -825,17 +693,19 @@ export class MainScene extends Phaser.Scene {
         retryCount,
       })
 
-      // Scene might have been destroyed during execution - silently ignore
-      // Only log if scene is still truly active (real error vs React Strict Mode cleanup)
       if (this.isSceneTrulyActive()) {
-        console.warn(`[MainScene] Failed to add remote player (attempt ${retryCount}/${this.MAX_RETRY_COUNT}):`, error)
+        console.warn(
+          `[MainScene] Failed to add remote player (attempt ${retryCount}/${this.MAX_RETRY_COUNT}):`,
+          error
+        )
       }
       return false
     }
   }
 
-  private updateRemotePlayer(position: PlayerPosition & { avatarColor?: AvatarColor; nickname?: string }) {
-    // Safety check - silently ignore if scene is not truly active (React Strict Mode cleanup)
+  private updateRemotePlayer(
+    position: PlayerPosition & { avatarColor?: AvatarColor; nickname?: string }
+  ) {
     if (!this.isSceneTrulyActive()) {
       return
     }
@@ -843,19 +713,17 @@ export class MainScene extends Phaser.Scene {
     try {
       let container = this.remotePlayers.get(position.id)
       if (!container) {
-        // Try to add the player - if it fails, skip this update entirely
         const success = this.addRemotePlayer(position)
         if (!success) {
-          return // Player addition failed or in cooldown, skip update
+          return
         }
         container = this.remotePlayers.get(position.id)
         if (!container) {
-          return // Still no container after add attempt, skip
+          return
         }
       }
 
       if (container && this.tweens) {
-        // Smooth position interpolation on container (independent from sprite's local Y for jump)
         this.tweens.add({
           targets: container,
           x: position.x,
@@ -864,7 +732,6 @@ export class MainScene extends Phaser.Scene {
           ease: "Linear",
         })
 
-        // Update shadow position
         const shadow = this.remotePlayerShadows.get(position.id)
         if (shadow) {
           this.tweens.add({
@@ -876,7 +743,6 @@ export class MainScene extends Phaser.Scene {
           })
         }
 
-        // Update nickname position (account for sprite's local Y offset during jump)
         const sprite = this.remotePlayerSprites.get(position.id)
         const spriteYOffset = sprite ? sprite.y : 0
         const nameText = this.remotePlayerNames.get(position.id)
@@ -890,17 +756,22 @@ export class MainScene extends Phaser.Scene {
           })
         }
 
-        // Update animation on sprite (not container)
         if (sprite && this.anims) {
           const avatarColor = position.avatarColor || "default"
-          const animKey = getAnimationKey(position.direction, position.isMoving, avatarColor)
-          if (this.anims.exists(animKey) && sprite.anims.currentAnim?.key !== animKey) {
+          const animKey = getAnimationKey(
+            position.direction,
+            position.isMoving,
+            avatarColor
+          )
+          if (
+            this.anims.exists(animKey) &&
+            sprite.anims.currentAnim?.key !== animKey
+          ) {
             sprite.play(animKey)
           }
         }
       }
     } catch (error) {
-      // Silently ignore errors during scene shutdown (React Strict Mode cleanup)
       if (this.isSceneTrulyActive()) {
         console.warn("[MainScene] Failed to update remote player:", error)
       }
@@ -918,26 +789,22 @@ export class MainScene extends Phaser.Scene {
       return
     }
 
-    // Jump animation on SPRITE's local Y (independent from container position)
-    // Same approach as local player - sprite starts at y=0, jumps to y=-JUMP_HEIGHT, returns to y=0
     this.tweens.add({
       targets: sprite,
-      y: -this.JUMP_HEIGHT,  // Local Y offset (relative to container)
+      y: -this.JUMP_HEIGHT,
       scaleX: 1.1,
       scaleY: 0.9,
       duration: this.JUMP_DURATION / 2,
       ease: "Quad.easeOut",
       onComplete: () => {
-        // Fall down animation
         this.tweens.add({
           targets: sprite,
-          y: 0,  // Return to local origin
+          y: 0,
           scaleX: 1,
           scaleY: 1,
           duration: this.JUMP_DURATION / 2,
           ease: "Quad.easeIn",
           onComplete: () => {
-            // Landing squash effect
             this.tweens.add({
               targets: sprite,
               scaleX: 1.15,
@@ -951,7 +818,6 @@ export class MainScene extends Phaser.Scene {
       },
     })
 
-    // Shadow animation (shrink while jumping)
     if (shadow) {
       this.tweens.add({
         targets: shadow,
@@ -970,14 +836,12 @@ export class MainScene extends Phaser.Scene {
   }
 
   private removeRemotePlayer(id: string) {
-    // Destroy container (also destroys contained sprite)
     const container = this.remotePlayers.get(id)
     if (container) {
       container.destroy()
       this.remotePlayers.delete(id)
     }
 
-    // Remove sprite reference (sprite already destroyed with container)
     this.remotePlayerSprites.delete(id)
 
     const shadow = this.remotePlayerShadows.get(id)
@@ -992,58 +856,60 @@ export class MainScene extends Phaser.Scene {
       this.remotePlayerNames.delete(id)
     }
 
-    // Clean up failed player tracking
     this.failedRemotePlayers.delete(id)
   }
 
-  // 🔄 Update local player's nickname and avatar (hot reload)
   private updateLocalProfile(nickname: string, avatarColor: AvatarColor) {
     if (IS_DEV) {
-      console.log(`[MainScene] Updating local profile: ${nickname} (${avatarColor})`)
+      console.log(
+        `[MainScene] Updating local profile: ${nickname} (${avatarColor})`
+      )
     }
 
-    // Update stored values
     this.playerNickname = nickname
     this.playerAvatarColor = avatarColor
 
-    // Update nickname text
     if (this.nicknameText) {
       this.nicknameText.setText(nickname)
     }
 
-    // Update sprite texture and animation
     const textureKey = `character-${avatarColor}`
     if (this.textures.exists(textureKey) && this.playerSprite) {
       this.playerSprite.setTexture(textureKey)
-      const animKey = getAnimationKey(this.playerDirection, this.isMoving, avatarColor)
+      const animKey = getAnimationKey(
+        this.playerDirection,
+        this.isMoving,
+        avatarColor
+      )
       if (this.anims.exists(animKey)) {
         this.playerSprite.play(animKey)
       }
     }
   }
 
-  // 🔄 Update remote player's nickname and avatar (hot reload)
-  private updateRemoteProfile(id: string, nickname: string, avatarColor: AvatarColor) {
+  private updateRemoteProfile(
+    id: string,
+    nickname: string,
+    avatarColor: AvatarColor
+  ) {
     if (IS_DEV) {
-      console.log(`[MainScene] Updating remote profile: ${id} → ${nickname} (${avatarColor})`)
+      console.log(
+        `[MainScene] Updating remote profile: ${id} → ${nickname} (${avatarColor})`
+      )
     }
 
-    // Update nickname text
     const nameText = this.remotePlayerNames.get(id)
     if (nameText) {
       nameText.setText(nickname)
     }
 
-    // Update sprite texture and animation
     const sprite = this.remotePlayerSprites.get(id)
     if (sprite) {
       const textureKey = `character-${avatarColor}`
       if (this.textures.exists(textureKey)) {
         sprite.setTexture(textureKey)
-        // Re-apply current animation with new color
         const currentAnim = sprite.anims.currentAnim
         if (currentAnim) {
-          // Parse direction and isMoving from current animation key (e.g., "walk-down-default")
           const parts = currentAnim.key.split("-")
           const isWalk = parts[0] === "walk"
           const direction = parts[1] as "up" | "down" | "left" | "right"
@@ -1060,18 +926,22 @@ export class MainScene extends Phaser.Scene {
     const playerBody = this.playerContainer.body as Phaser.Physics.Arcade.Body
     const { PLAYER_SPEED } = MAP_CONFIG
 
-    // 💬 채팅 활성화 시 게임 입력 차단
+    // 채팅 활성화 시 게임 입력 차단
     if (this.isChatActive) {
-      // 이동 중이었다면 멈춤 처리
       if (this.isMoving) {
         playerBody.setVelocity(0)
         this.isMoving = false
-        // Idle 애니메이션으로 전환
-        const idleAnim = getAnimationKey(this.playerDirection, false, this.playerAvatarColor)
-        if (this.anims.exists(idleAnim) && this.playerSprite.anims.currentAnim?.key !== idleAnim) {
+        const idleAnim = getAnimationKey(
+          this.playerDirection,
+          false,
+          this.playerAvatarColor
+        )
+        if (
+          this.anims.exists(idleAnim) &&
+          this.playerSprite.anims.currentAnim?.key !== idleAnim
+        ) {
           this.playerSprite.play(idleAnim)
         }
-        // 정지 상태 전파
         const position: PlayerPosition = {
           id: this.playerId,
           x: this.playerContainer.x,
@@ -1081,16 +951,14 @@ export class MainScene extends Phaser.Scene {
         }
         eventBridge.emit(GameEvents.PLAYER_MOVED, position)
       }
-      return // 나머지 입력 처리 건너뛰기
+      return
     }
 
-    // Reset velocity
     playerBody.setVelocity(0)
 
     let moved = false
     let newDirection = this.playerDirection
 
-    // Horizontal movement
     if (this.cursors.left.isDown || this.wasd.A.isDown) {
       playerBody.setVelocityX(-PLAYER_SPEED)
       newDirection = "left"
@@ -1101,7 +969,6 @@ export class MainScene extends Phaser.Scene {
       moved = true
     }
 
-    // Vertical movement
     if (this.cursors.up.isDown || this.wasd.W.isDown) {
       playerBody.setVelocityY(-PLAYER_SPEED)
       newDirection = "up"
@@ -1112,43 +979,42 @@ export class MainScene extends Phaser.Scene {
       moved = true
     }
 
-    // Jump input (Space key)
     if (Phaser.Input.Keyboard.JustDown(this.spaceKey)) {
       this.jump()
     }
 
-    // Interaction input (E key)
     if (Phaser.Input.Keyboard.JustDown(this.interactKey)) {
       this.triggerInteraction()
     }
 
-    // Check for nearby interactive objects
     this.checkObjectInteraction()
 
-    // Normalize diagonal movement
     if (playerBody.velocity.x !== 0 && playerBody.velocity.y !== 0) {
       playerBody.velocity.normalize().scale(PLAYER_SPEED)
     }
 
-    // Update animation based on direction and movement
     const animKey = getAnimationKey(newDirection, moved, this.playerAvatarColor)
-    if (this.anims.exists(animKey) && this.playerSprite.anims.currentAnim?.key !== animKey) {
+    if (
+      this.anims.exists(animKey) &&
+      this.playerSprite.anims.currentAnim?.key !== animKey
+    ) {
       this.playerSprite.play(animKey)
     }
 
-    // Update shadow position (follows container horizontally, stays at ground level)
     const groundY = this.playerContainer.y + CHARACTER_CONFIG.HEIGHT / 2
     this.playerShadow.setPosition(this.playerContainer.x, groundY)
 
-    // Update nickname text position (follows container, accounts for sprite's local Y offset during jump)
-    const spriteJumpOffset = this.playerSprite.y // Sprite's local Y (negative during jump)
+    const spriteJumpOffset = this.playerSprite.y
     this.nicknameText.setPosition(
       this.playerContainer.x,
       this.playerContainer.y + spriteJumpOffset - CHARACTER_CONFIG.HEIGHT / 2 - 8
     )
 
-    // Emit position update if moved or direction changed
-    if (moved || this.isMoving !== moved || this.playerDirection !== newDirection) {
+    if (
+      moved ||
+      this.isMoving !== moved ||
+      this.playerDirection !== newDirection
+    ) {
       this.isMoving = moved
       this.playerDirection = newDirection
 
@@ -1165,10 +1031,8 @@ export class MainScene extends Phaser.Scene {
   }
 
   shutdown() {
-    // Mark scene as inactive first to prevent any pending events from being processed
     this.isSceneActive = false
 
-    // Clean up event listeners using stored references
     if (this.handleRemotePlayerUpdate) {
       eventBridge.off(GameEvents.REMOTE_PLAYER_UPDATE, this.handleRemotePlayerUpdate)
     }
@@ -1181,26 +1045,23 @@ export class MainScene extends Phaser.Scene {
     if (this.handleRemotePlayerJump) {
       eventBridge.off(GameEvents.REMOTE_PLAYER_JUMPED, this.handleRemotePlayerJump)
     }
-    // 🔄 Clean up profile update event listeners
     if (this.handleLocalProfileUpdate) {
       eventBridge.off(GameEvents.LOCAL_PROFILE_UPDATE, this.handleLocalProfileUpdate)
     }
     if (this.handleRemoteProfileUpdate) {
       eventBridge.off(GameEvents.REMOTE_PROFILE_UPDATE, this.handleRemoteProfileUpdate)
     }
-    // 💬 Clean up chat focus event listener
     if (this.handleChatFocusChanged) {
       eventBridge.off(GameEvents.CHAT_FOCUS_CHANGED, this.handleChatFocusChanged)
     }
 
-    // Clean up remote players (containers destroy their children including sprites)
     this.remotePlayers.forEach((container) => container.destroy())
     this.remotePlayers.clear()
-    this.remotePlayerSprites.clear() // Sprites already destroyed with containers
+    this.remotePlayerSprites.clear()
     this.remotePlayerShadows.forEach((shadow) => shadow.destroy())
     this.remotePlayerShadows.clear()
     this.remotePlayerNames.forEach((name) => name.destroy())
     this.remotePlayerNames.clear()
-    this.failedRemotePlayers.clear() // Clear failed player tracking
+    this.failedRemotePlayers.clear()
   }
 }
