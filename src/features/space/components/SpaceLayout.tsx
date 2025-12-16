@@ -25,6 +25,7 @@ interface SpaceLayoutProps {
   spaceName: string
   spaceLogoUrl?: string | null
   spacePrimaryColor?: string | null
+  spaceInviteCode?: string // 초대 코드 (인게임 초대 링크용)
   userNickname: string
   userId: string
   userAvatarColor?: AvatarColor
@@ -83,6 +84,7 @@ function SpaceLayoutContent({
   spaceName,
   spaceLogoUrl,
   spacePrimaryColor,
+  spaceInviteCode,
   userNickname,
   userId,
   userAvatarColor = "default",
@@ -94,7 +96,6 @@ function SpaceLayoutContent({
 }: SpaceLayoutProps) {
   // Panel visibility
   const [isChatOpen, setIsChatOpen] = useState(true)
-  const [isParticipantsOpen, setIsParticipantsOpen] = useState(true)
   const [isMemberPanelOpen, setIsMemberPanelOpen] = useState(false)
 
   // 🎬 참가자 패널 뷰 모드 (sidebar | grid | hidden)
@@ -502,22 +503,15 @@ function SpaceLayoutContent({
     setIsChatOpen((prev) => !prev)
   }, [])
 
-  const handleToggleParticipants = useCallback(() => {
-    setIsParticipantsOpen((prev) => !prev)
-    // 참가자 패널이 꺼지면 뷰 모드를 hidden으로, 켜지면 sidebar로
-    setParticipantViewMode((prev) => prev === "hidden" ? "sidebar" : prev)
-  }, [])
-
   // 🧑‍🤝‍🧑 멤버 패널 토글
   const handleToggleMemberPanel = useCallback(() => {
     setIsMemberPanelOpen((prev) => !prev)
   }, [])
 
   // 🎬 뷰 모드 변경 핸들러
+  // hidden 모드에서도 최소화된 버튼 그룹은 표시되어야 하므로 패널 상태 유지
   const handleViewModeChange = useCallback((mode: ParticipantViewMode) => {
     setParticipantViewMode(mode)
-    // hidden 모드면 패널도 닫기, 그 외에는 패널 열기
-    setIsParticipantsOpen(mode !== "hidden")
   }, [])
 
   const handleOpenSettings = useCallback(() => {
@@ -598,7 +592,7 @@ function SpaceLayoutContent({
         />
 
         {/* 플로팅 참가자 비디오 - 뷰 모드에 따라 다르게 렌더링 */}
-        {isParticipantsOpen && participantViewMode === "sidebar" && (
+        {participantViewMode === "sidebar" && (
           <div className="pointer-events-auto absolute right-2 top-2 z-20 w-44 max-h-[calc(100%-80px)] overflow-y-auto">
             <ParticipantPanel
               participantTracks={allParticipantTracks}
@@ -607,12 +601,15 @@ function SpaceLayoutContent({
               onViewModeChange={handleViewModeChange}
               canRecord={userRole === "OWNER" || userRole === "STAFF" || isSuperAdmin}
               spaceName={spaceName}
+              inviteCode={spaceInviteCode}
+              isMemberPanelOpen={isMemberPanelOpen}
+              onToggleMemberPanel={handleToggleMemberPanel}
             />
           </div>
         )}
 
         {/* 그리드 모드 - 전체 화면 오버레이 (채팅과 동일한 반투명 배경) */}
-        {isParticipantsOpen && participantViewMode === "grid" && (
+        {participantViewMode === "grid" && (
           <div className="pointer-events-auto absolute inset-0 z-30 bg-black/30 backdrop-blur-sm">
             <ParticipantPanel
               participantTracks={allParticipantTracks}
@@ -621,14 +618,32 @@ function SpaceLayoutContent({
               onViewModeChange={handleViewModeChange}
               canRecord={userRole === "OWNER" || userRole === "STAFF" || isSuperAdmin}
               spaceName={spaceName}
+              inviteCode={spaceInviteCode}
+              isMemberPanelOpen={isMemberPanelOpen}
+              onToggleMemberPanel={handleToggleMemberPanel}
               className="h-full"
             />
           </div>
         )}
 
-        {/* 🧑‍🤝‍🧑 플로팅 멤버 패널 (좌측 상단, 채팅 위) */}
+        {/* 숨김 모드 - 최소화된 버튼 그룹만 표시 (우측 상단) */}
+        {participantViewMode === "hidden" && (
+          <div className="pointer-events-auto absolute right-2 top-2 z-20">
+            <ParticipantPanel
+              participantTracks={allParticipantTracks}
+              localParticipantId={resolvedUserId}
+              viewMode={participantViewMode}
+              onViewModeChange={handleViewModeChange}
+              inviteCode={spaceInviteCode}
+              isMemberPanelOpen={isMemberPanelOpen}
+              onToggleMemberPanel={handleToggleMemberPanel}
+            />
+          </div>
+        )}
+
+        {/* 🧑‍🤝‍🧑 플로팅 멤버 패널 (우측 상단, 참가자 패널 좌측) */}
         {isMemberPanelOpen && (
-          <div className="pointer-events-auto absolute left-2 top-2 z-20 w-64 max-h-[calc(100%-80px)]">
+          <div className="pointer-events-auto absolute right-48 top-2 z-20 w-64 max-h-[calc(100%-80px)]">
             <MemberPanel
               spaceId={spaceId}
               isSuperAdmin={isSuperAdmin}
@@ -645,15 +660,11 @@ function SpaceLayoutContent({
           isCameraOn={mediaState.isCameraEnabled}
           isScreenSharing={mediaState.isScreenShareEnabled}
           isChatOpen={isChatOpen}
-          isParticipantsOpen={isParticipantsOpen}
-          isMemberPanelOpen={isMemberPanelOpen}
           mediaError={displayError}
           onToggleMic={handleToggleMic}
           onToggleCamera={handleToggleCamera}
           onToggleScreenShare={handleToggleScreenShare}
           onToggleChat={handleToggleChat}
-          onToggleParticipants={handleToggleParticipants}
-          onToggleMemberPanel={handleToggleMemberPanel}
           onOpenSettings={handleOpenSettings}
           onDismissError={handleDismissError}
         />

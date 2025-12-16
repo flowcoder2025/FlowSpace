@@ -485,7 +485,7 @@ export function VideoTile({
               // 전체화면: 상단 중앙 (기존 위치)
               isFullscreen && "absolute left-1/2 top-1/2 z-20 -translate-x-1/2 -translate-y-1/2",
               // 일반 타일: Portal 타겟 내에서 정중앙
-              !isFullscreen && "fixed left-1/2 top-1/2 z-[9999] -translate-x-1/2 -translate-y-1/2"
+              !isFullscreen && "fixed left-1/2 top-1/2 z-9999 -translate-x-1/2 -translate-y-1/2"
             )}
           >
             <Text size="xs" className="font-medium">

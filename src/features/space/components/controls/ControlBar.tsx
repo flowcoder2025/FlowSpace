@@ -88,36 +88,6 @@ const ChatIcon = ({ active }: { active?: boolean }) => (
   </svg>
 )
 
-const UsersIcon = ({ active }: { active?: boolean }) => (
-  <svg
-    className="size-5"
-    fill="none"
-    stroke={active ? "var(--color-primary)" : "var(--color-destructive)"}
-    viewBox="0 0 24 24"
-  >
-    {!active && (
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 18L6 6" />
-    )}
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-  </svg>
-)
-
-// 🧑‍🤝‍🧑 멤버 관리 아이콘 (사용자 + 설정 조합)
-const MembersManageIcon = ({ active }: { active?: boolean }) => (
-  <svg
-    className="size-5"
-    fill="none"
-    stroke={active ? "var(--color-primary)" : "currentColor"}
-    viewBox="0 0 24 24"
-  >
-    {/* 사용자 그룹 */}
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
-    <circle cx="9" cy="7" r="4" strokeWidth={2} />
-    {/* 설정 기어 (작게) */}
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />
-  </svg>
-)
-
 const SettingsIcon = () => (
   <svg className="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -181,15 +151,11 @@ interface ControlBarProps {
   isCameraOn: boolean
   isScreenSharing: boolean
   isChatOpen: boolean
-  isParticipantsOpen: boolean
-  isMemberPanelOpen?: boolean
   mediaError?: MediaError | null
   onToggleMic: () => void
   onToggleCamera: () => void
   onToggleScreenShare: () => void
   onToggleChat: () => void
-  onToggleParticipants: () => void
-  onToggleMemberPanel?: () => void
   onOpenSettings?: () => void
   onDismissError?: () => void
 }
@@ -203,15 +169,11 @@ export function ControlBar({
   isCameraOn,
   isScreenSharing,
   isChatOpen,
-  isParticipantsOpen,
-  isMemberPanelOpen,
   mediaError,
   onToggleMic,
   onToggleCamera,
   onToggleScreenShare,
   onToggleChat,
-  onToggleParticipants,
-  onToggleMemberPanel,
   onOpenSettings,
   onDismissError,
 }: ControlBarProps) {
@@ -422,38 +384,6 @@ export function ControlBar({
         >
           <ChatIcon active={isChatOpen} />
         </Button>
-
-        {/* Participants Toggle */}
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={() => {
-            onToggleParticipants()
-            // 클릭 후 포커스 해제 (스페이스바로 재토글 방지)
-            ;(document.activeElement as HTMLElement)?.blur()
-          }}
-          className="border-white/30 text-white bg-transparent hover:bg-white/10 focus-visible:ring-0 focus-visible:ring-offset-0"
-          aria-label={isParticipantsOpen ? "참가자 목록 닫기" : "참가자 목록 열기"}
-        >
-          <UsersIcon active={isParticipantsOpen} />
-        </Button>
-
-        {/* Member Panel Toggle */}
-        {onToggleMemberPanel && (
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => {
-              onToggleMemberPanel()
-              // 클릭 후 포커스 해제 (스페이스바로 재토글 방지)
-              ;(document.activeElement as HTMLElement)?.blur()
-            }}
-            className="border-white/30 text-white bg-transparent hover:bg-white/10 focus-visible:ring-0 focus-visible:ring-offset-0"
-            aria-label={isMemberPanelOpen ? "멤버 관리 닫기" : "멤버 관리 열기"}
-          >
-            <MembersManageIcon active={isMemberPanelOpen} />
-          </Button>
-        )}
 
         {/* Settings */}
         {onOpenSettings && (

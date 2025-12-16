@@ -23,6 +23,33 @@ export type ParticipantSortOrder = "name-asc" | "name-desc"
 // ============================================
 // Icons
 // ============================================
+const FilterIcon = () => (
+  <svg className="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+  </svg>
+)
+
+const MemberManageIcon = ({ active }: { active?: boolean }) => (
+  <svg className="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"
+      className={active ? "text-primary" : ""}
+    />
+    {/* 설정 기어 아이콘 (작게) */}
+    <circle cx="18" cy="18" r="3" strokeWidth={1.5} className={active ? "text-primary" : ""} />
+    <path strokeLinecap="round" strokeWidth={1.5} d="M18 16.5v-0.5M18 20v-0.5M16.5 18h-0.5M20 18h-0.5" className={active ? "text-primary" : ""} />
+  </svg>
+)
+
+const LinkIcon = () => (
+  <svg className="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+  </svg>
+)
+
 const SidebarIcon = () => (
   <svg className="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
@@ -32,6 +59,12 @@ const SidebarIcon = () => (
 const GridIcon = () => (
   <svg className="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zM14 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
+  </svg>
+)
+
+const HiddenIcon = () => (
+  <svg className="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
   </svg>
 )
 
@@ -60,6 +93,28 @@ const CheckIcon = () => (
 )
 
 // ============================================
+// 메뉴 옵션 정의 (타입 좁힘 문제 방지)
+// ============================================
+const VIEW_MODE_OPTIONS: Array<{
+  value: ParticipantViewMode
+  label: string
+  icon: React.FC
+}> = [
+  { value: "sidebar", label: "사이드바", icon: SidebarIcon },
+  { value: "grid", label: "그리드", icon: GridIcon },
+  { value: "hidden", label: "숨기기", icon: HiddenIcon },
+]
+
+const SORT_ORDER_OPTIONS: Array<{
+  value: ParticipantSortOrder
+  label: string
+  icon: React.FC
+}> = [
+  { value: "name-asc", label: "이름 오름차순", icon: SortAscIcon },
+  { value: "name-desc", label: "이름 내림차순", icon: SortDescIcon },
+]
+
+// ============================================
 // ParticipantPanel Props
 // ============================================
 interface ParticipantPanelProps {
@@ -73,6 +128,12 @@ interface ParticipantPanelProps {
   canRecord?: boolean
   /** 🏷️ 공간 이름 (녹화 파일명용) */
   spaceName?: string
+  /** 🔗 초대 코드 (인게임 초대 링크용) */
+  inviteCode?: string
+  /** 🧑‍🤝‍🧑 멤버 관리 패널 열림 상태 */
+  isMemberPanelOpen?: boolean
+  /** 🧑‍🤝‍🧑 멤버 관리 패널 토글 콜백 */
+  onToggleMemberPanel?: () => void
 }
 
 // ============================================
@@ -112,10 +173,14 @@ export function ParticipantPanel({
   onViewModeChange,
   canRecord = false,
   spaceName = "recording",
+  inviteCode,
+  isMemberPanelOpen = false,
+  onToggleMemberPanel,
 }: ParticipantPanelProps) {
   // 내부 상태 (외부 제어가 없을 때 사용)
   const [internalViewMode, setInternalViewMode] = useState<ParticipantViewMode>("sidebar")
   const [sortOrder, setSortOrder] = useState<ParticipantSortOrder>("name-asc")
+  const [copied, setCopied] = useState(false)
 
   // 외부 제어 또는 내부 상태 사용
   const viewMode = externalViewMode ?? internalViewMode
@@ -126,6 +191,21 @@ export function ParticipantPanel({
       setInternalViewMode(mode)
     }
   }, [onViewModeChange])
+
+  // 초대 링크 복사 핸들러
+  const handleCopyInviteLink = useCallback(async () => {
+    if (!inviteCode) return
+
+    // 올바른 초대 링크 형식: /spaces/{inviteCode}
+    const inviteUrl = `${window.location.origin}/spaces/${inviteCode}`
+    try {
+      await navigator.clipboard.writeText(inviteUrl)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch (err) {
+      console.error("초대 링크 복사 실패:", err)
+    }
+  }, [inviteCode])
 
   // 참가자 목록 정렬 (로컬 우선 + 정렬 옵션 적용)
   const sortedTracks = useMemo(() => {
@@ -157,83 +237,227 @@ export function ParticipantPanel({
     return null
   }
 
-  // 사이드바 뷰
-  if (viewMode === "sidebar") {
+  // 숨김 뷰 - 헤더 버튼만 표시 (비디오 타일 숨김)
+  if (viewMode === "hidden") {
     return (
       <div className={cn("flex flex-col", className)}>
-        {/* 헤더 - 드롭다운 메뉴 */}
-        <div className="flex items-center justify-between px-2 py-1.5 bg-black/30 backdrop-blur-sm rounded-t-lg border-b border-white/10">
-          <span className="text-xs text-white/70 font-medium">
-            참가자 {sortedTracks.length}
+        {/* 최소화된 헤더 - 필터 + 멤버관리 + 초대 */}
+        <div className="flex items-center gap-1 px-2 py-2 bg-black/40 backdrop-blur-sm rounded-lg border border-white/10">
+          {/* 참가자 수 (아이콘 + 숫자) */}
+          <span className="text-xs text-white/70 font-medium mr-1">
+            👥 {sortedTracks.length}
           </span>
-          <DropdownMenu onOpenChange={(open) => {
-            // 닫힐 때 버튼 포커스 해제 (스페이스바로 재열림 방지)
-            // Radix가 포커스를 트리거로 복원한 후에 blur 호출
-            if (!open) {
-              setTimeout(() => {
-                (document.activeElement as HTMLElement)?.blur()
-              }, 0)
-            }
-          }}>
+
+          {/* 필터 버튼 (드롭다운) */}
+          <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-6 px-1.5 text-white/70 hover:text-white hover:bg-white/10"
+                className="h-7 px-2 text-xs text-white/90 hover:text-white hover:bg-white/10 font-medium gap-1 focus:outline-none focus-visible:outline-none focus-visible:ring-0"
+                title="필터"
+                tabIndex={-1}
+                onMouseDown={(e) => e.preventDefault()}
               >
-                <SidebarIcon />
+                <FilterIcon />
                 <ChevronDownIcon />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" side="bottom" className="w-40">
+            <DropdownMenuContent
+              align="end"
+              side="bottom"
+              className="w-44"
+              onCloseAutoFocus={(e) => e.preventDefault()}
+            >
               <DropdownMenuLabel className="text-xs">보기 방식</DropdownMenuLabel>
-              <DropdownMenuItem
-                onSelect={() => handleViewModeChange("sidebar")}
-                className="flex items-center justify-between"
-              >
-                <span className="flex items-center gap-2">
-                  <SidebarIcon />
-                  우측 정렬
-                </span>
-                {/* sidebar 블록이므로 항상 체크 */}
-                <CheckIcon />
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onSelect={() => handleViewModeChange("grid")}
-                className="flex items-center justify-between"
-              >
-                <span className="flex items-center gap-2">
-                  <GridIcon />
-                  그리드 보기
-                </span>
-                {/* sidebar 블록이므로 grid는 체크 없음 */}
-              </DropdownMenuItem>
+              {VIEW_MODE_OPTIONS.map((option) => (
+                <DropdownMenuItem
+                  key={option.value}
+                  onSelect={() => handleViewModeChange(option.value)}
+                  className="flex items-center justify-between"
+                >
+                  <span className="flex items-center gap-2">
+                    <option.icon />
+                    {option.label}
+                  </span>
+                  {viewMode === option.value && <CheckIcon />}
+                </DropdownMenuItem>
+              ))}
 
               <DropdownMenuSeparator />
 
               <DropdownMenuLabel className="text-xs">정렬</DropdownMenuLabel>
-              <DropdownMenuItem
-                onSelect={() => setSortOrder("name-asc")}
-                className="flex items-center justify-between"
-              >
-                <span className="flex items-center gap-2">
-                  <SortAscIcon />
-                  이름순 (오름차순)
-                </span>
-                {sortOrder === "name-asc" && <CheckIcon />}
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onSelect={() => setSortOrder("name-desc")}
-                className="flex items-center justify-between"
-              >
-                <span className="flex items-center gap-2">
-                  <SortDescIcon />
-                  이름순 (내림차순)
-                </span>
-                {sortOrder === "name-desc" && <CheckIcon />}
-              </DropdownMenuItem>
+              {SORT_ORDER_OPTIONS.map((option) => (
+                <DropdownMenuItem
+                  key={option.value}
+                  onSelect={() => setSortOrder(option.value)}
+                  className="flex items-center justify-between"
+                >
+                  <span className="flex items-center gap-2">
+                    <option.icon />
+                    {option.label}
+                  </span>
+                  {sortOrder === option.value && <CheckIcon />}
+                </DropdownMenuItem>
+              ))}
             </DropdownMenuContent>
           </DropdownMenu>
+
+          {/* 멤버 관리 버튼 */}
+          {onToggleMemberPanel && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={(e) => {
+                onToggleMemberPanel()
+                ;(e.currentTarget as HTMLElement).blur()
+              }}
+              onMouseDown={(e) => e.preventDefault()}
+              tabIndex={-1}
+              className={cn(
+                "h-7 px-2 text-xs font-medium gap-1 focus:outline-none focus-visible:outline-none focus-visible:ring-0",
+                isMemberPanelOpen
+                  ? "text-primary hover:text-primary hover:bg-primary/10"
+                  : "text-white/90 hover:text-white hover:bg-white/10"
+              )}
+              title="멤버 관리"
+            >
+              <MemberManageIcon active={isMemberPanelOpen} />
+            </Button>
+          )}
+
+          {/* 초대하기 버튼 */}
+          {inviteCode && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={(e) => {
+                handleCopyInviteLink()
+                ;(e.currentTarget as HTMLElement).blur()
+              }}
+              onMouseDown={(e) => e.preventDefault()}
+              tabIndex={-1}
+              className="h-7 px-2 text-xs text-white/90 hover:text-white hover:bg-white/10 font-medium gap-1 focus:outline-none focus-visible:outline-none focus-visible:ring-0"
+              title="초대 링크 복사"
+            >
+              <LinkIcon />
+              <span className="hidden sm:inline">{copied ? "복사됨!" : "초대"}</span>
+            </Button>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  // 사이드바 뷰
+  if (viewMode === "sidebar") {
+    return (
+      <div className={cn("flex flex-col", className)}>
+        {/* ZEP 스타일 헤더 - 필터 + 멤버관리 + 초대 */}
+        <div className="flex flex-col gap-1.5 px-2 py-2 bg-black/40 backdrop-blur-sm rounded-t-lg border-b border-white/10">
+          {/* 참가자 수 표시 */}
+          <div className="text-xs text-white/70 font-medium px-1">
+            참가자 {sortedTracks.length}명
+          </div>
+          {/* 상단 버튼 그룹: 필터 → 멤버관리 → 초대 */}
+          <div className="flex items-center gap-1">
+            {/* 1. 필터 버튼 (드롭다운) - 보기 방식/정렬 */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-xs text-white/90 hover:text-white hover:bg-white/10 font-medium gap-1 focus:outline-none focus-visible:outline-none focus-visible:ring-0"
+                  title="필터"
+                  tabIndex={-1}
+                  onMouseDown={(e) => e.preventDefault()}
+                >
+                  <FilterIcon />
+                  <ChevronDownIcon />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="start"
+                side="bottom"
+                className="w-44"
+                onCloseAutoFocus={(e) => e.preventDefault()}
+              >
+                <DropdownMenuLabel className="text-xs">보기 방식</DropdownMenuLabel>
+                {VIEW_MODE_OPTIONS.map((option) => (
+                  <DropdownMenuItem
+                    key={option.value}
+                    onSelect={() => handleViewModeChange(option.value)}
+                    className="flex items-center justify-between"
+                  >
+                    <span className="flex items-center gap-2">
+                      <option.icon />
+                      {option.label}
+                    </span>
+                    {viewMode === option.value && <CheckIcon />}
+                  </DropdownMenuItem>
+                ))}
+
+                <DropdownMenuSeparator />
+
+                <DropdownMenuLabel className="text-xs">정렬</DropdownMenuLabel>
+                {SORT_ORDER_OPTIONS.map((option) => (
+                  <DropdownMenuItem
+                    key={option.value}
+                    onSelect={() => setSortOrder(option.value)}
+                    className="flex items-center justify-between"
+                  >
+                    <span className="flex items-center gap-2">
+                      <option.icon />
+                      {option.label}
+                    </span>
+                    {sortOrder === option.value && <CheckIcon />}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {/* 2. 멤버 관리 버튼 */}
+            {onToggleMemberPanel && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={(e) => {
+                  onToggleMemberPanel()
+                  ;(e.currentTarget as HTMLElement).blur()
+                }}
+                onMouseDown={(e) => e.preventDefault()}
+                tabIndex={-1}
+                className={cn(
+                  "h-7 px-2 text-xs font-medium gap-1 focus:outline-none focus-visible:outline-none focus-visible:ring-0",
+                  isMemberPanelOpen
+                    ? "text-primary hover:text-primary hover:bg-primary/10"
+                    : "text-white/90 hover:text-white hover:bg-white/10"
+                )}
+                title="멤버 관리"
+              >
+                <MemberManageIcon active={isMemberPanelOpen} />
+              </Button>
+            )}
+
+            {/* 3. 초대하기 버튼 */}
+            {inviteCode && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={(e) => {
+                  handleCopyInviteLink()
+                  ;(e.currentTarget as HTMLElement).blur()
+                }}
+                onMouseDown={(e) => e.preventDefault()}
+                tabIndex={-1}
+                className="h-7 px-2 text-xs text-white/90 hover:text-white hover:bg-white/10 font-medium gap-1 focus:outline-none focus-visible:outline-none focus-visible:ring-0"
+                title="초대 링크 복사"
+              >
+                <LinkIcon />
+                <span className="hidden sm:inline">{copied ? "복사됨!" : "초대"}</span>
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* 참가자 목록 - 사이드바 스타일 */}
@@ -271,79 +495,109 @@ export function ParticipantPanel({
   // 그리드 뷰
   return (
     <div className={cn("flex flex-col h-full", className)}>
-      {/* 헤더 - 드롭다운 메뉴 */}
-      <div className="flex items-center justify-between px-3 py-2 bg-black/50 backdrop-blur-sm border-b border-white/10">
-        <span className="text-sm text-white font-medium">
+      {/* ZEP 스타일 헤더 - 필터 + 멤버관리 + 초대 */}
+      <div className="flex items-center gap-2 px-3 py-2 bg-black/50 backdrop-blur-sm border-b border-white/10">
+        {/* 참가자 수 표시 */}
+        <span className="text-sm text-white font-medium mr-auto">
           참가자 {sortedTracks.length}명
         </span>
-        <DropdownMenu onOpenChange={(open) => {
-          // 닫힐 때 버튼 포커스 해제 (스페이스바로 재열림 방지)
-          // Radix가 포커스를 트리거로 복원한 후에 blur 호출
-          if (!open) {
-            setTimeout(() => {
-              (document.activeElement as HTMLElement)?.blur()
-            }, 0)
-          }
-        }}>
+
+        {/* 1. 필터 버튼 (드롭다운) */}
+        <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 px-2 text-white/80 hover:text-white hover:bg-white/10"
+              className="h-8 px-2 text-sm text-white/90 hover:text-white hover:bg-white/10 font-medium gap-1 focus:outline-none focus-visible:outline-none focus-visible:ring-0"
+              title="필터"
+              tabIndex={-1}
+              onMouseDown={(e) => e.preventDefault()}
             >
-              <GridIcon />
+              <FilterIcon />
               <ChevronDownIcon />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" side="bottom" className="w-40">
+          <DropdownMenuContent
+            align="end"
+            side="bottom"
+            className="w-44"
+            onCloseAutoFocus={(e) => e.preventDefault()}
+          >
             <DropdownMenuLabel className="text-xs">보기 방식</DropdownMenuLabel>
-            <DropdownMenuItem
-              onSelect={() => handleViewModeChange("sidebar")}
-              className="flex items-center justify-between"
-            >
-              <span className="flex items-center gap-2">
-                <SidebarIcon />
-                우측 정렬
-              </span>
-              {/* grid 블록이므로 sidebar는 체크 없음 */}
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onSelect={() => handleViewModeChange("grid")}
-              className="flex items-center justify-between"
-            >
-              <span className="flex items-center gap-2">
-                <GridIcon />
-                그리드 보기
-              </span>
-              {/* grid 블록에서 viewMode가 "grid"일 때만 체크 */}
-              {viewMode === "grid" && <CheckIcon />}
-            </DropdownMenuItem>
+            {VIEW_MODE_OPTIONS.map((option) => (
+              <DropdownMenuItem
+                key={option.value}
+                onSelect={() => handleViewModeChange(option.value)}
+                className="flex items-center justify-between"
+              >
+                <span className="flex items-center gap-2">
+                  <option.icon />
+                  {option.label}
+                </span>
+                {viewMode === option.value && <CheckIcon />}
+              </DropdownMenuItem>
+            ))}
 
             <DropdownMenuSeparator />
 
             <DropdownMenuLabel className="text-xs">정렬</DropdownMenuLabel>
-            <DropdownMenuItem
-              onSelect={() => setSortOrder("name-asc")}
-              className="flex items-center justify-between"
-            >
-              <span className="flex items-center gap-2">
-                <SortAscIcon />
-                이름순 (오름차순)
-              </span>
-              {sortOrder === "name-asc" && <CheckIcon />}
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onSelect={() => setSortOrder("name-desc")}
-              className="flex items-center justify-between"
-            >
-              <span className="flex items-center gap-2">
-                <SortDescIcon />
-                이름순 (내림차순)
-              </span>
-              {sortOrder === "name-desc" && <CheckIcon />}
-            </DropdownMenuItem>
+            {SORT_ORDER_OPTIONS.map((option) => (
+              <DropdownMenuItem
+                key={option.value}
+                onSelect={() => setSortOrder(option.value)}
+                className="flex items-center justify-between"
+              >
+                <span className="flex items-center gap-2">
+                  <option.icon />
+                  {option.label}
+                </span>
+                {sortOrder === option.value && <CheckIcon />}
+              </DropdownMenuItem>
+            ))}
           </DropdownMenuContent>
         </DropdownMenu>
+
+        {/* 2. 멤버 관리 버튼 */}
+        {onToggleMemberPanel && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={(e) => {
+              onToggleMemberPanel()
+              ;(e.currentTarget as HTMLElement).blur()
+            }}
+            onMouseDown={(e) => e.preventDefault()}
+            tabIndex={-1}
+            className={cn(
+              "h-8 px-2 text-sm font-medium gap-1 focus:outline-none focus-visible:outline-none focus-visible:ring-0",
+              isMemberPanelOpen
+                ? "text-primary hover:text-primary hover:bg-primary/10"
+                : "text-white/90 hover:text-white hover:bg-white/10"
+            )}
+            title="멤버 관리"
+          >
+            <MemberManageIcon active={isMemberPanelOpen} />
+          </Button>
+        )}
+
+        {/* 3. 초대하기 버튼 */}
+        {inviteCode && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={(e) => {
+              handleCopyInviteLink()
+              ;(e.currentTarget as HTMLElement).blur()
+            }}
+            onMouseDown={(e) => e.preventDefault()}
+            tabIndex={-1}
+            className="h-8 px-2 text-sm text-white/90 hover:text-white hover:bg-white/10 font-medium gap-1 focus:outline-none focus-visible:outline-none focus-visible:ring-0"
+            title="초대 링크 복사"
+          >
+            <LinkIcon />
+            <span>{copied ? "복사됨!" : "초대"}</span>
+          </Button>
+        )}
       </div>
 
       {/* 참가자 목록 - 그리드 스타일 (ZEP 유사 레이아웃) */}

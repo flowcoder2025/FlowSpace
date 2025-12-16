@@ -33,6 +33,7 @@ interface SpaceData {
   logoUrl: string | null
   primaryColor: string | null
   loadingMessage: string | null
+  inviteCode: string  // 초대 코드 (인게임 초대 링크용)
 }
 
 // 🛡️ 역할 API 응답 타입
@@ -396,6 +397,7 @@ export default function SpacePage() {
         logoUrl: null,
         primaryColor: null,
         loadingMessage: null,
+        inviteCode: `dev-${spaceId}`,  // 개발용 초대 코드
       })
       setLoading(false)
       return
@@ -762,6 +764,7 @@ export default function SpacePage() {
       spaceName={space.name}
       spaceLogoUrl={space.logoUrl}
       spacePrimaryColor={space.primaryColor}
+      spaceInviteCode={space.inviteCode}
       userNickname={verifiedUser.nickname}
       userId={verifiedUser.participantId}
       userAvatarColor={verifiedUser.avatar as LocalAvatarColor}
