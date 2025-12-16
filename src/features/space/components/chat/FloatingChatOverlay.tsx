@@ -364,8 +364,8 @@ export function FloatingChatOverlay({
       }}
       className={cn(
         "flex flex-col rounded-lg",
-        // 🔧 전체화면 시 아주 미세한 배경 오버레이 (텍스트 가시성 향상)
-        isFullscreen && "bg-black/20 backdrop-blur-[2px]"
+        // 🔧 항상 반투명 배경 오버레이 적용 (텍스트 가시성 향상)
+        "bg-black/40 backdrop-blur-sm border border-white/10"
       )}
     >
       {/* 드래그 가능한 헤더 바 (활성화 중 + 비활성화 후 5초간만 표시) */}
