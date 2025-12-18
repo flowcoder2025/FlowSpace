@@ -13,7 +13,7 @@
  * - 스크롤바 활성화 시에만 표시
  * - 최신 메시지 이동 버튼
  */
-import { useRef, useState, useEffect, useCallback, useImperativeHandle, forwardRef, useMemo } from "react"
+import { useRef, useState, useEffect, useCallback, useImperativeHandle, forwardRef, useMemo, memo } from "react"
 import { cn } from "@/lib/utils"
 import type { ChatMessage, ReactionType, MessageReaction, ReplyTo, ChatFontSize } from "../../types/space.types"
 import { CHAT_FONT_SIZES } from "../../types/space.types"
@@ -307,7 +307,7 @@ function ReplyQuote({ replyTo, onClick }: ReplyQuoteProps) {
 }
 
 // ============================================
-// 개별 메시지 렌더링
+// 개별 메시지 렌더링 (React.memo로 최적화)
 // ============================================
 interface ChatMessageItemProps {
   message: ChatMessage
@@ -322,7 +322,7 @@ interface ChatMessageItemProps {
   onScrollToMessage?: (messageId: string) => void
 }
 
-function ChatMessageItem({
+const ChatMessageItem = memo(function ChatMessageItem({
   message,
   isOwn,
   currentUserId,
@@ -467,7 +467,7 @@ function ChatMessageItem({
       )}
     </div>
   )
-}
+})
 
 // ============================================
 // ChatMessageList Props & Handle
@@ -483,6 +483,10 @@ interface ChatMessageListProps {
   onReply?: (message: ChatMessage) => void  // 답장 콜백
   onDeleteMessage?: (messageId: string) => void  // 메시지 삭제 콜백
   onDeactivate?: () => void  // 채팅 기록 영역에서 Enter 시 비활성화
+  // 📜 과거 메시지 페이지네이션
+  onLoadMore?: () => void  // 과거 메시지 로드 트리거
+  isLoadingMore?: boolean  // 로딩 중 여부
+  hasMoreMessages?: boolean  // 더 불러올 메시지 존재 여부
 }
 
 export interface ChatMessageListHandle {
@@ -497,10 +501,11 @@ export interface ChatMessageListHandle {
 const SCROLL_STEP = 40
 
 export const ChatMessageList = forwardRef<ChatMessageListHandle, ChatMessageListProps>(
-  function ChatMessageList({ messages, players, currentUserId, isActive, userRole, fontSize = "medium", onReact, onReply, onDeleteMessage, onDeactivate }, ref) {
+  function ChatMessageList({ messages, players, currentUserId, isActive, userRole, fontSize = "medium", onReact, onReply, onDeleteMessage, onDeactivate, onLoadMore, isLoadingMore = false, hasMoreMessages = true }, ref) {
     // 🔤 폰트 크기 픽셀 값
     const fontSizePx = CHAT_FONT_SIZES[fontSize]
     const containerRef = useRef<HTMLDivElement>(null)
+    const sentinelRef = useRef<HTMLDivElement>(null)  // 📜 스크롤 감지용 센티널
     const [userScrolled, setUserScrolled] = useState(false)
     // 새 메시지 알림용 (과거 기록 보는 중 신규 메시지 있음)
     const [hasNewMessages, setHasNewMessages] = useState(false)
@@ -521,6 +526,34 @@ export const ChatMessageList = forwardRef<ChatMessageListHandle, ChatMessageList
       if (!userRole) return false
       return hasPermission(userRole, "chat:delete")
     }, [userRole])
+
+    // 📜 IntersectionObserver: 스크롤 상단 감지 → 과거 메시지 로드
+    useEffect(() => {
+      if (!onLoadMore || !hasMoreMessages || isLoadingMore) return
+
+      const sentinel = sentinelRef.current
+      if (!sentinel) return
+
+      const observer = new IntersectionObserver(
+        (entries) => {
+          // 센티널이 화면에 보이면 과거 메시지 로드
+          if (entries[0]?.isIntersecting) {
+            onLoadMore()
+          }
+        },
+        {
+          root: containerRef.current,
+          rootMargin: "100px 0px 0px 0px",  // 상단 100px 전에 트리거
+          threshold: 0,
+        }
+      )
+
+      observer.observe(sentinel)
+
+      return () => {
+        observer.disconnect()
+      }
+    }, [onLoadMore, hasMoreMessages, isLoadingMore])
 
     // 최하단 스크롤 함수
     const scrollToBottom = useCallback(() => {
@@ -635,8 +668,8 @@ export const ChatMessageList = forwardRef<ChatMessageListHandle, ChatMessageList
       [onDeactivate, scrollToBottom]
     )
 
-    // 최근 메시지만 표시 (성능 최적화)
-    const recentMessages = messages.slice(-50)
+    // 메모리 제한은 SpaceLayout에서 처리 (Phase 2)
+    // 여기서는 전체 messages를 렌더링
 
     return (
       <div className="relative flex-1 min-h-0">
@@ -657,14 +690,49 @@ export const ChatMessageList = forwardRef<ChatMessageListHandle, ChatMessageList
 
           {/* 메시지 목록 */}
           <div className="flex flex-col">
-            {recentMessages.length === 0 ? (
+            {/* 📜 과거 메시지 로딩 센티널 + 스피너 */}
+            {onLoadMore && (
+              <div ref={sentinelRef} className="flex justify-center py-2 min-h-[24px]">
+                {isLoadingMore ? (
+                  <div className="flex items-center gap-1.5 text-[10px] text-white/40">
+                    <svg
+                      className="animate-spin h-3 w-3"
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      />
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      />
+                    </svg>
+                    <span>이전 메시지 불러오는 중...</span>
+                  </div>
+                ) : hasMoreMessages ? (
+                  <span className="text-[10px] text-white/30">↑ 스크롤하여 이전 메시지 보기</span>
+                ) : messages.length > 0 ? (
+                  <span className="text-[10px] text-white/30">— 채팅 시작 —</span>
+                ) : null}
+              </div>
+            )}
+
+            {messages.length === 0 ? (
               <div className="py-2 px-2">
                 <span className="text-[11px] text-white/40">
                   채팅을 시작하세요...
                 </span>
               </div>
             ) : (
-              recentMessages.map((msg) => (
+              messages.map((msg) => (
                 <div
                   key={msg.id}
                   className={cn(

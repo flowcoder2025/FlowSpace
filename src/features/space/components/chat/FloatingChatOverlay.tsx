@@ -48,6 +48,10 @@ interface FloatingChatOverlayProps {
   isVisible?: boolean
   whisperHistory?: string[]  // 📬 귓속말 히스토리 (최근 대화 상대)
   spaceId?: string  // ⚙️ 스태프 관리용 공간 ID
+  // 📜 Phase 4: 과거 메시지 페이지네이션
+  onLoadMore?: () => void  // 스크롤 상단 도달 시 호출
+  isLoadingMore?: boolean  // 과거 메시지 로딩 중
+  hasMoreMessages?: boolean  // 더 불러올 메시지 존재 여부
 }
 
 // ============================================
@@ -67,6 +71,10 @@ export function FloatingChatOverlay({
   isVisible = true,
   whisperHistory = [],
   spaceId,
+  // 📜 Phase 4: 과거 메시지 페이지네이션
+  onLoadMore,
+  isLoadingMore = false,
+  hasMoreMessages = true,
 }: FloatingChatOverlayProps) {
   const { isActive, toggleMode, deactivate } = useChatMode()
   const { position, size, isDragging, isResizing, handleMoveStart, handleResizeStart } = useChatDrag()
@@ -419,6 +427,10 @@ export function FloatingChatOverlay({
           onReply={handleReply}
           onDeleteMessage={onDeleteMessage}
           onDeactivate={handleDeactivate}
+          // 📜 Phase 4: 과거 메시지 페이지네이션
+          onLoadMore={onLoadMore}
+          isLoadingMore={isLoadingMore}
+          hasMoreMessages={hasMoreMessages}
         />
       </div>
 

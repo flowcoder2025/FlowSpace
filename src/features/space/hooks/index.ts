@@ -24,3 +24,6 @@ export {
 
 // Phase 5.4: 디바운스 저장 훅
 export { useDebouncedEditorSave } from "./useDebouncedEditorSave"
+
+// Phase 6: 과거 메시지 페이지네이션
+export { usePastMessages, mergePastMessages } from "./usePastMessages"

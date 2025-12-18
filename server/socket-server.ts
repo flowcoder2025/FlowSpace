@@ -195,6 +195,110 @@ async function verifyGuestSession(
   }
 }
 
+// ============================================
+// 🚦 Rate Limiting (채팅 도배 방지)
+// ============================================
+const RATE_LIMIT = {
+  MAX_MESSAGES: 5,           // 최대 메시지 수
+  WINDOW_MS: 5000,           // 시간 윈도우 (5초)
+  MAX_DUPLICATES: 3,         // 동일 메시지 연속 허용 횟수
+  MAX_MESSAGE_LENGTH: 2000,  // 최대 메시지 길이 (자)
+}
+
+interface RateLimitState {
+  timestamps: number[]       // 메시지 전송 시각 배열
+  lastMessageHash: string    // 마지막 메시지 해시 (중복 체크용)
+  duplicateCount: number     // 동일 메시지 연속 횟수
+}
+
+// socketId → RateLimitState
+const rateLimitMap = new Map<string, RateLimitState>()
+
+/**
+ * 간단한 해시 함수 (중복 메시지 비교용)
+ */
+function simpleHash(str: string): string {
+  let hash = 0
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i)
+    hash = ((hash << 5) - hash) + char
+    hash = hash & hash // 32bit 정수로 변환
+  }
+  return hash.toString(16)
+}
+
+/**
+ * Rate Limit 체크 및 업데이트
+ * @returns { allowed: boolean, reason?: string }
+ */
+function checkRateLimit(
+  socketId: string,
+  content: string
+): { allowed: boolean; reason?: string } {
+  const now = Date.now()
+  const contentHash = simpleHash(content.trim().toLowerCase())
+
+  // 1. 메시지 길이 체크
+  if (content.length > RATE_LIMIT.MAX_MESSAGE_LENGTH) {
+    return {
+      allowed: false,
+      reason: `메시지가 너무 깁니다. (최대 ${RATE_LIMIT.MAX_MESSAGE_LENGTH}자)`,
+    }
+  }
+
+  // 2. Rate Limit 상태 가져오기 또는 생성
+  let state = rateLimitMap.get(socketId)
+  if (!state) {
+    state = {
+      timestamps: [],
+      lastMessageHash: "",
+      duplicateCount: 0,
+    }
+    rateLimitMap.set(socketId, state)
+  }
+
+  // 3. 시간 윈도우 밖의 오래된 타임스탬프 제거
+  state.timestamps = state.timestamps.filter(
+    (ts) => now - ts < RATE_LIMIT.WINDOW_MS
+  )
+
+  // 4. 빈도 제한 체크 (5msg/5sec)
+  if (state.timestamps.length >= RATE_LIMIT.MAX_MESSAGES) {
+    const oldestTs = state.timestamps[0]
+    const waitTime = Math.ceil((RATE_LIMIT.WINDOW_MS - (now - oldestTs)) / 1000)
+    return {
+      allowed: false,
+      reason: `메시지를 너무 빨리 보내고 있습니다. ${waitTime}초 후에 다시 시도해주세요.`,
+    }
+  }
+
+  // 5. 동일 메시지 반복 체크
+  if (contentHash === state.lastMessageHash) {
+    state.duplicateCount++
+    if (state.duplicateCount >= RATE_LIMIT.MAX_DUPLICATES) {
+      return {
+        allowed: false,
+        reason: "동일한 메시지를 연속으로 보낼 수 없습니다.",
+      }
+    }
+  } else {
+    state.duplicateCount = 1
+    state.lastMessageHash = contentHash
+  }
+
+  // 6. 타임스탬프 추가 (허용된 경우)
+  state.timestamps.push(now)
+
+  return { allowed: true }
+}
+
+/**
+ * 연결 해제 시 Rate Limit 상태 정리
+ */
+function cleanupRateLimitState(socketId: string): void {
+  rateLimitMap.delete(socketId)
+}
+
 // Create HTTP server for health checks (Railway requirement)
 const httpServer = createServer((req, res) => {
   const url = req.url || ""
@@ -583,6 +687,13 @@ io.on("connection", (socket) => {
       return
     }
 
+    // 🚦 Rate Limit 체크
+    const rateCheck = checkRateLimit(socket.id, content)
+    if (!rateCheck.allowed) {
+      socket.emit("chat:error", { message: rateCheck.reason || "메시지 전송이 제한되었습니다." })
+      return
+    }
+
     if (spaceId && playerId && content.trim()) {
       const now = Date.now()
       const tempId = `msg-${now}-${playerId}`
@@ -630,6 +741,13 @@ io.on("connection", (socket) => {
     const { spaceId, playerId, nickname } = socket.data
 
     if (!spaceId || !playerId || !content.trim()) return
+
+    // 🚦 Rate Limit 체크
+    const rateCheck = checkRateLimit(socket.id, content)
+    if (!rateCheck.allowed) {
+      socket.emit("whisper:error", { message: rateCheck.reason || "메시지 전송이 제한되었습니다." })
+      return
+    }
 
     // 🔒 자기 자신에게 귓속말 보내기 방지
     if (targetNickname === nickname) {
@@ -747,6 +865,13 @@ io.on("connection", (socket) => {
       if (!partyId) {
         socket.emit("party:error", { message: "파티에 참가하지 않았습니다." })
       }
+      return
+    }
+
+    // 🚦 Rate Limit 체크
+    const rateCheck = checkRateLimit(socket.id, content)
+    if (!rateCheck.allowed) {
+      socket.emit("party:error", { message: rateCheck.reason || "메시지 전송이 제한되었습니다." })
       return
     }
 
@@ -1693,6 +1818,9 @@ io.on("connection", (socket) => {
   // Disconnect
   socket.on("disconnect", (reason) => {
     const { spaceId, playerId, nickname, sessionToken, partyId, partyName } = socket.data
+
+    // 🚦 Rate Limit 상태 정리
+    cleanupRateLimitState(socket.id)
 
     if (spaceId && playerId) {
       removePlayerFromRoom(spaceId, playerId)

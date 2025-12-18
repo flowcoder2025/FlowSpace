@@ -14,7 +14,7 @@ import { RecordingIndicator } from "./RecordingIndicator"
 import { EditorPanel, EditorModeIndicator } from "./editor"
 import { useSocket } from "../socket"
 import { LiveKitRoomProvider, useLiveKitMedia } from "../livekit"
-import { useNotificationSound, useChatStorage } from "../hooks"
+import { useNotificationSound, useChatStorage, usePastMessages, mergePastMessages } from "../hooks"
 import { useEditorCommands } from "../hooks/useEditorCommands"
 import { useEditorStore } from "../stores/editorStore"
 import { eventBridge, GameEvents, type EditorCanvasClickPayload } from "../game/events"
@@ -61,6 +61,31 @@ function socketToChatMessage(data: ChatMessageData): ChatMessage {
     // 💬 답장 필드
     replyTo: data.replyTo,
   }
+}
+
+// ============================================
+// 📦 메모리 관리: 메시지 상한
+// ============================================
+const MAX_MESSAGES = 500
+
+/**
+ * 메시지 배열에 새 메시지를 추가하고 최대 개수를 초과하면 오래된 메시지 제거
+ * @param prev 기존 메시지 배열
+ * @param newMessages 추가할 메시지 (단일 또는 배열)
+ * @returns 제한된 메시지 배열
+ */
+function addMessagesWithLimit(
+  prev: ChatMessage[],
+  newMessages: ChatMessage | ChatMessage[]
+): ChatMessage[] {
+  const messagesToAdd = Array.isArray(newMessages) ? newMessages : [newMessages]
+  const combined = [...prev, ...messagesToAdd]
+
+  // 최대 개수 초과 시 오래된 메시지(앞쪽) 제거
+  if (combined.length > MAX_MESSAGES) {
+    return combined.slice(combined.length - MAX_MESSAGES)
+  }
+  return combined
 }
 
 /**
@@ -116,13 +141,17 @@ function SpaceLayoutContent({
   // 💾 채팅 내역 localStorage 영속성
   const { loadMessages, saveMessages } = useChatStorage({ spaceId })
 
-  // 📥 컴포넌트 마운트 시 저장된 메시지 로드
+  // 📥 컴포넌트 마운트 시 저장된 메시지 로드 (📦 500개 상한 적용)
   // localStorage에서 초기 데이터 로드 시 동기 setState가 필요하므로 lint 규칙 비활성화
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     const savedMessages = loadMessages()
     if (savedMessages.length > 0) {
-      setMessages(savedMessages)
+      // 저장된 메시지도 최대 개수 제한 적용
+      const limitedMessages = savedMessages.length > MAX_MESSAGES
+        ? savedMessages.slice(savedMessages.length - MAX_MESSAGES)
+        : savedMessages
+      setMessages(limitedMessages)
     }
   }, [loadMessages])
   /* eslint-enable react-hooks/set-state-in-effect */
@@ -134,6 +163,32 @@ function SpaceLayoutContent({
     }
   }, [messages, saveMessages])
 
+  // 📜 Phase 4: 과거 메시지 페이지네이션
+  const {
+    isLoading: isLoadingMore,
+    hasMore: hasMoreMessages,
+    loadPastMessages,
+    reset: resetPastMessages,
+  } = usePastMessages({
+    spaceId,
+    guestSessionId: sessionToken,
+    limit: 50,
+    enabled: true,
+  })
+
+  // 📜 과거 메시지 로드 핸들러 (스크롤 상단 도달 시)
+  const handleLoadMore = useCallback(async () => {
+    const pastMessages = await loadPastMessages()
+    if (pastMessages.length > 0) {
+      setMessages((prev) => mergePastMessages(prev, pastMessages))
+    }
+  }, [loadPastMessages])
+
+  // 📜 공간 변경 시 페이지네이션 상태 초기화
+  useEffect(() => {
+    resetPastMessages()
+  }, [spaceId, resetPastMessages])
+
   // 🔔 알림음 훅
   const { playWhisperSound } = useNotificationSound()
 
@@ -141,18 +196,18 @@ function SpaceLayoutContent({
   const [characterPosition, setCharacterPosition] = useState<GridPosition>({ x: 5, y: 5 })
   const [characterDirection, setCharacterDirection] = useState<"up" | "down" | "left" | "right">("down")
 
-  // Socket message handlers
+  // Socket message handlers (📦 500개 메모리 상한 적용)
   const handleChatMessage = useCallback((data: ChatMessageData) => {
-    setMessages((prev) => [...prev, socketToChatMessage(data)])
+    setMessages((prev) => addMessagesWithLimit(prev, socketToChatMessage(data)))
   }, [])
 
   const handleSystemMessage = useCallback((data: ChatMessageData) => {
-    setMessages((prev) => [...prev, socketToChatMessage(data)])
+    setMessages((prev) => addMessagesWithLimit(prev, socketToChatMessage(data)))
   }, [])
 
   // 📬 귓속말 메시지 핸들러 (송신/수신 모두 같은 핸들러)
   const handleWhisperMessage = useCallback((data: ChatMessageData) => {
-    setMessages((prev) => [...prev, socketToChatMessage(data)])
+    setMessages((prev) => addMessagesWithLimit(prev, socketToChatMessage(data)))
     // 🔔 수신한 귓속말만 알림음 재생 (내가 보낸 게 아닌 경우)
     if (data.senderId !== userId) {
       playWhisperSound()
@@ -170,7 +225,7 @@ function SpaceLayoutContent({
       timestamp: new Date(),
       type: "system",
     }
-    setMessages((prev) => [...prev, errorMessage])
+    setMessages((prev) => addMessagesWithLimit(prev, errorMessage))
   }, [])
 
   // 🔄 Local state for nickname/avatar (enables hot reload without socket reconnection)
@@ -187,7 +242,7 @@ function SpaceLayoutContent({
       timestamp: new Date(),
       type: "system",
     }
-    setMessages((prev) => [...prev, errorMessage])
+    setMessages((prev) => addMessagesWithLimit(prev, errorMessage))
   }, [])
 
   // 🔇 채팅 에러 핸들러 (음소거 등)
@@ -200,7 +255,7 @@ function SpaceLayoutContent({
       timestamp: new Date(),
       type: "system",
     }
-    setMessages((prev) => [...prev, errorMessage])
+    setMessages((prev) => addMessagesWithLimit(prev, errorMessage))
   }, [])
 
   // 📢 공지 메시지 핸들러
@@ -213,7 +268,7 @@ function SpaceLayoutContent({
       timestamp: new Date(data.timestamp),
       type: "system",
     }
-    setMessages((prev) => [...prev, announceMessage])
+    setMessages((prev) => addMessagesWithLimit(prev, announceMessage))
   }, [])
 
   // 🗑️ 메시지 삭제 핸들러 (서버에서 삭제 이벤트 수신 시)
@@ -241,7 +296,7 @@ function SpaceLayoutContent({
       timestamp: new Date(),
       type: "system",
     }
-    setMessages((prev) => [...prev, recordingMessage])
+    setMessages((prev) => addMessagesWithLimit(prev, recordingMessage))
   }, [])
 
   // 🎬 녹화 중지 핸들러
@@ -254,7 +309,7 @@ function SpaceLayoutContent({
       timestamp: new Date(),
       type: "system",
     }
-    setMessages((prev) => [...prev, recordingMessage])
+    setMessages((prev) => addMessagesWithLimit(prev, recordingMessage))
   }, [])
 
   // 🎬 녹화 에러 핸들러
@@ -267,7 +322,7 @@ function SpaceLayoutContent({
       timestamp: new Date(),
       type: "system",
     }
-    setMessages((prev) => [...prev, errorMessage])
+    setMessages((prev) => addMessagesWithLimit(prev, errorMessage))
   }, [])
 
   // Socket connection for game position sync (🔒 sessionToken으로 서버 검증)
@@ -448,7 +503,7 @@ function SpaceLayoutContent({
         timestamp: new Date(),
         type: "system",
       }
-      setMessages((prev) => [...prev, editorCloseMessage])
+      setMessages((prev) => addMessagesWithLimit(prev, editorCloseMessage))
       setPendingEditorClose(false)
     }
   }, [pendingEditorClose, isEditorActive])
@@ -485,7 +540,7 @@ function SpaceLayoutContent({
           timestamp: new Date(),
           type: "system",
         }
-        setMessages((prev) => [...prev, warningMessage])
+        setMessages((prev) => addMessagesWithLimit(prev, warningMessage))
         return
       }
 
@@ -507,7 +562,7 @@ function SpaceLayoutContent({
             timestamp: new Date(),
             type: "system",
           }
-          setMessages((prev) => [...prev, firstMessage])
+          setMessages((prev) => addMessagesWithLimit(prev, firstMessage))
           return
         } else if (pairPhase === "placing_second" && pairFirstPosition) {
           // 같은 위치에 두 번째 배치 불가
@@ -520,7 +575,7 @@ function SpaceLayoutContent({
               timestamp: new Date(),
               type: "system",
             }
-            setMessages((prev) => [...prev, samePositionMessage])
+            setMessages((prev) => addMessagesWithLimit(prev, samePositionMessage))
             return
           }
 
@@ -592,7 +647,7 @@ function SpaceLayoutContent({
                 timestamp: new Date(),
                 type: "system",
               }
-              setMessages((prev) => [...prev, errorMessage])
+              setMessages((prev) => addMessagesWithLimit(prev, errorMessage))
               // 페어 상태 초기화 후 리턴
               setPairPhase("idle")
               setPairFirstPosition(null)
@@ -642,7 +697,7 @@ function SpaceLayoutContent({
               timestamp: new Date(),
               type: "system",
             }
-            setMessages((prev) => [...prev, pairCompleteMessage])
+            setMessages((prev) => addMessagesWithLimit(prev, pairCompleteMessage))
           }
 
           // 페어 상태 초기화
@@ -686,7 +741,7 @@ function SpaceLayoutContent({
             timestamp: new Date(),
             type: "system",
           }
-          setMessages((prev) => [...prev, errorMessage])
+          setMessages((prev) => addMessagesWithLimit(prev, errorMessage))
           return
         }
       }
@@ -718,7 +773,7 @@ function SpaceLayoutContent({
           timestamp: new Date(),
           type: "system",
         }
-        setMessages((prev) => [...prev, successMessage])
+        setMessages((prev) => addMessagesWithLimit(prev, successMessage))
       }
     }
 
@@ -739,7 +794,7 @@ function SpaceLayoutContent({
       timestamp: new Date(),
       type: "system",
     }
-    setMessages((prev) => [...prev, editorMessage])
+    setMessages((prev) => addMessagesWithLimit(prev, editorMessage))
   }, [])
 
   // 🎨 에디터 명령어 훅
@@ -979,7 +1034,7 @@ function SpaceLayoutContent({
             type: "system",
           },
         ]
-        setMessages((prev) => [...prev, ...helpMessages])
+        setMessages((prev) => addMessagesWithLimit(prev, helpMessages))
         break
     }
   }, [sendMuteCommand, sendUnmuteCommand, sendKickCommand, sendAnnounce])
@@ -1106,6 +1161,10 @@ function SpaceLayoutContent({
           isVisible={isChatOpen}
           whisperHistory={whisperHistory}
           spaceId={spaceId}
+          // 📜 Phase 4: 과거 메시지 페이지네이션
+          onLoadMore={handleLoadMore}
+          isLoadingMore={isLoadingMore}
+          hasMoreMessages={hasMoreMessages}
         />
 
         {/* 플로팅 참가자 비디오 - 뷰 모드에 따라 다르게 렌더링 */}
