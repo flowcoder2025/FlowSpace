@@ -1,5 +1,6 @@
 [build]
 builder = "nixpacks"
+buildCommand = "npm install"  # Next.js 빌드 건너뛰기 (Socket.io만 필요)
 
 [deploy]
 startCommand = "npm run socket:start"
