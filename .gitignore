@@ -38,6 +38,9 @@ Thumbs.db
 # Misc
 *.log
 
+# Temporary/work files
+.bin/
+
 # Playwright MCP browser data
 .playwright-mcp/
 
