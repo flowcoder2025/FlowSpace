@@ -52,6 +52,43 @@ export async function isSuperAdmin(userId: string): Promise<boolean> {
 }
 
 // ============================================
+// 공간 생성 권한 체크
+// ============================================
+
+/**
+ * 사용자가 공간을 생성할 수 있는지 확인
+ *
+ * Phase 1: SuperAdmin만 허용
+ * Phase 2 (향후): 유료 구독자(PRO/PREMIUM) 허용
+ *
+ * @param userId - 확인할 사용자 ID
+ * @returns 공간 생성 가능 여부
+ */
+export async function canCreateSpace(userId: string): Promise<boolean> {
+  // 1. SuperAdmin은 항상 허용
+  if (await isSuperAdmin(userId)) {
+    return true
+  }
+
+  // 2. 유료 구독자 확인 (PRO 또는 PREMIUM)
+  const subscription = await prisma.subscription.findUnique({
+    where: { userId },
+    select: { tier: true, status: true },
+  })
+
+  // 활성 상태의 유료 플랜(PRO, PREMIUM)만 허용
+  if (subscription && subscription.status === "ACTIVE") {
+    const paidTiers = ["PRO", "PREMIUM"]
+    if (paidTiers.includes(subscription.tier)) {
+      return true
+    }
+  }
+
+  // 3. 그 외에는 불허
+  return false
+}
+
+// ============================================
 // 공간 멤버십 조회
 // ============================================
 

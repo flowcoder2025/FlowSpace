@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
-import { createSpaceOwner } from "@/lib/space-auth"
+import { createSpaceOwner, canCreateSpace } from "@/lib/space-auth"
 import { SpaceAccessType, SpaceStatus, TemplateKey } from "@prisma/client"
 
 // ============================================
@@ -57,10 +57,19 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // 2. Request body 파싱
+    // 2. 공간 생성 권한 확인 (SuperAdmin 또는 유료 구독자만 가능)
+    const hasCreatePermission = await canCreateSpace(ownerId)
+    if (!hasCreatePermission) {
+      return NextResponse.json(
+        { error: "공간 생성 권한이 없습니다. 유료 플랜을 구독하거나 관리자에게 문의하세요." },
+        { status: 403 }
+      )
+    }
+
+    // 3. Request body 파싱
     const body: CreateSpaceBody = await request.json()
 
-    // 3. 필수 필드 검증
+    // 4. 필수 필드 검증
     if (!body.name || !body.templateKey) {
       return NextResponse.json(
         { error: "Missing required fields: name, templateKey" },
@@ -68,7 +77,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // 4. 입력값 검증
+    // 5. 입력값 검증
     if (body.name.length > 100) {
       return NextResponse.json(
         { error: "Name must be 100 characters or less" },
@@ -83,7 +92,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // 5. 템플릿 조회
+    // 6. 템플릿 조회
     const template = await prisma.template.findUnique({
       where: { key: body.templateKey },
     })
@@ -95,7 +104,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // 6. 공간 생성
+    // 7. 공간 생성
     const space = await prisma.space.create({
       data: {
         name: body.name,
@@ -114,7 +123,7 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    // 7. 소유자 멤버십 자동 생성 (Phase 6)
+    // 8. 소유자 멤버십 자동 생성 (OWNER 역할)
     await createSpaceOwner(space.id, ownerId)
 
     if (IS_DEV) {
