@@ -980,8 +980,12 @@ export class MainScene extends Phaser.Scene {
       // 🔄 Store avatar config for animation updates
       this.remotePlayerAvatarConfigs.set(position.id, avatarConfig)
 
-      // 🔄 새 애니메이션 키 사용
-      const idleAnim = `${animPrefix}-${position.direction || "down"}-idle`
+      // 🔧 Use getAnimationKey for correct format (classic vs custom)
+      const idleAnim = getAnimationKey(
+        (position.direction || "down") as "up" | "down" | "left" | "right",
+        false,
+        animPrefix
+      )
       if (this.anims?.exists(idleAnim)) {
         sprite.play(idleAnim)
       }
@@ -1086,8 +1090,12 @@ export class MainScene extends Phaser.Scene {
           const animPrefix = storedConfig
             ? getAnimationPrefix(storedConfig)
             : position.avatarColor || "default"
-          const animSuffix = position.isMoving ? "walk" : "idle"
-          const animKey = `${animPrefix}-${position.direction}-${animSuffix}`
+          // 🔧 Use getAnimationKey for correct format (classic vs custom)
+          const animKey = getAnimationKey(
+            position.direction as "up" | "down" | "left" | "right",
+            position.isMoving,
+            animPrefix
+          )
 
           if (
             this.anims.exists(animKey) &&
