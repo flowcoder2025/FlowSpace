@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useMemo, useEffect } from "react"
+import { useState, useCallback, useMemo, useEffect, useRef } from "react"
 
 import { SpaceHeader } from "./SpaceHeader"
 import { FloatingChatOverlay, type AdminCommandResult } from "./chat"
@@ -898,14 +898,48 @@ function SpaceLayoutContent({
   const isOwner = userRole === "OWNER"
 
   // Find active screen share (first participant with screenTrack)
+  // 🔧 안정화: screenTrack이 실제로 존재하고 활성 상태인 경우만 반환
   const activeScreenShare = useMemo(() => {
     for (const track of allParticipantTracks.values()) {
-      if (track.screenTrack) {
+      // screenTrack이 있고 아직 종료되지 않은 경우만 유효
+      if (track.screenTrack && track.screenTrack.readyState !== "ended") {
         return track
       }
     }
     return null
   }, [allParticipantTracks])
+
+  // 🔧 화면공유 안정화: 일시적인 null 상태를 무시하고 이전 값 유지
+  // 귓속말 등 채팅 이벤트 처리 시 allParticipantTracks가 재계산되면서
+  // 일시적으로 screenTrack이 undefined가 되는 문제 방지
+  const stableScreenShareRef = useRef(activeScreenShare)
+  const screenShareDebounceRef = useRef<NodeJS.Timeout | null>(null)
+
+  useEffect(() => {
+    if (activeScreenShare && activeScreenShare.screenTrack?.readyState !== "ended") {
+      // 유효한 화면공유가 있으면 즉시 업데이트
+      stableScreenShareRef.current = activeScreenShare
+      if (screenShareDebounceRef.current) {
+        clearTimeout(screenShareDebounceRef.current)
+        screenShareDebounceRef.current = null
+      }
+    } else if (activeScreenShare === null && stableScreenShareRef.current) {
+      // null이 되었지만 이전에 화면공유가 있었던 경우
+      // 200ms 대기 후에도 null이면 실제 종료로 판단
+      screenShareDebounceRef.current = setTimeout(() => {
+        stableScreenShareRef.current = null
+      }, 200)
+    }
+
+    return () => {
+      if (screenShareDebounceRef.current) {
+        clearTimeout(screenShareDebounceRef.current)
+      }
+    }
+  }, [activeScreenShare])
+
+  // 렌더링에 사용할 안정화된 화면공유 (즉시 반영 + 디바운스 null)
+  const stableScreenShare = activeScreenShare ?? stableScreenShareRef.current
 
   // 🎤 모든 참가자의 오디오 트랙 수집 (녹화 시 믹싱용)
   const allAudioTracks = useMemo(() => {
@@ -948,12 +982,13 @@ function SpaceLayoutContent({
   const [closedScreenTrackId, setClosedScreenTrackId] = useState<string | null>(null)
 
   // Screen share overlay visibility - derived from track ID comparison
+  // 🔧 stableScreenShare 사용: 일시적인 상태 변화에도 안정적으로 표시
   // 새 화면공유가 시작되면 (트랙 ID가 달라지면) 자동으로 오버레이 재활성화
   const showScreenShareOverlay = useMemo(() => {
-    const screenTrack = activeScreenShare?.screenTrack
+    const screenTrack = stableScreenShare?.screenTrack
     if (!screenTrack) return false
     return screenTrack.id !== closedScreenTrackId
-  }, [activeScreenShare, closedScreenTrackId])
+  }, [stableScreenShare, closedScreenTrackId])
 
   // Handlers
   const handleSendMessage = useCallback((content: string, replyTo?: ReplyToData) => {
@@ -1118,11 +1153,11 @@ function SpaceLayoutContent({
   // 🔧 오버레이 닫을 때 현재 트랙 ID 저장 (같은 트랙 재표시 방지)
   // setClosedScreenTrackId로 닫힌 트랙 ID를 저장하면 showScreenShareOverlay가 자동으로 false로 계산됨
   const handleCloseScreenShareOverlay = useCallback(() => {
-    const screenTrack = activeScreenShare?.screenTrack
+    const screenTrack = stableScreenShare?.screenTrack
     if (screenTrack) {
       setClosedScreenTrackId(screenTrack.id)
     }
-  }, [activeScreenShare])
+  }, [stableScreenShare])
 
   return (
     <div className="flex h-screen flex-col bg-background">
@@ -1321,15 +1356,17 @@ function SpaceLayoutContent({
       />
 
       {/* Screen Share Overlay - Show when someone is sharing (except self) */}
-      {activeScreenShare &&
-       activeScreenShare.participantId !== resolvedUserId &&
+      {/* 🔧 stableScreenShare 사용: 일시적인 상태 변화에도 오버레이 유지 */}
+      {stableScreenShare &&
+       stableScreenShare.participantId !== resolvedUserId &&
        showScreenShareOverlay && (
         <ScreenShareOverlay
-          track={activeScreenShare}
+          key={stableScreenShare.participantId}  // 🔧 key 추가: 같은 참가자면 리마운트 방지
+          track={stableScreenShare}
           onClose={handleCloseScreenShareOverlay}
           canRecord={userRole === "OWNER" || userRole === "STAFF" || isSuperAdmin}
           spaceName={spaceName}
-          audioTrack={activeScreenShare.audioTrack}
+          audioTrack={stableScreenShare.audioTrack}
           allAudioTracks={allAudioTracks}
         />
       )}
