@@ -14,20 +14,58 @@ import { useState, useCallback, useEffect, useRef } from "react"
 
 const STORAGE_KEY = "flowspace-chat-position"
 
-// 채팅창 기본/최소/최대 크기
-const DEFAULT_WIDTH = 320
-const DEFAULT_HEIGHT = 300
-const MIN_WIDTH = 280
-const MIN_HEIGHT = 200
+// 📱 반응형 기본/최소/최대 크기 계산
+const getDefaultSize = () => {
+  if (typeof window === "undefined") return { width: 320, height: 300 }
+
+  const isMobile = window.innerWidth < 640 // Tailwind sm breakpoint
+  const isTablet = window.innerWidth < 1024 // Tailwind lg breakpoint
+
+  if (isMobile) {
+    // 모바일: 화면 너비의 90%, 높이 280px
+    return {
+      width: Math.min(window.innerWidth * 0.9, 320),
+      height: 280,
+    }
+  } else if (isTablet) {
+    // 태블릿: 기본 크기
+    return { width: 300, height: 280 }
+  }
+  // 데스크톱: 큰 크기
+  return { width: 320, height: 300 }
+}
+
+// 📱 반응형 최소 크기
+const getMinSize = () => {
+  if (typeof window === "undefined") return { width: 280, height: 200 }
+  const isMobile = window.innerWidth < 640
+  return {
+    width: isMobile ? 240 : 280,
+    height: isMobile ? 180 : 200,
+  }
+}
+
 const MAX_WIDTH = 600
 const MAX_HEIGHT = 600
 
-// 기본 위치: 좌하단
+// 기본 위치: 좌하단 (📱 모바일에서는 중앙 하단)
 const getDefaultPosition = () => {
   if (typeof window === "undefined") return { x: 16, y: 400 }
+
+  const { width: defaultWidth, height: defaultHeight } = getDefaultSize()
+  const isMobile = window.innerWidth < 640
+
+  if (isMobile) {
+    // 모바일: 중앙 하단 (컨트롤 바 위)
+    return {
+      x: (window.innerWidth - defaultWidth) / 2,
+      y: Math.max(50, window.innerHeight - defaultHeight - 80),
+    }
+  }
+
   return {
     x: 16,
-    y: Math.max(100, window.innerHeight - DEFAULT_HEIGHT - 100),
+    y: Math.max(100, window.innerHeight - defaultHeight - 100),
   }
 }
 
@@ -49,12 +87,14 @@ interface ChatState {
 type DragMode = "none" | "move" | "resize"
 
 export function useChatDrag() {
-  // localStorage에서 초기값 로드
+  // localStorage에서 초기값 로드 (📱 반응형 기본 크기 사용)
   const [state, setState] = useState<ChatState>(() => {
+    const defaultSize = getDefaultSize()
+
     if (typeof window === "undefined") {
       return {
         position: { x: 16, y: 400 },
-        size: { width: DEFAULT_WIDTH, height: DEFAULT_HEIGHT },
+        size: defaultSize,
       }
     }
     try {
@@ -68,8 +108,8 @@ export function useChatDrag() {
               y: typeof parsed.position.y === "number" ? parsed.position.y : 400,
             },
             size: {
-              width: typeof parsed.size.width === "number" ? parsed.size.width : DEFAULT_WIDTH,
-              height: typeof parsed.size.height === "number" ? parsed.size.height : DEFAULT_HEIGHT,
+              width: typeof parsed.size.width === "number" ? parsed.size.width : defaultSize.width,
+              height: typeof parsed.size.height === "number" ? parsed.size.height : defaultSize.height,
             },
           }
         }
@@ -77,7 +117,7 @@ export function useChatDrag() {
         if (typeof parsed.x === "number" && typeof parsed.y === "number") {
           return {
             position: { x: parsed.x, y: parsed.y },
-            size: { width: DEFAULT_WIDTH, height: DEFAULT_HEIGHT },
+            size: defaultSize,
           }
         }
       }
@@ -86,7 +126,7 @@ export function useChatDrag() {
     }
     return {
       position: getDefaultPosition(),
-      size: { width: DEFAULT_WIDTH, height: DEFAULT_HEIGHT },
+      size: defaultSize,
     }
   })
 
@@ -114,11 +154,12 @@ export function useChatDrag() {
     }
   }, [])
 
-  // 크기 제한
+  // 크기 제한 (📱 반응형 최소 크기 사용)
   const clampSize = useCallback((width: number, height: number): Size => {
+    const minSize = getMinSize()
     return {
-      width: Math.max(MIN_WIDTH, Math.min(width, MAX_WIDTH)),
-      height: Math.max(MIN_HEIGHT, Math.min(height, MAX_HEIGHT)),
+      width: Math.max(minSize.width, Math.min(width, MAX_WIDTH)),
+      height: Math.max(minSize.height, Math.min(height, MAX_HEIGHT)),
     }
   }, [])
 

@@ -8,7 +8,7 @@
  */
 
 import { useEffect, useCallback, useRef } from "react"
-import { io, Socket } from "socket.io-client"
+import type { Socket } from "socket.io-client"
 import type {
   ClientToServerEvents,
   ServerToClientEvents,
@@ -23,7 +23,6 @@ import type {
   GridPosition,
 } from "./types"
 
-const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3001"
 const IS_DEV = process.env.NODE_ENV === "development"
 
 interface UseEditorSocketOptions {

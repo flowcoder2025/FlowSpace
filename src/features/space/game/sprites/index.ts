@@ -4,5 +4,6 @@ export {
   generateCharacterTexture,
   createCharacterAnimations,
   createCharacterAnimationsFromSpritesheet,
+  createCharacterAnimationsFrom8x4Spritesheet,
   getAnimationKey,
 } from "./CharacterSprite"

@@ -16,6 +16,11 @@ import {
   getSpaceParticipant,
   saveSpaceParticipant,
 } from "@/features/space/components/ParticipantEntryModal"
+import {
+  getSafeAvatarString,
+  getLegacyAvatarColor,
+  type ClassicColorId,
+} from "@/features/space/avatar"
 
 // ============================================
 // Types
@@ -61,18 +66,13 @@ interface VerifiedUser {
   avatar: string
 }
 
-// 유효한 아바타 색상 목록 (socket/types.ts의 AvatarColor와 일치)
-const VALID_AVATAR_COLORS = ["default", "red", "green", "purple", "orange", "pink"] as const
-type LocalAvatarColor = typeof VALID_AVATAR_COLORS[number]
+// 레거시 아바타 색상 타입 (backward compatibility)
+type LocalAvatarColor = ClassicColorId
 
-// 아바타 색상 유효성 검사 헬퍼 함수
-function isValidAvatarColor(value: unknown): value is LocalAvatarColor {
-  return typeof value === "string" && VALID_AVATAR_COLORS.includes(value as LocalAvatarColor)
-}
-
-// 안전한 아바타 색상 반환 (유효하지 않으면 "default")
+// 안전한 아바타 색상 반환 (새 포맷에서 레거시 색상 추출)
 function getSafeAvatarColor(value: unknown): LocalAvatarColor {
-  return isValidAvatarColor(value) ? value : "default"
+  if (typeof value !== "string") return "default"
+  return getLegacyAvatarColor(value)
 }
 
 // /api/guest/verify 응답 타입
@@ -244,7 +244,8 @@ export default function SpacePage() {
       if (savedParticipant) {
         // 저장된 참가자 정보가 있으면 사용
         console.log("[SpacePage] Using saved participant:", savedParticipant.nickname)
-        const safeAvatar = getSafeAvatarColor(savedParticipant.avatar)
+        // 🔄 새 아바타 포맷 지원 - 전체 문자열 저장
+        const safeAvatar = getSafeAvatarString(savedParticipant.avatar)
         const authUserSession: GuestSession = {
           sessionToken: `auth-${authSession.user.id || Date.now()}`,
           nickname: savedParticipant.nickname,
@@ -362,7 +363,8 @@ export default function SpacePage() {
         const data: VerifyResponse = await res.json()
 
         // 🔒 서버에서 파생된 participantId 저장 (avatar도 유효성 검사)
-        const safeAvatar = getSafeAvatarColor(data.avatar)
+        // 🔄 새 아바타 포맷 지원 - 전체 문자열 저장
+        const safeAvatar = getSafeAvatarString(data.avatar)
         setVerifiedUser({
           participantId: data.participantId,
           nickname: data.nickname,
@@ -551,11 +553,12 @@ export default function SpacePage() {
     ({ nickname, avatar }: { nickname: string; avatar: string }) => {
       if (!authSession?.user) return
 
-      console.log("[SpacePage] Participant entry completed:", nickname)
+      console.log("[SpacePage] Participant entry completed:", nickname, avatar)
       setShowParticipantModal(false)
       setLoading(true)
 
-      const safeAvatar = getSafeAvatarColor(avatar)
+      // 🔄 새 아바타 포맷 지원 - 전체 문자열 저장 (예: "classic:default" 또는 "custom:office_male")
+      const safeAvatar = getSafeAvatarString(avatar)
       const authUserSession: GuestSession = {
         sessionToken: `auth-${authSession.user.id || Date.now()}`,
         nickname,
@@ -578,7 +581,8 @@ export default function SpacePage() {
       console.log("[SpacePage] Nickname changed (hot reload):", nickname, avatar)
       // 🔄 SpaceLayout 내부에서 updateProfile()로 핫 리로드 처리되므로
       // page.tsx에서는 verifiedUser 상태만 동기화
-      const safeAvatar = getSafeAvatarColor(avatar)
+      // 🔄 새 아바타 포맷 지원
+      const safeAvatar = getSafeAvatarString(avatar)
       setVerifiedUser((prev) =>
         prev ? { ...prev, nickname, avatar: safeAvatar } : prev
       )
@@ -767,7 +771,8 @@ export default function SpacePage() {
       spaceInviteCode={space.inviteCode}
       userNickname={verifiedUser.nickname}
       userId={verifiedUser.participantId}
-      userAvatarColor={verifiedUser.avatar as LocalAvatarColor}
+      userAvatarColor={getSafeAvatarColor(verifiedUser.avatar)}
+      userAvatar={verifiedUser.avatar}
       userRole={userRole ?? undefined}
       isSuperAdmin={isSuperAdmin}
       sessionToken={session.sessionToken}

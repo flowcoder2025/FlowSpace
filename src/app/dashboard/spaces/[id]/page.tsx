@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useParams, useRouter } from "next/navigation"
+import { useParams } from "next/navigation"
 import Link from "next/link"
 import {
   Container,
@@ -117,7 +117,6 @@ function StatCard({
 // ============================================
 export default function DashboardSpaceManagePage() {
   const params = useParams()
-  const router = useRouter()
   const spaceId = params.id as string
 
   const [space, setSpace] = useState<Space | null>(null)
@@ -125,6 +124,7 @@ export default function DashboardSpaceManagePage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [exporting, setExporting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isOwner, setIsOwner] = useState(false)
   const [isSuperAdmin, setIsSuperAdmin] = useState(false)
@@ -232,6 +232,36 @@ export default function DashboardSpaceManagePage() {
       console.error(err)
     } finally {
       setSaving(false)
+    }
+  }
+
+  // Export event logs as CSV
+  const handleExport = async () => {
+    setExporting(true)
+    try {
+      const res = await fetch(`/api/dashboard/spaces/${spaceId}/export`)
+
+      if (!res.ok) {
+        throw new Error("Failed to export")
+      }
+
+      // 파일 다운로드
+      const blob = await res.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download =
+        res.headers.get("Content-Disposition")?.split("filename=")[1]?.replace(/"/g, "") ||
+        "events.csv"
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+    } catch (err) {
+      alert("내보내기에 실패했습니다")
+      console.error(err)
+    } finally {
+      setExporting(false)
     }
   }
 
@@ -352,34 +382,50 @@ export default function DashboardSpaceManagePage() {
             </HStack>
 
             {/* Stats */}
-            <Grid cols={4} gap="default">
-              <GridItem>
-                <StatCard
-                  title="총 멤버"
-                  value={stats?.totalMembers ?? space._count.members}
-                />
-              </GridItem>
-              <GridItem>
-                <StatCard
-                  title="총 방문자"
-                  value={stats?.totalVisitors ?? space._count.guestSessions}
-                  change={visitorChangeText}
-                  changeType={visitorChangeType}
-                />
-              </GridItem>
-              <GridItem>
-                <StatCard
-                  title="피크 동시접속"
-                  value={stats?.peakConcurrent ?? 0}
-                />
-              </GridItem>
-              <GridItem>
-                <StatCard
-                  title="총 이벤트"
-                  value={stats?.totalEvents ?? space._count.eventLogs}
-                />
-              </GridItem>
-            </Grid>
+            <VStack gap="default">
+              <HStack justify="between" align="center">
+                <Heading as="h2" size="lg">
+                  {getText("LID.DASHBOARD.STATS.TITLE")}
+                </Heading>
+                <Button
+                  variant="outline"
+                  onClick={handleExport}
+                  disabled={exporting}
+                >
+                  {exporting
+                    ? getText("LID.DASHBOARD.EXPORT.LOADING")
+                    : getText("BTN.DASHBOARD.EXPORT")}
+                </Button>
+              </HStack>
+              <Grid cols={4} gap="default">
+                <GridItem>
+                  <StatCard
+                    title="총 멤버"
+                    value={stats?.totalMembers ?? space._count.members}
+                  />
+                </GridItem>
+                <GridItem>
+                  <StatCard
+                    title="총 방문자"
+                    value={stats?.totalVisitors ?? space._count.guestSessions}
+                    change={visitorChangeText}
+                    changeType={visitorChangeType}
+                  />
+                </GridItem>
+                <GridItem>
+                  <StatCard
+                    title="피크 동시접속"
+                    value={stats?.peakConcurrent ?? 0}
+                  />
+                </GridItem>
+                <GridItem>
+                  <StatCard
+                    title="총 이벤트"
+                    value={stats?.totalEvents ?? space._count.eventLogs}
+                  />
+                </GridItem>
+              </Grid>
+            </VStack>
 
             {/* Invite Link */}
             <Card>

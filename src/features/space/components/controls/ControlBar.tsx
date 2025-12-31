@@ -191,7 +191,8 @@ export function ControlBar({
   } = useMediaDevices()
 
   return (
-    <div className="absolute inset-x-0 bottom-4 z-30 mx-auto flex w-fit items-center rounded-full bg-black/30 px-3 py-2 shadow-lg backdrop-blur-sm border border-white/10">
+    // 📱 반응형: 모바일에서 패딩/마진 축소, 하단 여백 줄임
+    <div className="absolute inset-x-0 bottom-2 sm:bottom-4 z-30 mx-auto flex w-fit items-center rounded-full bg-black/30 px-2 sm:px-3 py-1.5 sm:py-2 shadow-lg backdrop-blur-sm border border-white/10">
       {/* Media Error Alert */}
       {mediaError && (
         <div className="absolute -top-12 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-lg bg-destructive px-4 py-2 text-destructive-foreground shadow-lg">
@@ -210,22 +211,25 @@ export function ControlBar({
       )}
       <div className="flex items-center gap-1">
         {/* Mic Toggle + Device Selector */}
+        {/* 📱 모바일: 장치 선택 드롭다운 숨김, 토글만 표시 */}
         <div className="group flex items-center">
+          {/* 모바일: 단순 토글 버튼 */}
           <Button
             variant="outline"
             size="icon"
             onClick={onToggleMic}
-            className="rounded-r-none border-r-0 border-white/30 text-white bg-transparent hover:bg-white/10 group-hover:border-primary focus-visible:ring-0 focus-visible:ring-offset-0"
+            className="sm:rounded-r-none sm:border-r-0 border-white/30 text-white bg-transparent hover:bg-white/10 group-hover:border-primary focus-visible:ring-0 focus-visible:ring-offset-0"
             aria-label={isMicOn ? "마이크 끄기" : "마이크 켜기"}
           >
             <MicIcon muted={!isMicOn} />
           </Button>
+          {/* sm+: 장치 선택 드롭다운 */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
                 variant="outline"
                 size="icon"
-                className="w-6 rounded-l-none border-l-0 px-1 border-white/30 text-white bg-transparent hover:bg-white/10 group-hover:border-primary focus-visible:ring-0 focus-visible:ring-offset-0"
+                className="hidden sm:flex w-6 rounded-l-none border-l-0 px-1 border-white/30 text-white bg-transparent hover:bg-white/10 group-hover:border-primary focus-visible:ring-0 focus-visible:ring-offset-0"
                 aria-label="오디오 설정"
               >
                 <ChevronDownIcon />
@@ -298,12 +302,13 @@ export function ControlBar({
         </div>
 
         {/* Camera Toggle + Device Selector */}
+        {/* 📱 모바일: 장치 선택 드롭다운 숨김 */}
         <div className="group flex items-center">
           <Button
             variant="outline"
             size="icon"
             onClick={onToggleCamera}
-            className="rounded-r-none border-r-0 border-white/30 text-white bg-transparent hover:bg-white/10 group-hover:border-primary focus-visible:ring-0 focus-visible:ring-offset-0"
+            className="sm:rounded-r-none sm:border-r-0 border-white/30 text-white bg-transparent hover:bg-white/10 group-hover:border-primary focus-visible:ring-0 focus-visible:ring-offset-0"
             aria-label={isCameraOn ? "카메라 끄기" : "카메라 켜기"}
           >
             <CameraIcon off={!isCameraOn} />
@@ -313,7 +318,7 @@ export function ControlBar({
               <Button
                 variant="outline"
                 size="icon"
-                className="w-6 rounded-l-none border-l-0 px-1 border-white/30 text-white bg-transparent hover:bg-white/10 group-hover:border-primary focus-visible:ring-0 focus-visible:ring-offset-0"
+                className="hidden sm:flex w-6 rounded-l-none border-l-0 px-1 border-white/30 text-white bg-transparent hover:bg-white/10 group-hover:border-primary focus-visible:ring-0 focus-visible:ring-offset-0"
                 aria-label="비디오 설정"
               >
                 <ChevronDownIcon />
@@ -357,18 +362,18 @@ export function ControlBar({
           </DropdownMenu>
         </div>
 
-        {/* Screen Share Toggle */}
+        {/* Screen Share Toggle - 📱 모바일에서 숨김 (모바일 웹 화면 공유 제한적) */}
         <Button
           variant="outline"
           size="icon"
           onClick={onToggleScreenShare}
-          className="border-white/30 text-white bg-transparent hover:bg-white/10 focus-visible:ring-0 focus-visible:ring-offset-0"
+          className="hidden sm:inline-flex border-white/30 text-white bg-transparent hover:bg-white/10 focus-visible:ring-0 focus-visible:ring-offset-0"
           aria-label={isScreenSharing ? "화면 공유 중지" : "화면 공유"}
         >
           <ScreenShareIcon active={isScreenSharing} />
         </Button>
 
-        <div className="mx-1 h-5 w-px bg-white/20" />
+        <div className="mx-0.5 sm:mx-1 h-5 w-px bg-white/20" />
 
         {/* Chat Toggle */}
         <Button
@@ -388,7 +393,7 @@ export function ControlBar({
         {/* Settings */}
         {onOpenSettings && (
           <>
-            <div className="mx-1 h-5 w-px bg-white/20" />
+            <div className="mx-0.5 sm:mx-1 h-5 w-px bg-white/20" />
             <Button
               variant="outline"
               size="icon"

@@ -20,6 +20,7 @@ import { useEditorStore } from "../stores/editorStore"
 import { eventBridge, GameEvents, type EditorCanvasClickPayload } from "../game/events"
 import type { ParsedEditorCommand, GridPosition } from "../types/editor.types"
 import type { ChatMessageData, AvatarColor, ReplyToData, AnnouncementData, MessageDeletedData, RecordingStatusData } from "../socket/types"
+import { parseAvatarString, getLegacyAvatarColor, getSafeAvatarString } from "../avatar"
 import type { ChatMessage } from "../types/space.types"
 import type { SpaceRole } from "@prisma/client"
 
@@ -34,7 +35,8 @@ interface SpaceLayoutProps {
   spaceInviteCode?: string // 초대 코드 (인게임 초대 링크용)
   userNickname: string
   userId: string
-  userAvatarColor?: AvatarColor
+  userAvatarColor?: AvatarColor // Legacy prop (backwards compatibility)
+  userAvatar?: string // New format: "classic:default" or "custom:office_male"
   userRole?: SpaceRole // 🛡️ 사용자 역할 (OWNER/STAFF/PARTICIPANT)
   isSuperAdmin?: boolean // 🌟 플랫폼 관리자 (모든 공간에서 관리 권한)
   sessionToken?: string // 게스트 세션 토큰 (LiveKit 인증용)
@@ -119,6 +121,7 @@ function SpaceLayoutContent({
   userNickname,
   userId,
   userAvatarColor = "default",
+  userAvatar, // New avatar format
   userRole,
   isSuperAdmin = false,
   sessionToken,
@@ -142,8 +145,6 @@ function SpaceLayoutContent({
   const { loadMessages, saveMessages } = useChatStorage({ spaceId })
 
   // 📥 컴포넌트 마운트 시 저장된 메시지 로드 (📦 500개 상한 적용)
-  // localStorage에서 초기 데이터 로드 시 동기 setState가 필요하므로 lint 규칙 비활성화
-  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     const savedMessages = loadMessages()
     if (savedMessages.length > 0) {
@@ -154,7 +155,6 @@ function SpaceLayoutContent({
       setMessages(limitedMessages)
     }
   }, [loadMessages])
-  /* eslint-enable react-hooks/set-state-in-effect */
 
   // 💾 메시지 변경 시 저장 (디바운스됨)
   useEffect(() => {
@@ -192,9 +192,11 @@ function SpaceLayoutContent({
   // 🔔 알림음 훅
   const { playWhisperSound } = useNotificationSound()
 
-  // 🎮 캐릭터 위치/방향 상태 (Phaser에서 eventBridge로 업데이트)
-  const [characterPosition, setCharacterPosition] = useState<GridPosition>({ x: 5, y: 5 })
-  const [characterDirection, setCharacterDirection] = useState<"up" | "down" | "left" | "right">("down")
+  // 🎮 캐릭터 위치/방향 상태 (Phaser에서 eventBridge로 업데이트, 향후 사용 예정)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [characterPosition, _setCharacterPosition] = useState<GridPosition>({ x: 5, y: 5 })
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [characterDirection, _setCharacterDirection] = useState<"up" | "down" | "left" | "right">("down")
 
   // Socket message handlers (📦 500개 메모리 상한 적용)
   const handleChatMessage = useCallback((data: ChatMessageData) => {
@@ -231,6 +233,10 @@ function SpaceLayoutContent({
   // 🔄 Local state for nickname/avatar (enables hot reload without socket reconnection)
   const [currentNickname, setCurrentNickname] = useState(userNickname)
   const [currentAvatarColor, setCurrentAvatarColor] = useState<AvatarColor>(userAvatarColor)
+  // 🔄 Full avatar string (new format: "classic:default" or "custom:office_male")
+  const [currentAvatar, setCurrentAvatar] = useState(() =>
+    userAvatar ? getSafeAvatarString(userAvatar) : `classic:${userAvatarColor}`
+  )
 
   // 🛡️ 관리 명령어 에러 핸들러
   const handleAdminError = useCallback((action: string, message: string) => {
@@ -325,6 +331,12 @@ function SpaceLayoutContent({
     setMessages((prev) => addMessagesWithLimit(prev, errorMessage))
   }, [])
 
+  // 🔄 Parse current avatar for socket (memoized to avoid recreation)
+  const currentAvatarConfig = useMemo(
+    () => parseAvatarString(currentAvatar),
+    [currentAvatar]
+  )
+
   // Socket connection for game position sync (🔒 sessionToken으로 서버 검증)
   const {
     players,
@@ -346,6 +358,7 @@ function SpaceLayoutContent({
     playerId: userId,
     nickname: currentNickname,
     avatarColor: currentAvatarColor,
+    avatarConfig: currentAvatarConfig, // 🔄 새 아바타 포맷 지원
     sessionToken, // 게스트 세션 인증용
     onChatMessage: handleChatMessage,
     onSystemMessage: handleSystemMessage,
@@ -1072,16 +1085,22 @@ function SpaceLayoutContent({
 
   const handleSaveSettings = useCallback((nickname: string, avatar: string) => {
     // 🔄 Hot reload: 로컬 상태 업데이트 + 소켓으로 프로필 전송
-    const typedAvatar = avatar as AvatarColor
+    // avatar는 이제 "classic:default" 또는 "custom:office_male" 형식
+    const safeAvatar = getSafeAvatarString(avatar)
+    const legacyColor = getLegacyAvatarColor(safeAvatar)
+
     setCurrentNickname(nickname)
-    setCurrentAvatarColor(typedAvatar)
+    setCurrentAvatar(safeAvatar)
+    setCurrentAvatarColor(legacyColor)
 
     // Socket으로 프로필 업데이트 (게임엔진 리렌더링 없이)
-    updateProfile({ nickname, avatarColor: typedAvatar })
+    // 🔄 새 아바타 포맷을 avatarConfig로 전달
+    const avatarConfig = parseAvatarString(safeAvatar)
+    updateProfile({ nickname, avatarColor: legacyColor, avatarConfig })
 
     // 부모에게도 알림 (옵션, localStorage 동기화용)
     if (onNicknameChange) {
-      onNicknameChange(nickname, avatar)
+      onNicknameChange(nickname, safeAvatar)
     }
   }, [onNicknameChange, updateProfile])
 
@@ -1126,6 +1145,7 @@ function SpaceLayoutContent({
           playerId={resolvedUserId}
           playerNickname={currentNickname}
           avatarColor={currentAvatarColor}
+          avatar={userAvatar}
         />
 
         {/* 🎬 녹화 중 표시 (상단 중앙) - 법적 준수: 모든 참가자에게 REC 표시 */}
@@ -1168,8 +1188,9 @@ function SpaceLayoutContent({
         />
 
         {/* 플로팅 참가자 비디오 - 뷰 모드에 따라 다르게 렌더링 */}
+        {/* 📱 반응형: 모바일에서 숨김 → sm에서 작게 → md에서 기본 크기 */}
         {participantViewMode === "sidebar" && (
-          <div className="pointer-events-auto absolute right-2 top-2 z-20 w-44 max-h-[calc(100%-80px)] overflow-y-auto">
+          <div className="pointer-events-auto absolute right-2 top-2 z-20 hidden sm:block sm:w-36 md:w-44 max-h-[calc(100%-80px)] overflow-y-auto">
             <ParticipantPanel
               participantTracks={allParticipantTracks}
               localParticipantId={resolvedUserId}
@@ -1203,6 +1224,7 @@ function SpaceLayoutContent({
         )}
 
         {/* 숨김 모드 - 최소화된 버튼 그룹만 표시 (우측 상단) */}
+        {/* 📱 모바일에서도 표시 (참가자 수/필터 버튼만) */}
         {participantViewMode === "hidden" && (
           <div className="pointer-events-auto absolute right-2 top-2 z-20">
             <ParticipantPanel
@@ -1217,17 +1239,48 @@ function SpaceLayoutContent({
           </div>
         )}
 
-        {/* 🧑‍🤝‍🧑 플로팅 멤버 패널 (우측 상단, 참가자 패널 좌측) */}
-        {isMemberPanelOpen && (
-          <div className="pointer-events-auto absolute right-48 top-2 z-20 w-64 max-h-[calc(100%-80px)]">
-            <MemberPanel
-              spaceId={spaceId}
-              isSuperAdmin={isSuperAdmin}
-              isOwner={isOwner}
-              onlineUserIds={onlineUserIds}
-              onClose={handleToggleMemberPanel}
+        {/* 📱 모바일 전용: 사이드바 모드일 때 숨김 버튼만 표시 */}
+        {participantViewMode === "sidebar" && (
+          <div className="pointer-events-auto absolute right-2 top-2 z-20 sm:hidden">
+            <ParticipantPanel
+              participantTracks={allParticipantTracks}
+              localParticipantId={resolvedUserId}
+              viewMode="hidden"
+              onViewModeChange={handleViewModeChange}
+              inviteCode={spaceInviteCode}
+              isMemberPanelOpen={isMemberPanelOpen}
+              onToggleMemberPanel={handleToggleMemberPanel}
             />
           </div>
+        )}
+
+        {/* 🧑‍🤝‍🧑 플로팅 멤버 패널 */}
+        {/* 📱 모바일: 중앙 모달 스타일, sm+: 우측 상단 참가자 패널 좌측 */}
+        {isMemberPanelOpen && (
+          <>
+            {/* 모바일: 반투명 배경 + 중앙 패널 */}
+            <div className="pointer-events-auto fixed inset-0 z-40 flex items-center justify-center bg-black/50 sm:hidden">
+              <div className="w-[90%] max-w-sm max-h-[80vh] overflow-hidden rounded-lg">
+                <MemberPanel
+                  spaceId={spaceId}
+                  isSuperAdmin={isSuperAdmin}
+                  isOwner={isOwner}
+                  onlineUserIds={onlineUserIds}
+                  onClose={handleToggleMemberPanel}
+                />
+              </div>
+            </div>
+            {/* sm+: 기존 플로팅 위치 */}
+            <div className="pointer-events-auto absolute right-40 sm:right-48 top-2 z-20 hidden sm:block w-56 md:w-64 max-h-[calc(100%-80px)]">
+              <MemberPanel
+                spaceId={spaceId}
+                isSuperAdmin={isSuperAdmin}
+                isOwner={isOwner}
+                onlineUserIds={onlineUserIds}
+                onClose={handleToggleMemberPanel}
+              />
+            </div>
+          </>
         )}
 
         {/* 플로팅 컨트롤 바 (하단 중앙) */}
@@ -1252,7 +1305,7 @@ function SpaceLayoutContent({
         onOpenChange={setIsSettingsOpen}
         spaceId={spaceId}
         currentNickname={currentNickname}
-        currentAvatar={currentAvatarColor}
+        currentAvatar={currentAvatar}
         onSave={handleSaveSettings}
       />
 

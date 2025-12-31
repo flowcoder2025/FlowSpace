@@ -227,8 +227,9 @@ export function ParticipantPanel({
     [sortedTracks]
   )
 
-  // 그리드 레이아웃 계산
-  const gridLayout = useMemo(() =>
+  // 그리드 레이아웃 계산 (향후 사용 예정)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _gridLayout = useMemo(() =>
     getGridLayout(sortedTracks.length),
     [sortedTracks.length]
   )

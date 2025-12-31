@@ -18,6 +18,7 @@ import type {
   ChatMessageData,
   PlayerJumpData,
   AvatarColor,
+  AvatarConfig,
   ProfileUpdateData,
   // Phase 6: 관리 이벤트 타입
   SpaceRole,
@@ -451,11 +452,12 @@ io.on("connection", (socket) => {
   console.log(`[Socket] Client connected: ${socket.id}`)
 
   // Join space - 🔒 세션 토큰 검증 추가
-  socket.on("join:space", async ({ spaceId, playerId, nickname, avatarColor, sessionToken }) => {
+  socket.on("join:space", async ({ spaceId, playerId, nickname, avatarColor, avatarConfig, sessionToken }) => {
     // 🔒 보안: 세션 토큰 검증 (운영환경에서는 필수)
     let verifiedPlayerId = playerId
     let verifiedNickname = nickname
     let verifiedAvatarColor = avatarColor || "default"
+    let verifiedAvatarConfig: AvatarConfig | undefined = avatarConfig
 
     // 개발 모드에서 dev- 세션은 검증 스킵 (테스트 편의)
     const isDevSession = IS_DEV && sessionToken?.startsWith("dev-")
@@ -515,6 +517,7 @@ io.on("connection", (socket) => {
     socket.data.playerId = verifiedPlayerId
     socket.data.nickname = verifiedNickname
     socket.data.avatarColor = verifiedAvatarColor
+    socket.data.avatarConfig = verifiedAvatarConfig  // Phase 1: 커스터마이징
     socket.data.sessionToken = sessionToken // 중복 접속 방지용
 
     // Join socket room
@@ -539,6 +542,7 @@ io.on("connection", (socket) => {
       direction: existingEntry ? existingEntry[1].direction : "down",
       isMoving: false,
       avatarColor: verifiedAvatarColor,
+      avatarConfig: verifiedAvatarConfig,  // Phase 1: 커스터마이징
     }
 
     // Add player to room
@@ -636,25 +640,36 @@ io.on("connection", (socket) => {
 
   // Player movement
   // 🔒 보안: 클라이언트가 보낸 position.id를 신뢰하지 않고 socket.data.playerId 사용
+  // ⚡ Phase 2: 이동 패킷 경량화 - avatarColor/avatarConfig 제외 (입장/프로필 변경 시만 전송)
   socket.on("player:move", (position) => {
-    const { spaceId, playerId, nickname, avatarColor } = socket.data
+    const { spaceId, playerId, nickname, avatarColor, avatarConfig } = socket.data
 
     // 🔒 playerId가 없으면 아직 join:space 완료 전이므로 무시
     if (!spaceId || !playerId) return
 
     const room = rooms.get(spaceId)
     if (room) {
-      // 🔒 클라이언트 ID/avatarColor 무시, 서버에서 검증된 값으로 덮어쓰기
+      // 서버 내부 상태는 full position 유지 (player:joined 등에서 필요)
       const fullPosition: PlayerPosition = {
         ...position,
-        id: playerId, // 🔒 서버 검증 ID 강제 사용
+        id: playerId,
         nickname: nickname || "Unknown",
-        avatarColor: avatarColor || "default", // 🔒 서버 검증 색상 강제 사용 (클라이언트 값 무시)
+        avatarColor: avatarColor || "default",
+        avatarConfig,
       }
       room.set(playerId, fullPosition)
 
-      // Broadcast to other players in room
-      socket.to(spaceId).emit("player:moved", fullPosition)
+      // ⚡ Broadcast: avatar 정보 제외 (경량화) - 클라이언트에서 기존 값 유지
+      const movePosition: PlayerPosition = {
+        id: playerId,
+        nickname: nickname || "Unknown",
+        x: position.x,
+        y: position.y,
+        direction: position.direction,
+        isMoving: position.isMoving,
+        // avatarColor, avatarConfig 생략 - 이동 패킷 경량화
+      }
+      socket.to(spaceId).emit("player:moved", movePosition)
     }
   })
 
@@ -905,7 +920,12 @@ io.on("connection", (socket) => {
 
     // Update socket data
     socket.data.nickname = data.nickname
-    socket.data.avatarColor = data.avatarColor
+    if (data.avatarColor) {
+      socket.data.avatarColor = data.avatarColor
+    }
+    if (data.avatarConfig) {
+      socket.data.avatarConfig = data.avatarConfig  // Phase 1: 커스터마이징
+    }
 
     // Update room state
     const room = rooms.get(spaceId)
@@ -915,7 +935,8 @@ io.on("connection", (socket) => {
         room.set(playerId, {
           ...player,
           nickname: data.nickname,
-          avatarColor: data.avatarColor,
+          ...(data.avatarColor && { avatarColor: data.avatarColor }),
+          ...(data.avatarConfig && { avatarConfig: data.avatarConfig }),
         })
       }
     }
@@ -924,11 +945,12 @@ io.on("connection", (socket) => {
     socket.to(spaceId).emit("player:profileUpdated", {
       id: playerId,
       nickname: data.nickname,
-      avatarColor: data.avatarColor,
+      ...(data.avatarColor && { avatarColor: data.avatarColor }),
+      ...(data.avatarConfig && { avatarConfig: data.avatarConfig }),
     })
 
     if (IS_DEV) {
-      console.log(`[Socket] Profile updated for ${playerId}: ${data.nickname} (${data.avatarColor})`)
+      console.log(`[Socket] Profile updated for ${playerId}: ${data.nickname} (color: ${data.avatarColor}, config: ${data.avatarConfig ? 'yes' : 'no'})`)
     }
   })
 

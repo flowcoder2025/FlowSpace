@@ -4,6 +4,7 @@ import { useCallback } from "react"
 import dynamic from "next/dynamic"
 import { cn } from "@/lib/utils"
 import { VStack, Text } from "@/components/ui"
+import type { AvatarColor } from "../../socket/types"
 
 // Dynamic import for Phaser (browser-only)
 const PhaserGame = dynamic(
@@ -35,16 +36,14 @@ function GameLoadingState() {
   )
 }
 
-// Avatar color type
-type AvatarColor = "default" | "red" | "green" | "purple" | "orange" | "pink"
-
 // ============================================
 // GameCanvas Props
 // ============================================
 interface GameCanvasProps {
   playerId: string
   playerNickname: string
-  avatarColor?: AvatarColor
+  avatarColor?: AvatarColor // Legacy prop
+  avatar?: string // New format: "classic:default" or "custom:office_male"
   onPlayerMove?: (position: { x: number; y: number; direction: string; isMoving: boolean }) => void
   className?: string
 }
@@ -56,6 +55,7 @@ export function GameCanvas({
   playerId,
   playerNickname,
   avatarColor = "default",
+  avatar,
   onPlayerMove,
   className,
 }: GameCanvasProps) {
@@ -69,6 +69,7 @@ export function GameCanvas({
         playerId={playerId}
         playerNickname={playerNickname}
         avatarColor={avatarColor}
+        avatar={avatar}
         onPlayerMove={onPlayerMove}
         onGameReady={handleGameReady}
       />

@@ -74,6 +74,11 @@ export function UserNav() {
           </Button>
         )}
 
+        {/* 요금제 링크 */}
+        <Button variant="ghost" size="sm" asChild>
+          <Link href="/pricing">{getText("BTN.NAV.PRICING")}</Link>
+        </Button>
+
         {/* 공간 만들기 버튼 */}
         <Button size="sm" asChild>
           <Link href="/spaces/new">{getText("BTN.LANDING.CREATE_SPACE")}</Link>
@@ -94,6 +99,9 @@ export function UserNav() {
   // 비로그인 상태
   return (
     <HStack gap="md">
+      <Button variant="ghost" asChild>
+        <Link href="/pricing">{getText("BTN.NAV.PRICING")}</Link>
+      </Button>
       <Button variant="ghost" asChild>
         <Link href="/login">{getText("BTN.AUTH.LOGIN")}</Link>
       </Button>

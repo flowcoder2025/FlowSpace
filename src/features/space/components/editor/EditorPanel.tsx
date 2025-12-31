@@ -21,7 +21,6 @@ import {
   searchAssets,
   ASSET_REGISTRY,
   type AssetMetadata,
-  type CategoryConfig,
 } from "@/config"
 import { useEditorStore } from "../../stores/editorStore"
 

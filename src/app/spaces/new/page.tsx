@@ -13,7 +13,6 @@ import {
   Section,
   HStack,
   VStack,
-  Heading,
   Text,
   Button,
   Card,

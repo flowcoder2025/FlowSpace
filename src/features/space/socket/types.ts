@@ -3,10 +3,23 @@
  * Shared type definitions for client-server communication
  */
 
-// Avatar color type
-export type AvatarColor = "default" | "red" | "green" | "purple" | "orange" | "pink"
+import type { AvatarConfig } from "../avatar"
 
-// Player position data
+// Re-export for server usage
+export type { AvatarConfig }
+
+// Avatar color type (8개 - MainScene.ts, 스프라이트 파일과 동기화)
+export type AvatarColor =
+  | "default"
+  | "red"
+  | "green"
+  | "purple"
+  | "orange"
+  | "pink"
+  | "yellow"
+  | "blue"
+
+// Player position data (full - 입장/프로필 업데이트용)
 export interface PlayerPosition {
   id: string
   nickname: string
@@ -14,7 +27,17 @@ export interface PlayerPosition {
   y: number
   direction: "up" | "down" | "left" | "right"
   isMoving: boolean
-  avatarColor?: AvatarColor
+  avatarColor?: AvatarColor      // 기존 (하위 호환)
+  avatarConfig?: AvatarConfig    // Phase 1: 커스터마이징
+}
+
+// ⚡ Phase 2.3: 경량 이동 데이터 (avatar 정보 제외)
+export interface PlayerMoveData {
+  id: string
+  x: number
+  y: number
+  direction: "up" | "down" | "left" | "right"
+  isMoving: boolean
 }
 
 // Player jump data
@@ -244,7 +267,8 @@ export interface RoomData {
 // Profile update data (닉네임/아바타 핫 업데이트)
 export interface ProfileUpdateData {
   nickname: string
-  avatarColor: AvatarColor
+  avatarColor?: AvatarColor       // 기존 (하위 호환)
+  avatarConfig?: AvatarConfig     // Phase 1: 커스터마이징
 }
 
 // Client to Server events
@@ -254,13 +278,14 @@ export interface ClientToServerEvents {
     spaceId: string
     playerId: string
     nickname: string
-    avatarColor?: AvatarColor
+    avatarColor?: AvatarColor       // 기존 (하위 호환)
+    avatarConfig?: AvatarConfig     // Phase 1: 커스터마이징
     sessionToken?: string // 게스트 세션 토큰 (서버에서 검증)
   }) => void
   "leave:space": () => void
 
-  // Movement
-  "player:move": (position: Omit<PlayerPosition, "nickname">) => void
+  // Movement (⚡ Phase 2.3: 경량 payload - avatar 정보 제외)
+  "player:move": (position: PlayerMoveData) => void
 
   // Jump
   "player:jump": (data: PlayerJumpData) => void
@@ -381,7 +406,8 @@ export interface SocketData {
   spaceId: string
   playerId: string
   nickname: string
-  avatarColor?: AvatarColor
+  avatarColor?: AvatarColor       // 기존 (하위 호환)
+  avatarConfig?: AvatarConfig     // Phase 1: 커스터마이징
   sessionToken?: string // 🔒 세션 토큰 (중복 접속 방지용)
   // 파티/구역 정보
   partyId?: string      // 현재 참가 중인 파티 ID

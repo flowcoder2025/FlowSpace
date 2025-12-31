@@ -244,7 +244,6 @@ export function MemberList({
   // 멤버 카드 렌더링
   // ============================================
   const renderMemberCard = (member: SpaceMember) => {
-    const displayInfo = member.user || member.guestSession
     const name = member.user?.name || member.guestSession?.nickname || "알 수 없음"
     const email = member.user?.email || null
     const image = member.user?.image || null

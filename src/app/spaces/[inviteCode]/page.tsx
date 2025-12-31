@@ -9,15 +9,12 @@ import {
   Section,
   HStack,
   VStack,
-  Grid,
-  GridItem,
   Text,
   Button,
   Card,
   CardHeader,
   CardContent,
   CardTitle,
-  CardDescription,
   Badge,
 } from "@/components/ui"
 import { getText } from "@/lib/text-config"

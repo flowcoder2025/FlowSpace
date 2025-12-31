@@ -18,7 +18,7 @@ import { cn } from "@/lib/utils"
 import type { ChatMessage, ReactionType, MessageReaction, ReplyTo, ChatFontSize } from "../../types/space.types"
 import { CHAT_FONT_SIZES } from "../../types/space.types"
 import type { PlayerPosition } from "../../socket/types"
-import { parseContentWithUrls, type ContentSegment } from "../../utils/chatFilter"
+import { parseContentWithUrls } from "../../utils/chatFilter"
 import { hasPermission } from "@/lib/space-permissions"
 import type { SpaceRole } from "@prisma/client"
 

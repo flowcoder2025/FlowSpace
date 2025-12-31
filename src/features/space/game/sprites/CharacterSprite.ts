@@ -15,7 +15,9 @@ const IS_DEV = process.env.NODE_ENV === "development"
 export const CHARACTER_CONFIG = {
   WIDTH: 24,
   HEIGHT: 32,
-  FRAME_COUNT: 4, // Frames per animation
+  FRAME_COUNT: 4, // Frames per animation (procedural)
+  // External spritesheet configuration (8x4 grids from AI generators)
+  EXTERNAL_FRAME_COUNT: 8, // Frames per direction for AI-generated sprites
   COLORS: {
     default: { body: "#00cec9", outline: "#00a8a8" },
     red: { body: "#e74c3c", outline: "#c0392b" },
@@ -353,6 +355,9 @@ export function createCharacterAnimations(
 
 /**
  * Get animation key based on direction and movement state
+ *
+ * Classic characters use: {prefix}-{action}-{direction} (e.g., default-idle-down)
+ * Custom characters use: {prefix}-{direction}-{action} (e.g., custom-office_male-down-idle)
  */
 export function getAnimationKey(
   direction: "up" | "down" | "left" | "right",
@@ -361,6 +366,13 @@ export function getAnimationKey(
 ): string {
   const pre = prefix ? `${prefix}-` : ""
   const action = isMoving ? "walk" : "idle"
+
+  // Custom characters (prefix starts with "custom-") use direction-action format
+  if (prefix.startsWith("custom-")) {
+    return `${pre}${direction}-${action}`
+  }
+
+  // Classic characters use action-direction format
   return `${pre}${action}-${direction}`
 }
 
@@ -430,6 +442,101 @@ export function createCharacterAnimationsFromSpritesheet(
 
   if (IS_DEV) {
     console.log(`[CharacterSprite] Created ${animationsCreated} animations for: ${textureKey}`)
+  }
+  return true
+}
+
+/**
+ * Create animations for a character from an 8x4 spritesheet (AI-generated)
+ * Uses frame indices (0-31) from spritesheets like Nanobanana3 output
+ *
+ * Spritesheet layout (8 cols x 4 rows = 32 frames):
+ * Row 0 (frames 0-7): down (front facing)
+ * Row 1 (frames 8-15): left
+ * Row 2 (frames 16-23): right
+ * Row 3 (frames 24-31): up (back facing)
+ */
+export function createCharacterAnimationsFrom8x4Spritesheet(
+  scene: Phaser.Scene,
+  textureKey: string,
+  animPrefix: string = ""
+): boolean {
+  const { EXTERNAL_FRAME_COUNT } = CHARACTER_CONFIG
+  const prefix = animPrefix ? `${animPrefix}-` : ""
+
+  // Verify texture exists
+  if (!scene.textures.exists(textureKey)) {
+    console.error(`[CharacterSprite] Cannot create animations - texture not found: ${textureKey}`)
+    return false
+  }
+
+  const directions = [
+    { key: "down", startFrame: 0 },
+    { key: "left", startFrame: 8 },
+    { key: "right", startFrame: 16 },
+    { key: "up", startFrame: 24 },
+  ]
+
+  let animationsCreated = 0
+
+  // 🔍 DEBUG: Check texture frame count
+  const texture = scene.textures.get(textureKey)
+  const frameTotal = texture?.frameTotal ?? 0
+  if (IS_DEV) {
+    console.log(`[CharacterSprite] 🔍 Creating 8x4 animations for "${textureKey}", frameTotal: ${frameTotal}`)
+  }
+
+  directions.forEach(({ key, startFrame }) => {
+    // 🔍 DEBUG: Verify frame exists
+    const frameExists = startFrame < frameTotal
+    if (IS_DEV) {
+      console.log(`[CharacterSprite] 🔍 Direction "${key}": startFrame=${startFrame}, exists=${frameExists}`)
+    }
+
+    // Idle animation (single frame)
+    // 🔄 키 형식: {prefix}{direction}-idle (MainScene.ts와 일치)
+    const idleKey = `${prefix}${key}-idle`
+    if (!scene.anims.exists(idleKey)) {
+      const idleAnim = scene.anims.create({
+        key: idleKey,
+        frames: [{ key: textureKey, frame: startFrame }],
+        frameRate: 1,
+        repeat: -1,
+      })
+      if (idleAnim) {
+        animationsCreated++
+        if (IS_DEV) console.log(`[CharacterSprite] ✅ Created: ${idleKey}`)
+      } else {
+        console.error(`[CharacterSprite] ❌ Failed to create: ${idleKey}`)
+      }
+    }
+
+    // Walk animation (8 frames for smoother animation)
+    // 🔄 키 형식: {prefix}{direction}-walk (MainScene.ts와 일치)
+    const walkKey = `${prefix}${key}-walk`
+    if (!scene.anims.exists(walkKey)) {
+      const frames = []
+      for (let i = 0; i < EXTERNAL_FRAME_COUNT; i++) {
+        frames.push({ key: textureKey, frame: startFrame + i })
+      }
+
+      const walkAnim = scene.anims.create({
+        key: walkKey,
+        frames,
+        frameRate: 10, // Slightly faster for 8 frames
+        repeat: -1,
+      })
+      if (walkAnim) {
+        animationsCreated++
+        if (IS_DEV) console.log(`[CharacterSprite] ✅ Created: ${walkKey} (frames: ${startFrame}-${startFrame + EXTERNAL_FRAME_COUNT - 1})`)
+      } else {
+        console.error(`[CharacterSprite] ❌ Failed to create: ${walkKey}`)
+      }
+    }
+  })
+
+  if (IS_DEV) {
+    console.log(`[CharacterSprite] Created ${animationsCreated} animations (8x4) for: ${textureKey}`)
   }
   return true
 }

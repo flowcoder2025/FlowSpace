@@ -33,7 +33,7 @@ export async function POST(
       : null // null = 영구
 
     // 3. 멤버 상태 업데이트
-    const updatedMember = await prisma.spaceMember.update({
+    await prisma.spaceMember.update({
       where: { id: memberId },
       data: {
         restriction: "MUTED",

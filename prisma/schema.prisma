@@ -30,6 +30,9 @@ model User {
   agreedToRecording   Boolean   @default(false)
   agreedToRecordingAt DateTime?
 
+  // 캐릭터 커스터마이징 (Phase 1)
+  avatarConfig        Json?     // AvatarConfigSchema 형식
+
   // Relations
   accounts            Account[]
   sessions            Session[]

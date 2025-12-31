@@ -12,7 +12,6 @@ import {
 } from "./TilesetGenerator"
 import {
   createModernOfficeMap,
-  flattenLayerData,
   MAP_CONFIG,
   type MapData,
   type SpawnPoint,

@@ -16,30 +16,33 @@ import {
 } from "../events"
 import {
   createCharacterAnimationsFromSpritesheet,
+  createCharacterAnimationsFrom8x4Spritesheet,
   getAnimationKey,
   CHARACTER_CONFIG,
 } from "../sprites"
+import {
+  type AvatarConfig,
+  type ClassicColorId,
+  parseAvatarString,
+  getTextureKey,
+  getAnimationPrefix,
+  isCustomCharacter,
+  CLASSIC_COLORS,
+  CUSTOM_CHARACTER_META,
+} from "../../avatar"
 import { TileMapSystem } from "../tiles"
 import {
   InteractiveObject,
   createInteractiveObjects,
   type InteractiveObjectConfig,
 } from "../objects"
-import { getAssetById, type AssetMetadata } from "@/config/asset-registry"
+import { getAssetById } from "@/config/asset-registry"
 
 // Development mode flag for debug logs
 const IS_DEV = process.env.NODE_ENV === "development"
 
-// Avatar color type - must match CHARACTER_CONFIG.COLORS keys
-type AvatarColor =
-  | "default"
-  | "red"
-  | "green"
-  | "purple"
-  | "orange"
-  | "pink"
-  | "yellow"
-  | "blue"
+// Legacy avatar color type (for backwards compatibility)
+type AvatarColor = ClassicColorId
 
 export class MainScene extends Phaser.Scene {
   // 타일맵 시스템
@@ -66,6 +69,8 @@ export class MainScene extends Phaser.Scene {
   private remotePlayerShadows: Map<string, Phaser.GameObjects.Ellipse> =
     new Map()
   private remotePlayerNames: Map<string, Phaser.GameObjects.Text> = new Map()
+  // 🔄 Store avatar configs for remote players (for animation updates)
+  private remotePlayerAvatarConfigs: Map<string, AvatarConfig> = new Map()
   // Track failed remote player additions to prevent infinite retry loops
   private failedRemotePlayers: Map<
     string,
@@ -77,18 +82,21 @@ export class MainScene extends Phaser.Scene {
   private isMoving = false
   private isJumping = false
   private jumpCooldown = false
+  private playerBaseScale = 1 // Base scale for custom character sprites
   private isChatActive = false // 채팅 활성화 시 게임 입력 차단
   private isEditorActive = false // 🎨 에디터 모드 활성화 시 클릭 → 배치
   private playerId: string = ""
   private playerNickname: string = ""
-  private playerAvatarColor: AvatarColor = "default"
+  private playerAvatarColor: AvatarColor = "default" // Legacy, kept for compatibility
+  private playerAvatarConfig: AvatarConfig = { type: "classic", colorId: "default" }
+  private playerAnimPrefix: string = "default" // Animation prefix for getAnimationKey
   private nicknameText!: Phaser.GameObjects.Text
   private isSceneActive = false
 
   // Queue for pending remote player events (received before scene is ready)
   private pendingRemotePlayerEvents: Array<{
     type: "join" | "update" | "leave"
-    data: PlayerPosition & { avatarColor?: AvatarColor; nickname?: string }
+    data: PlayerPosition & { avatarColor?: AvatarColor; nickname?: string; avatarConfig?: AvatarConfig }
   }> = []
 
   // Event handler references for cleanup
@@ -122,11 +130,28 @@ export class MainScene extends Phaser.Scene {
   init(data: {
     playerId: string
     nickname: string
-    avatarColor?: AvatarColor
+    avatarColor?: AvatarColor // Legacy support
+    avatar?: string // New format: "classic:default" or "custom:office_male"
   }) {
     this.playerId = data.playerId || "local-player"
     this.playerNickname = data.nickname || "Player"
-    this.playerAvatarColor = data.avatarColor || "default"
+
+    // Parse avatar configuration (support both legacy and new format)
+    if (data.avatar) {
+      this.playerAvatarConfig = parseAvatarString(data.avatar)
+    } else if (data.avatarColor) {
+      this.playerAvatarConfig = { type: "classic", colorId: data.avatarColor }
+    } else {
+      this.playerAvatarConfig = { type: "classic", colorId: "default" }
+    }
+
+    // Keep legacy field for backwards compatibility
+    this.playerAvatarColor = isCustomCharacter(this.playerAvatarConfig)
+      ? "default"
+      : this.playerAvatarConfig.colorId
+
+    // Set animation prefix
+    this.playerAnimPrefix = getAnimationPrefix(this.playerAvatarConfig)
 
     // 타일맵 시스템 초기화
     this.tileMapSystem = new TileMapSystem(this)
@@ -143,18 +168,8 @@ export class MainScene extends Phaser.Scene {
       )
     })
 
-    // Load character sprite sheets from static PNG files
-    const colors: AvatarColor[] = [
-      "default",
-      "red",
-      "green",
-      "purple",
-      "orange",
-      "pink",
-      "yellow",
-      "blue",
-    ]
-    colors.forEach((color) => {
+    // Load classic character sprite sheets (4x4 grid, 24x32 frames)
+    CLASSIC_COLORS.forEach((color) => {
       const textureKey = `character-${color}`
       this.load.spritesheet(
         textureKey,
@@ -166,6 +181,15 @@ export class MainScene extends Phaser.Scene {
       )
     })
 
+    // Load custom character sprite sheets (8x4 grid, variable frame size)
+    CUSTOM_CHARACTER_META.forEach((charMeta) => {
+      const textureKey = `character-custom-${charMeta.id}`
+      this.load.spritesheet(textureKey, charMeta.spriteUrl, {
+        frameWidth: charMeta.frameWidth,
+        frameHeight: charMeta.frameHeight,
+      })
+    })
+
     // Log when loading completes
     this.load.on("complete", () => {
       console.log("[MainScene] All assets loaded successfully")
@@ -173,25 +197,39 @@ export class MainScene extends Phaser.Scene {
   }
 
   create() {
-    // Character animations setup
-    const colors: AvatarColor[] = [
-      "default",
-      "red",
-      "green",
-      "purple",
-      "orange",
-      "pink",
-      "yellow",
-      "blue",
-    ]
-
-    colors.forEach((color) => {
+    // Classic character animations setup (4x4 grid)
+    CLASSIC_COLORS.forEach((color) => {
       const textureKey = `character-${color}`
       if (!this.textures.exists(textureKey)) {
         console.error(`[MainScene] Character texture not loaded: ${textureKey}`)
         return
       }
       createCharacterAnimationsFromSpritesheet(this, textureKey, color)
+    })
+
+    // Custom character animations setup (8x4 grid)
+    CUSTOM_CHARACTER_META.forEach((charMeta) => {
+      const textureKey = `character-custom-${charMeta.id}`
+      if (!this.textures.exists(textureKey)) {
+        console.error(`[MainScene] Custom character texture not loaded: ${textureKey}`)
+        return
+      }
+
+      // 🔍 DEBUG: Log texture info
+      const texture = this.textures.get(textureKey)
+      const source = texture.getSourceImage()
+      console.log(`[MainScene] 🔍 Texture "${textureKey}":`, {
+        sourceWidth: source.width,
+        sourceHeight: source.height,
+        expectedFrameW: charMeta.frameWidth,
+        expectedFrameH: charMeta.frameHeight,
+        expectedCols: charMeta.columns,
+        expectedRows: charMeta.rows,
+        frameNames: texture.getFrameNames(),
+        frameTotal: texture.frameTotal,
+      })
+
+      createCharacterAnimationsFrom8x4Spritesheet(this, textureKey, `custom-${charMeta.id}`)
     })
 
     // 새로운 타일맵 시스템으로 맵 생성
@@ -353,10 +391,22 @@ export class MainScene extends Phaser.Scene {
     const startX = spawnPos.x
     const startY = spawnPos.y
 
+    // Get texture key and animation prefix based on avatar config
+    const textureKey = getTextureKey(this.playerAvatarConfig)
+    const animPrefix = getAnimationPrefix(this.playerAvatarConfig)
+
+    // Determine frame size for shadow positioning
+    let frameHeight = CHARACTER_CONFIG.HEIGHT
+    if (isCustomCharacter(this.playerAvatarConfig)) {
+      const customConfig = this.playerAvatarConfig // TypeScript narrowing
+      const charMeta = CUSTOM_CHARACTER_META.find((m) => m.id === customConfig.characterId)
+      frameHeight = charMeta?.frameHeight ?? CHARACTER_CONFIG.HEIGHT
+    }
+
     // Create player shadow
     this.playerShadow = this.add.ellipse(
       startX,
-      startY + CHARACTER_CONFIG.HEIGHT / 2,
+      startY + frameHeight / 2,
       CHARACTER_CONFIG.WIDTH - 4,
       8,
       0x000000,
@@ -365,17 +415,29 @@ export class MainScene extends Phaser.Scene {
     this.playerShadow.setDepth(3)
 
     // Create player sprite
-    const textureKey = `character-${this.playerAvatarColor}`
-
     if (IS_DEV) {
       const textureExists = this.textures.exists(textureKey)
       console.log(
-        `[MainScene] Creating player sprite: key=${textureKey}, exists=${textureExists}`
+        `[MainScene] Creating player sprite: key=${textureKey}, exists=${textureExists}, type=${this.playerAvatarConfig.type}`
       )
     }
 
     this.playerSprite = this.add.sprite(0, 0, textureKey)
     this.playerSprite.setOrigin(0.5, 0.5)
+
+    // Scale down custom characters to match classic character size
+    if (isCustomCharacter(this.playerAvatarConfig)) {
+      const customConfig = this.playerAvatarConfig // TypeScript narrowing
+      const charMeta = CUSTOM_CHARACTER_META.find((m) => m.id === customConfig.characterId)
+      if (charMeta) {
+        // Scale to match classic character height (32px)
+        const scale = CHARACTER_CONFIG.HEIGHT / charMeta.frameHeight
+        this.playerSprite.setScale(scale)
+        this.playerBaseScale = scale // Store for jump animation reset
+      }
+    } else {
+      this.playerBaseScale = 1 // Classic characters use scale 1
+    }
 
     // Create container
     this.playerContainer = this.add.container(startX, startY, [
@@ -384,7 +446,7 @@ export class MainScene extends Phaser.Scene {
     this.playerContainer.setDepth(5) // 가구 위, 장식 아래
 
     // Play initial idle animation
-    const idleAnim = getAnimationKey("down", false, this.playerAvatarColor)
+    const idleAnim = getAnimationKey("down", false, animPrefix)
     if (this.anims.exists(idleAnim)) {
       this.playerSprite.play(idleAnim)
     }
@@ -473,20 +535,21 @@ export class MainScene extends Phaser.Scene {
     if (this.isJumping || this.jumpCooldown) return
 
     this.isJumping = true
+    const baseScale = this.playerBaseScale
 
     this.tweens.add({
       targets: this.playerSprite,
       y: -this.JUMP_HEIGHT,
-      scaleX: 1.1,
-      scaleY: 0.9,
+      scaleX: baseScale * 1.1,
+      scaleY: baseScale * 0.9,
       duration: this.JUMP_DURATION / 2,
       ease: "Quad.easeOut",
       onComplete: () => {
         this.tweens.add({
           targets: this.playerSprite,
           y: 0,
-          scaleX: 1,
-          scaleY: 1,
+          scaleX: baseScale,
+          scaleY: baseScale,
           duration: this.JUMP_DURATION / 2,
           ease: "Quad.easeIn",
           onComplete: () => {
@@ -495,8 +558,8 @@ export class MainScene extends Phaser.Scene {
 
             this.tweens.add({
               targets: this.playerSprite,
-              scaleX: 1.15,
-              scaleY: 0.85,
+              scaleX: baseScale * 1.15,
+              scaleY: baseScale * 0.85,
               duration: 50,
               yoyo: true,
               ease: "Quad.easeOut",
@@ -631,6 +694,7 @@ export class MainScene extends Phaser.Scene {
       const position = data as PlayerPosition & {
         avatarColor?: AvatarColor
         nickname?: string
+        avatarConfig?: AvatarConfig
       }
       if (!this.isSceneTrulyActive()) {
         if (this.isSceneActive && !this.sys?.displayList) {
@@ -646,6 +710,7 @@ export class MainScene extends Phaser.Scene {
       const position = data as PlayerPosition & {
         avatarColor?: AvatarColor
         nickname?: string
+        avatarConfig?: AvatarConfig
       }
       if (!this.isSceneTrulyActive()) {
         if (this.isSceneActive && !this.sys?.displayList) {
@@ -831,7 +896,7 @@ export class MainScene extends Phaser.Scene {
   }
 
   private addRemotePlayer(
-    position: PlayerPosition & { avatarColor?: AvatarColor; nickname?: string }
+    position: PlayerPosition & { avatarColor?: AvatarColor; nickname?: string; avatarConfig?: AvatarConfig }
   ): boolean {
     if (!this.isSceneTrulyActive()) {
       return false
@@ -858,12 +923,29 @@ export class MainScene extends Phaser.Scene {
     }
 
     try {
-      const avatarColor = position.avatarColor || "default"
-      const textureKey = `character-${avatarColor}`
+      // 🔄 새 아바타 시스템 지원 (avatarConfig 우선, 없으면 avatarColor 사용)
+      let avatarConfig: AvatarConfig
+      if (position.avatarConfig) {
+        avatarConfig = position.avatarConfig
+      } else {
+        const avatarColor = position.avatarColor || "default"
+        avatarConfig = { type: "classic", colorId: avatarColor }
+      }
+
+      const textureKey = getTextureKey(avatarConfig)
+      const animPrefix = getAnimationPrefix(avatarConfig)
+
+      // 커스텀 캐릭터 크기 결정
+      let frameHeight = CHARACTER_CONFIG.HEIGHT
+      if (isCustomCharacter(avatarConfig)) {
+        const customConfig = avatarConfig
+        const charMeta = CUSTOM_CHARACTER_META.find((m) => m.id === customConfig.characterId)
+        frameHeight = charMeta?.frameHeight ?? CHARACTER_CONFIG.HEIGHT
+      }
 
       const shadow = this.add.ellipse(
         position.x,
-        position.y + CHARACTER_CONFIG.HEIGHT / 2,
+        position.y + frameHeight / 2,
         CHARACTER_CONFIG.WIDTH - 4,
         8,
         0x000000,
@@ -875,16 +957,25 @@ export class MainScene extends Phaser.Scene {
       const sprite = this.add.sprite(0, 0, textureKey)
       sprite.setOrigin(0.5, 0.5)
 
+      // 🔄 커스텀 캐릭터 스케일 조정
+      if (isCustomCharacter(avatarConfig)) {
+        const customConfig = avatarConfig
+        const charMeta = CUSTOM_CHARACTER_META.find((m) => m.id === customConfig.characterId)
+        if (charMeta) {
+          const scale = CHARACTER_CONFIG.HEIGHT / charMeta.frameHeight
+          sprite.setScale(scale)
+        }
+      }
+
       const container = this.add.container(position.x, position.y, [sprite])
       container.setDepth(5)
       this.remotePlayers.set(position.id, container)
       this.remotePlayerSprites.set(position.id, sprite)
+      // 🔄 Store avatar config for animation updates
+      this.remotePlayerAvatarConfigs.set(position.id, avatarConfig)
 
-      const idleAnim = getAnimationKey(
-        position.direction || "down",
-        false,
-        avatarColor
-      )
+      // 🔄 새 애니메이션 키 사용
+      const idleAnim = `${animPrefix}-${position.direction || "down"}-idle`
       if (this.anims?.exists(idleAnim)) {
         sprite.play(idleAnim)
       }
@@ -931,7 +1022,7 @@ export class MainScene extends Phaser.Scene {
   }
 
   private updateRemotePlayer(
-    position: PlayerPosition & { avatarColor?: AvatarColor; nickname?: string }
+    position: PlayerPosition & { avatarColor?: AvatarColor; nickname?: string; avatarConfig?: AvatarConfig }
   ) {
     if (!this.isSceneTrulyActive()) {
       return
@@ -984,12 +1075,14 @@ export class MainScene extends Phaser.Scene {
         }
 
         if (sprite && this.anims) {
-          const avatarColor = position.avatarColor || "default"
-          const animKey = getAnimationKey(
-            position.direction,
-            position.isMoving,
-            avatarColor
-          )
+          // 🔄 Use stored avatar config for animation
+          const storedConfig = this.remotePlayerAvatarConfigs.get(position.id)
+          const animPrefix = storedConfig
+            ? getAnimationPrefix(storedConfig)
+            : position.avatarColor || "default"
+          const animSuffix = position.isMoving ? "walk" : "idle"
+          const animKey = `${animPrefix}-${position.direction}-${animSuffix}`
+
           if (
             this.anims.exists(animKey) &&
             sprite.anims.currentAnim?.key !== animKey
@@ -1016,26 +1109,36 @@ export class MainScene extends Phaser.Scene {
       return
     }
 
+    // Calculate base scale from stored avatar config
+    let baseScale = 1
+    const avatarConfig = this.remotePlayerAvatarConfigs.get(id)
+    if (avatarConfig && isCustomCharacter(avatarConfig)) {
+      const charMeta = CUSTOM_CHARACTER_META.find((m) => m.id === avatarConfig.characterId)
+      if (charMeta) {
+        baseScale = CHARACTER_CONFIG.HEIGHT / charMeta.frameHeight
+      }
+    }
+
     this.tweens.add({
       targets: sprite,
       y: -this.JUMP_HEIGHT,
-      scaleX: 1.1,
-      scaleY: 0.9,
+      scaleX: baseScale * 1.1,
+      scaleY: baseScale * 0.9,
       duration: this.JUMP_DURATION / 2,
       ease: "Quad.easeOut",
       onComplete: () => {
         this.tweens.add({
           targets: sprite,
           y: 0,
-          scaleX: 1,
-          scaleY: 1,
+          scaleX: baseScale,
+          scaleY: baseScale,
           duration: this.JUMP_DURATION / 2,
           ease: "Quad.easeIn",
           onComplete: () => {
             this.tweens.add({
               targets: sprite,
-              scaleX: 1.15,
-              scaleY: 0.85,
+              scaleX: baseScale * 1.15,
+              scaleY: baseScale * 0.85,
               duration: 50,
               yoyo: true,
               ease: "Quad.easeOut",
@@ -1070,6 +1173,8 @@ export class MainScene extends Phaser.Scene {
     }
 
     this.remotePlayerSprites.delete(id)
+    // 🔄 Clean up avatar config
+    this.remotePlayerAvatarConfigs.delete(id)
 
     const shadow = this.remotePlayerShadows.get(id)
     if (shadow) {
@@ -1161,7 +1266,7 @@ export class MainScene extends Phaser.Scene {
         const idleAnim = getAnimationKey(
           this.playerDirection,
           false,
-          this.playerAvatarColor
+          this.playerAnimPrefix
         )
         if (
           this.anims.exists(idleAnim) &&
@@ -1220,7 +1325,7 @@ export class MainScene extends Phaser.Scene {
       playerBody.velocity.normalize().scale(PLAYER_SPEED)
     }
 
-    const animKey = getAnimationKey(newDirection, moved, this.playerAvatarColor)
+    const animKey = getAnimationKey(newDirection, moved, this.playerAnimPrefix)
     if (
       this.anims.exists(animKey) &&
       this.playerSprite.anims.currentAnim?.key !== animKey
@@ -1299,6 +1404,7 @@ export class MainScene extends Phaser.Scene {
     this.remotePlayerShadows.clear()
     this.remotePlayerNames.forEach((name) => name.destroy())
     this.remotePlayerNames.clear()
+    this.remotePlayerAvatarConfigs.clear()
     this.failedRemotePlayers.clear()
   }
 }

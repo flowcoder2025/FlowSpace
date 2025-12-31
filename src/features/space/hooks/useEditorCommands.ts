@@ -82,6 +82,7 @@ export function useEditorCommands(options: UseEditorCommandsOptions): UseEditorC
     userRole,
     characterPosition,
     characterDirection,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     userId,
     onSystemMessage,
   } = options
@@ -90,8 +91,10 @@ export function useEditorCommands(options: UseEditorCommandsOptions): UseEditorC
   const {
     toggleEditor,
     selectAsset,
-    setTool,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    setTool: _setTool,
     setPairPhase,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     setPairFirstPosition,
     togglePanel,
     setCategory,
@@ -511,7 +514,6 @@ export function useEditorCommands(options: UseEditorCommandsOptions): UseEditorC
       userRole,
       characterPosition,
       characterDirection,
-      userId,
       mode,
       objects,
       clipboard,
@@ -519,7 +521,6 @@ export function useEditorCommands(options: UseEditorCommandsOptions): UseEditorC
       toggleEditor,
       selectAsset,
       setPairPhase,
-      setPairFirstPosition,
       togglePanel,
       setCategory,
       setSearchQuery,

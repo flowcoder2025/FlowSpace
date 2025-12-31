@@ -10,6 +10,7 @@ import type {
   RoomData,
   PlayerJumpData,
   AvatarColor,
+  AvatarConfig,
   ProfileUpdateData,
   ReplyToData,
   // Phase 6: 관리 이벤트 타입
@@ -31,6 +32,7 @@ interface UseSocketOptions {
   playerId: string
   nickname: string
   avatarColor?: AvatarColor
+  avatarConfig?: AvatarConfig  // Phase 1: 커스터마이징
   sessionToken?: string // 🔒 세션 토큰 (서버 검증용)
   onChatMessage?: (message: ChatMessageData) => void
   onSystemMessage?: (message: ChatMessageData) => void
@@ -98,6 +100,7 @@ export function useSocket({
   playerId,
   nickname,
   avatarColor = "default",
+  avatarConfig,  // Phase 1: 커스터마이징
   sessionToken,
   onChatMessage,
   onSystemMessage,
@@ -161,9 +164,10 @@ export function useSocket({
   const onRecordingStoppedRef = useRef(onRecordingStopped)
   const onRecordingErrorRef = useRef(onRecordingError)
 
-  // 🔄 Store nickname and avatarColor in refs to enable hot update without reconnection
+  // 🔄 Store nickname and avatarColor/avatarConfig in refs to enable hot update without reconnection
   const nicknameRef = useRef(nickname)
   const avatarColorRef = useRef(avatarColor)
+  const avatarConfigRef = useRef(avatarConfig)  // Phase 1: 커스터마이징
 
   // Keep callback refs up to date
   useEffect(() => {
@@ -191,6 +195,7 @@ export function useSocket({
     // 🔄 Update profile refs (used for movement events)
     nicknameRef.current = nickname
     avatarColorRef.current = avatarColor
+    avatarConfigRef.current = avatarConfig  // Phase 1: 커스터마이징
   })
 
   // Initialize socket connection
@@ -214,8 +219,8 @@ export function useSocket({
       console.log("[Socket] Connected to server")
       setIsConnected(true)
 
-      // Join the space with avatarColor and sessionToken (🔒 서버 검증용)
-      socket.emit("join:space", { spaceId, playerId, nickname, avatarColor, sessionToken })
+      // Join the space with avatarColor/avatarConfig and sessionToken (🔒 서버 검증용)
+      socket.emit("join:space", { spaceId, playerId, nickname, avatarColor, avatarConfig, sessionToken })
     })
 
     socket.on("disconnect", () => {
@@ -316,18 +321,32 @@ export function useSocket({
       onPlayerLeftRef.current?.(id)
     })
 
-    // Movement events
+    // Movement events (Phase 2.3: 경량화된 payload - avatar 정보 없음)
     socket.on("player:moved", (position: PlayerPosition) => {
       setPlayers((prev) => {
         const next = new Map(prev)
-        next.set(position.id, position)
+        const existing = prev.get(position.id)
+        // 🔄 Phase 2.3: 서버가 경량 payload를 보내므로 기존 avatar 정보 보존
+        const mergedPosition: PlayerPosition = {
+          ...position,
+          avatarColor: position.avatarColor ?? existing?.avatarColor,
+          avatarConfig: position.avatarConfig ?? existing?.avatarConfig,
+        }
+        next.set(position.id, mergedPosition)
         return next
       })
 
       // Only notify game if it's ready - prevents errors when move events arrive
       // before the scene is fully initialized or before the player has been added
       if (gameReadyRef.current) {
-        eventBridge.emit(GameEvents.REMOTE_PLAYER_UPDATE, position)
+        // 🔄 Game에도 기존 avatar 정보 포함하여 전달
+        setPlayers((current) => {
+          const player = current.get(position.id)
+          if (player) {
+            eventBridge.emit(GameEvents.REMOTE_PLAYER_UPDATE, player)
+          }
+          return current
+        })
       }
       // If game isn't ready, position is still stored in players map
       // and will be used when the player is eventually added via REMOTE_PLAYER_JOIN
@@ -488,7 +507,7 @@ export function useSocket({
     // 🔄 Profile update events (다른 플레이어의 닉네임/아바타 변경)
     socket.on("player:profileUpdated", (data) => {
       if (IS_DEV) {
-        console.log("[Socket] Player profile updated:", data.id, data.nickname)
+        console.log("[Socket] Player profile updated:", data.id, data.nickname, data.avatarConfig ? "(with avatarConfig)" : "")
       }
 
       // Update players map with new profile
@@ -500,6 +519,7 @@ export function useSocket({
             ...player,
             nickname: data.nickname,
             avatarColor: data.avatarColor,
+            avatarConfig: data.avatarConfig,  // Phase 1: 커스터마이징
           })
         }
         return next
@@ -538,6 +558,7 @@ export function useSocket({
     })
 
     // Listen for local player movement from game
+    // ⚡ Phase 2.3: 이동 패킷 경량화 - avatarColor/avatarConfig 제외
     const handleLocalPlayerMove = (position: unknown) => {
       const pos = position as PlayerPosition
       socket.emit("player:move", {
@@ -546,7 +567,7 @@ export function useSocket({
         y: pos.y,
         direction: pos.direction,
         isMoving: pos.isMoving,
-        avatarColor: avatarColorRef.current, // 🔄 ref 사용으로 재연결 없이 업데이트 반영
+        // avatarColor, avatarConfig 제외 - 이동 패킷 경량화 (CHARACTER.md Phase 2)
       })
     }
 
@@ -626,7 +647,12 @@ export function useSocket({
     if (socketRef.current && isConnected && effectivePlayerId) {
       // Update refs
       nicknameRef.current = data.nickname
-      avatarColorRef.current = data.avatarColor
+      if (data.avatarColor) {
+        avatarColorRef.current = data.avatarColor
+      }
+      if (data.avatarConfig) {
+        avatarConfigRef.current = data.avatarConfig  // Phase 1: 커스터마이징
+      }
 
       // 🔄 SSOT: players Map에서 로컬 사용자 정보도 즉시 업데이트
       setPlayers((prev) => {
@@ -637,9 +663,10 @@ export function useSocket({
             ...localPlayer,
             nickname: data.nickname,
             avatarColor: data.avatarColor,
+            avatarConfig: data.avatarConfig,  // Phase 1: 커스터마이징
           })
           if (IS_DEV) {
-            console.log("[Socket] SSOT: Local player updated in players Map:", effectivePlayerId, data.nickname)
+            console.log("[Socket] SSOT: Local player updated in players Map:", effectivePlayerId, data.nickname, data.avatarConfig ? "(with avatarConfig)" : "")
           }
         }
         return next
@@ -652,7 +679,7 @@ export function useSocket({
       eventBridge.emit(GameEvents.LOCAL_PROFILE_UPDATE, data)
 
       if (IS_DEV) {
-        console.log("[Socket] Profile updated:", data.nickname, data.avatarColor)
+        console.log("[Socket] Profile updated:", data.nickname, data.avatarColor, data.avatarConfig ? "(with avatarConfig)" : "")
       }
     }
   }, [isConnected, effectivePlayerId])

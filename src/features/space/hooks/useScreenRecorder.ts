@@ -112,7 +112,7 @@ async function saveFile(blob: Blob, fileName: string): Promise<SaveResult> {
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
     return { status: "saved", fileName }
-  } catch (err) {
+  } catch {
     return { status: "error", message: "파일 다운로드에 실패했습니다" }
   }
 }

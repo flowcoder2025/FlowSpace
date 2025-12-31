@@ -5,13 +5,11 @@ import * as Phaser from "phaser"
 import { createGameConfig } from "./config"
 import { MainScene } from "./scenes/MainScene"
 import { eventBridge, GameEvents } from "./events"
+import type { AvatarColor } from "../socket/types"
 
 export interface PhaserGameRef {
   game: Phaser.Game | null
 }
-
-// Avatar color type
-type AvatarColor = "default" | "red" | "green" | "purple" | "orange" | "pink"
 
 // Object interaction data type
 interface ObjectInteractionData {
@@ -24,7 +22,8 @@ interface ObjectInteractionData {
 interface PhaserGameProps {
   playerId: string
   playerNickname: string
-  avatarColor?: AvatarColor
+  avatarColor?: AvatarColor // Legacy prop (backwards compatibility)
+  avatar?: string // New format: "classic:default" or "custom:office_male"
   onPlayerMove?: (position: { x: number; y: number; direction: string; isMoving: boolean }) => void
   onObjectInteract?: (data: ObjectInteractionData) => void
   onGameReady?: () => void
@@ -35,7 +34,7 @@ const MIN_WIDTH = 200
 const MIN_HEIGHT = 200
 
 export const PhaserGame = forwardRef<PhaserGameRef, PhaserGameProps>(
-  ({ playerId, playerNickname, avatarColor = "default", onPlayerMove, onObjectInteract, onGameReady }, ref) => {
+  ({ playerId, playerNickname, avatarColor = "default", avatar, onPlayerMove, onObjectInteract, onGameReady }, ref) => {
     const containerRef = useRef<HTMLDivElement>(null)
     const gameRef = useRef<Phaser.Game | null>(null)
     // 🔧 마지막 유효 크기 저장 (잘못된 리사이즈 복구용)
@@ -53,11 +52,12 @@ export const PhaserGame = forwardRef<PhaserGameRef, PhaserGameProps>(
       const config = createGameConfig(containerRef.current, [MainScene])
       gameRef.current = new Phaser.Game(config)
 
-      // Pass data to scene
+      // Pass data to scene (support both legacy avatarColor and new avatar format)
       gameRef.current.scene.start("MainScene", {
         playerId,
         nickname: playerNickname,
         avatarColor,
+        avatar, // New format takes precedence in MainScene
       })
 
       // Setup event listeners
@@ -172,7 +172,7 @@ export const PhaserGame = forwardRef<PhaserGameRef, PhaserGameProps>(
           gameRef.current = null
         }
       }
-    }, [playerId, playerNickname, avatarColor, onPlayerMove, onObjectInteract, onGameReady])
+    }, [playerId, playerNickname, avatarColor, avatar, onPlayerMove, onObjectInteract, onGameReady])
 
     return (
       <div

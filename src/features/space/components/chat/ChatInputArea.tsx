@@ -18,7 +18,7 @@
  */
 import { useState, useRef, useEffect, useCallback } from "react"
 import { cn } from "@/lib/utils"
-import { parseChatInput, isWhisperFormat, type AdminCommandType, type ParsedInput } from "../../utils/chatParser"
+import { parseChatInput, isWhisperFormat, type AdminCommandType } from "../../utils/chatParser"
 import type { ReplyTo } from "../../types/space.types"
 import type { ParsedEditorCommand } from "../../types/editor.types"
 

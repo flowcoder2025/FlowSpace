@@ -329,20 +329,41 @@ export default function LandingPage() {
       {/* Footer */}
       <footer className="border-t py-12">
         <Container>
-          <HStack justify="between" align="center">
-            <VStack gap="sm">
-              <HStack gap="sm" align="center">
-                <img src="/FlowSpace_logo_transparent_clean.png" alt="FlowSpace" className="size-6 rounded object-contain" />
-                <Text weight="semibold">FlowSpace</Text>
+          <VStack gap="lg">
+            <HStack justify="between" align="start" className="flex-col gap-8 sm:flex-row sm:gap-0">
+              <VStack gap="sm">
+                <HStack gap="sm" align="center">
+                  <img src="/FlowSpace_logo_transparent_clean.png" alt="FlowSpace" className="size-6 rounded object-contain" />
+                  <Text weight="semibold">FlowSpace</Text>
+                </HStack>
+                <Text tone="muted" size="sm">
+                  Phaser 3 기반 자체 개발 2D 메타버스 플랫폼
+                </Text>
+              </VStack>
+              <HStack gap="lg">
+                <VStack gap="sm">
+                  <Text weight="medium" size="sm">제품</Text>
+                  <Link href="/pricing" className="text-sm text-muted-foreground hover:text-foreground">
+                    요금제
+                  </Link>
+                  <Link href="/spaces/new" className="text-sm text-muted-foreground hover:text-foreground">
+                    공간 만들기
+                  </Link>
+                </VStack>
+                <VStack gap="sm">
+                  <Text weight="medium" size="sm">지원</Text>
+                  <Link href="/login" className="text-sm text-muted-foreground hover:text-foreground">
+                    로그인
+                  </Link>
+                </VStack>
               </HStack>
-              <Text tone="muted" size="sm">
-                Phaser 3 기반 자체 개발 2D 메타버스 플랫폼
+            </HStack>
+            <div className="border-t pt-6">
+              <Text tone="muted" size="sm" className="text-center">
+                &copy; 2025 FlowSpace. All rights reserved.
               </Text>
-            </VStack>
-            <Text tone="muted" size="sm">
-              &copy; 2025 FlowSpace. All rights reserved.
-            </Text>
-          </HStack>
+            </div>
+          </VStack>
         </Container>
       </footer>
     </main>

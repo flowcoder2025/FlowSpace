@@ -111,13 +111,16 @@ export function useDebouncedEditorSave({
 
   // 컴포넌트 언마운트 시 보류 중인 업데이트 전송
   useEffect(() => {
+    // 클린업 시점에 ref 값이 변경될 수 있으므로 현재 값을 캡처
+    const pendingUpdates = pendingUpdatesRef.current
+    const onUpdate = onUpdateRef.current
     return () => {
       if (timerRef.current) {
         clearTimeout(timerRef.current)
       }
       // 언마운트 시 보류 중인 업데이트 전송
-      pendingUpdatesRef.current.forEach((data) => {
-        onUpdateRef.current(data)
+      pendingUpdates.forEach((data) => {
+        onUpdate(data)
       })
     }
   }, [])

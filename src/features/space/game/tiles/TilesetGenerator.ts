@@ -977,7 +977,7 @@ function drawTileFloor(
   size: number,
   variant: number
 ): void {
-  const { base, light, dark, grout } = MODERN_PALETTE.tile
+  const { base, light, grout } = MODERN_PALETTE.tile
 
   // 그라우트 배경
   ctx.fillStyle = grout
@@ -1263,7 +1263,7 @@ function drawDoor(
   y: number,
   size: number
 ): void {
-  const { base, dark } = MODERN_PALETTE.wall
+  const { base } = MODERN_PALETTE.wall
   const { wood_dark } = MODERN_PALETTE.furniture
 
   ctx.fillStyle = base
@@ -1468,7 +1468,8 @@ function drawBookshelf(
   x: number,
   y: number,
   size: number,
-  part: "top" | "bottom"
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _part: "top" | "bottom"
 ): void {
   const { wood_dark } = MODERN_PALETTE.furniture
 
@@ -1494,7 +1495,8 @@ function drawCabinet(
   x: number,
   y: number,
   size: number,
-  part: "top" | "bottom"
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _part: "top" | "bottom"
 ): void {
   const { white, metal } = MODERN_PALETTE.furniture
 
@@ -1704,7 +1706,7 @@ function drawRug(
   col: number,
   row: number
 ): void {
-  const { base, light, dark, pattern } = MODERN_PALETTE.carpet
+  const { base, dark, pattern } = MODERN_PALETTE.carpet
 
   ctx.fillStyle = base
   ctx.fillRect(x, y, size, size)

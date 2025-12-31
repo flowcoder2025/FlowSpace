@@ -70,7 +70,8 @@ export function FloatingChatOverlay({
   userRole,
   isVisible = true,
   whisperHistory = [],
-  spaceId,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  spaceId: _spaceId,
   // 📜 Phase 4: 과거 메시지 페이지네이션
   onLoadMore,
   isLoadingMore = false,

@@ -21,6 +21,10 @@
 │
 ├── /TASK.md                        ← 🎯 현재 진행 중인 태스크 (Phase별 계획)
 │
+├── /docs/ROADMAP.md                ← 📋 통합 개발 로드맵 (우선순위/상태)
+│   ├── /docs/roadmap/CHARACTER.md  ← 캐릭터 커스터마이징 설계
+│   └── /docs/roadmap/ASSETS.md     ← 에셋 분석 및 가공 계획
+│
 ├── /src/components/claude.md       ← UI 컴포넌트 작업 시 필수
 ├── /src/features/claude.md         ← 기능 모듈 개발 시 필수
 │   └── /src/features/space/claude.md  ← 📌 핵심 모듈 (게임/비디오/채팅)
@@ -33,6 +37,7 @@
 | 작업 유형 | 필수 참조 파일 | 예시 |
 |----------|---------------|------|
 | **🎯 계획된 태스크** | `/TASK.md` | Phase별 기능 구현, 진행 상태 |
+| **📋 로드맵 확인** | `/docs/ROADMAP.md` | 작업 우선순위, 전체 상태 |
 | UI/컴포넌트 변경 | `/src/components/claude.md` | 버튼, 카드, 모달 수정 |
 | 기능 모듈 개발 | `/src/features/claude.md` | space, auth 기능 추가 |
 | **공간 기능 개발** | `/src/features/space/claude.md` | 게임, 비디오, 채팅 수정 |
@@ -266,6 +271,10 @@
 │
 ├── /docs                            # 상세 스펙 (SSOT) - 자동 생성 금지
 │   ├── prd.md                       # 📌 제품 요구사항 문서
+│   ├── ROADMAP.md                   # 📋 통합 개발 로드맵
+│   ├── /roadmap                     # 로드맵 하위 문서
+│   │   ├── CHARACTER.md             # 캐릭터 커스터마이징 설계
+│   │   └── ASSETS.md                # 에셋 분석 및 가공 계획
 │   ├── /architecture                # 시스템 개요
 │   ├── /foundations                 # 전역 규칙
 │   ├── /checklists                  # 품질 검증 리스트
@@ -537,3 +546,4 @@ git add . && git commit -m "feat: 작업 내용" && git push
 | 2025-12-08 | 3.2.0 | 계층구조 확장: space/claude.md, server/claude.md 추가, PRD 로드맵 업데이트 |
 | 2025-12-11 | 3.3.0 | TASK.md 계층 추가: Phase별 태스크 관리 체계, 사용법 가이드 (0.5절) |
 | 2025-12-15 | 3.4.0 | 디렉토리 구조 전면 업데이트: /my-spaces, /dashboard, /components/space, space-auth.ts 반영 |
+| 2025-12-29 | 3.5.0 | ROADMAP 계층 추가: /docs/ROADMAP.md 통합 로드맵 + roadmap/CHARACTER.md, ASSETS.md |
