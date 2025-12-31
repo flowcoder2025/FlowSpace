@@ -227,6 +227,17 @@ export function ParticipantPanel({
     [sortedTracks]
   )
 
+  // 🎤 모든 참가자의 오디오 트랙 수집 (녹화 시 믹싱용)
+  const allAudioTracks = useMemo(() => {
+    const tracks: MediaStreamTrack[] = []
+    sortedTracks.forEach((track) => {
+      if (track.audioTrack && !track.isAudioMuted) {
+        tracks.push(track.audioTrack)
+      }
+    })
+    return tracks
+  }, [sortedTracks])
+
   // 그리드 레이아웃 계산 (향후 사용 예정)
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const _gridLayout = useMemo(() =>
@@ -474,6 +485,7 @@ export function ParticipantPanel({
                   isScreenShare
                   canRecord={canRecord}
                   spaceName={spaceName}
+                  allAudioTracks={allAudioTracks}
                   className="ring-2 ring-primary/50"
                 />
               ))}
@@ -614,6 +626,7 @@ export function ParticipantPanel({
                 isScreenShare
                 canRecord={canRecord}
                 spaceName={spaceName}
+                allAudioTracks={allAudioTracks}
                 className="ring-2 ring-primary/50 w-full aspect-video"
               />
             ))}

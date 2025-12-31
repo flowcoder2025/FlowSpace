@@ -101,6 +101,8 @@ interface VideoTileProps {
   canRecord?: boolean
   /** 🏷️ 공간 이름 (녹화 파일명용) */
   spaceName?: string
+  /** 🎤 모든 참가자의 오디오 트랙 (녹화 시 믹싱용) */
+  allAudioTracks?: MediaStreamTrack[]
 }
 
 // ============================================
@@ -113,6 +115,7 @@ export function VideoTile({
   className,
   canRecord = false,
   spaceName = "recording",
+  allAudioTracks = [],
 }: VideoTileProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
@@ -142,7 +145,8 @@ export function VideoTile({
   })
 
   const isRecording = recordingState === "recording" || recordingState === "paused"
-  const showRecordButton = isLocal && isScreenShare && canRecord
+  // 🔧 화면공유 녹화: 본인/타인 구분 없이 권한만 있으면 녹화 가능
+  const showRecordButton = isScreenShare && canRecord
 
   // 화면공유 모드일 때는 screenTrack, 아니면 videoTrack 사용
   const activeVideoTrack = isScreenShare ? track.screenTrack : track.videoTrack
@@ -381,14 +385,19 @@ export function VideoTile({
     }
   }, [])
 
-  // 🎬 녹화 시작/중지 핸들러
+  // 🎬 녹화 시작/중지 핸들러 (모든 참가자 오디오 믹싱)
   const handleToggleRecording = useCallback(async () => {
     if (isRecording) {
       await stopRecording()
     } else if (track.screenTrack) {
-      await startRecording(track.screenTrack, track.audioTrack)
+      // 모든 참가자의 오디오 트랙을 믹싱하여 녹화
+      // allAudioTracks가 비어있으면 현재 트랙의 오디오만 사용 (폴백)
+      const audioTracksToRecord = allAudioTracks.length > 0
+        ? allAudioTracks
+        : track.audioTrack ? [track.audioTrack] : []
+      await startRecording(track.screenTrack, audioTracksToRecord)
     }
-  }, [isRecording, track.screenTrack, track.audioTrack, startRecording, stopRecording])
+  }, [isRecording, track.screenTrack, track.audioTrack, allAudioTracks, startRecording, stopRecording])
 
   // hasAudio, isAudioMuted, canPip는 렌더링에서만 사용
   const hasAudio = !!track.audioTrack

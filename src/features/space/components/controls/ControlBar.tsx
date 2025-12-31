@@ -114,6 +114,18 @@ const SpeakerIcon = () => (
   </svg>
 )
 
+const ScreenSmallIcon = () => (
+  <svg className="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+  </svg>
+)
+
+const VolumeIcon = () => (
+  <svg className="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+  </svg>
+)
+
 const CameraSmallIcon = () => (
   <svg className="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
@@ -144,6 +156,14 @@ const CloseIcon = () => (
 )
 
 // ============================================
+// Screen Share Options
+// ============================================
+export interface ScreenShareOptions {
+  /** 시스템/탭 오디오 포함 여부 */
+  audio?: boolean
+}
+
+// ============================================
 // ControlBar Props
 // ============================================
 interface ControlBarProps {
@@ -154,7 +174,7 @@ interface ControlBarProps {
   mediaError?: MediaError | null
   onToggleMic: () => void
   onToggleCamera: () => void
-  onToggleScreenShare: () => void
+  onToggleScreenShare: (options?: ScreenShareOptions) => void
   onToggleChat: () => void
   onOpenSettings?: () => void
   onDismissError?: () => void
@@ -362,16 +382,82 @@ export function ControlBar({
           </DropdownMenu>
         </div>
 
-        {/* Screen Share Toggle - 📱 모바일에서 숨김 (모바일 웹 화면 공유 제한적) */}
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={onToggleScreenShare}
-          className="hidden sm:inline-flex border-white/30 text-white bg-transparent hover:bg-white/10 focus-visible:ring-0 focus-visible:ring-offset-0"
-          aria-label={isScreenSharing ? "화면 공유 중지" : "화면 공유"}
-        >
-          <ScreenShareIcon active={isScreenSharing} />
-        </Button>
+        {/* Screen Share Toggle + Audio Option - 📱 모바일에서 숨김 */}
+        <div className="group hidden sm:flex items-center">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => {
+              // 화면공유 중이면 중지, 아니면 드롭다운에서 선택하도록 유도
+              if (isScreenSharing) {
+                onToggleScreenShare()
+              } else {
+                // 기본: 오디오 없이 화면공유
+                onToggleScreenShare({ audio: false })
+              }
+            }}
+            className="rounded-r-none border-r-0 border-white/30 text-white bg-transparent hover:bg-white/10 group-hover:border-primary focus-visible:ring-0 focus-visible:ring-offset-0"
+            aria-label={isScreenSharing ? "화면 공유 중지" : "화면 공유"}
+          >
+            <ScreenShareIcon active={isScreenSharing} />
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon"
+                className="w-6 rounded-l-none border-l-0 px-1 border-white/30 text-white bg-transparent hover:bg-white/10 group-hover:border-primary focus-visible:ring-0 focus-visible:ring-offset-0"
+                aria-label="화면 공유 옵션"
+              >
+                <ChevronDownIcon />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="center"
+              side="top"
+              className="w-56"
+              onCloseAutoFocus={(e) => e.preventDefault()}
+            >
+              <DropdownMenuLabel className="flex items-center gap-2">
+                <ScreenSmallIcon />
+                화면 공유
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => onToggleScreenShare({ audio: false })}
+                disabled={isScreenSharing}
+                className="flex items-center gap-2"
+              >
+                <ScreenSmallIcon />
+                <span>화면만 공유</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => onToggleScreenShare({ audio: true })}
+                disabled={isScreenSharing}
+                className="flex items-center gap-2"
+              >
+                <VolumeIcon />
+                <div className="flex flex-col">
+                  <span>화면 + 오디오 공유</span>
+                  <span className="text-xs text-muted-foreground">
+                    브라우저 탭 공유 시만 지원
+                  </span>
+                </div>
+              </DropdownMenuItem>
+              {isScreenSharing && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={() => onToggleScreenShare()}
+                    className="text-destructive focus:text-destructive"
+                  >
+                    공유 중지
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
 
         <div className="mx-0.5 sm:mx-1 h-5 w-px bg-white/20" />
 

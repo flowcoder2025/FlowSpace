@@ -35,6 +35,12 @@ export type MediaError = {
   message: string
 }
 
+// Screen share options
+export interface ScreenShareOptions {
+  /** 시스템/탭 오디오 포함 여부 (브라우저 탭 공유 시만 지원) */
+  audio?: boolean
+}
+
 // Context value type
 export interface LiveKitMediaContextValue {
   participantTracks: Map<string, ParticipantTrack>
@@ -44,7 +50,7 @@ export interface LiveKitMediaContextValue {
   localParticipantId: string | null
   toggleCamera: () => Promise<boolean>
   toggleMicrophone: () => Promise<boolean>
-  toggleScreenShare: () => Promise<boolean>
+  toggleScreenShare: (options?: ScreenShareOptions) => Promise<boolean>
 }
 
 // Default value (when not in LiveKit context)
@@ -806,8 +812,8 @@ export function LiveKitMediaInternalProvider({ children }: { children: ReactNode
     }
   }, [localParticipant, room, parseMediaError])
 
-  // Toggle screen share
-  const toggleScreenShare = useCallback(async (): Promise<boolean> => {
+  // Toggle screen share (with optional audio)
+  const toggleScreenShare = useCallback(async (options?: ScreenShareOptions): Promise<boolean> => {
     if (!localParticipant) {
       setMediaError({
         type: "not_connected",
@@ -821,10 +827,20 @@ export function LiveKitMediaInternalProvider({ children }: { children: ReactNode
 
       const newState = !localParticipant.isScreenShareEnabled
       if (IS_DEV) {
-        console.log("[LiveKitMediaContext] Toggle screen share:", newState ? "ON" : "OFF")
+        console.log("[LiveKitMediaContext] Toggle screen share:", newState ? "ON" : "OFF", options?.audio ? "(with audio)" : "")
       }
 
-      await localParticipant.setScreenShareEnabled(newState)
+      // 화면공유 시작 시 오디오 옵션 적용
+      // 참고: 브라우저 탭 공유 시만 오디오 지원됨
+      if (newState && options?.audio) {
+        await localParticipant.setScreenShareEnabled(true, {
+          audio: true,
+          // 공유 중인 탭의 로컬 오디오 재생 억제 (에코 방지)
+          suppressLocalAudioPlayback: true,
+        })
+      } else {
+        await localParticipant.setScreenShareEnabled(newState)
+      }
       return true
     } catch (error) {
       const errorName = error instanceof Error ? error.name : ""

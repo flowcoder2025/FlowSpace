@@ -26,8 +26,8 @@ interface UseScreenRecorderReturn {
   recordingState: RecordingState
   /** 녹화 시간 (초) */
   recordingTime: number
-  /** 녹화 시작 */
-  startRecording: (screenTrack: MediaStreamTrack, audioTrack?: MediaStreamTrack) => Promise<void>
+  /** 녹화 시작 (여러 오디오 트랙 믹싱 지원) */
+  startRecording: (screenTrack: MediaStreamTrack, audioTracks?: MediaStreamTrack[]) => Promise<void>
   /** 녹화 중지 및 저장 */
   stopRecording: () => Promise<void>
   /** 녹화 일시정지/재개 */
@@ -43,6 +43,39 @@ interface UseScreenRecorderReturn {
 // ============================================
 // Utilities
 // ============================================
+
+/**
+ * 여러 오디오 트랙을 하나의 스트림으로 믹싱
+ * Web Audio API를 사용하여 모든 참가자의 오디오를 합성
+ */
+function mixAudioTracks(audioTracks: MediaStreamTrack[]): {
+  mixedStream: MediaStream
+  audioContext: AudioContext
+} | null {
+  if (audioTracks.length === 0) {
+    return null
+  }
+
+  try {
+    const audioContext = new AudioContext()
+    const destination = audioContext.createMediaStreamDestination()
+
+    // 각 오디오 트랙을 소스로 연결
+    audioTracks.forEach((track) => {
+      const stream = new MediaStream([track])
+      const source = audioContext.createMediaStreamSource(stream)
+      source.connect(destination)
+    })
+
+    return {
+      mixedStream: destination.stream,
+      audioContext,
+    }
+  } catch (err) {
+    console.error("[useScreenRecorder] Failed to mix audio tracks:", err)
+    return null
+  }
+}
 
 /**
  * 파일명 생성: YYYY_MM_DD_HH-MM-SS_공간이름.webm
@@ -135,6 +168,7 @@ export function useScreenRecorder({
   const timerRef = useRef<NodeJS.Timeout | null>(null)
   const startTimeRef = useRef<number>(0)
   const notificationTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const audioContextRef = useRef<AudioContext | null>(null)
 
   // 알림 표시 (자동 사라짐)
   const showNotification = useCallback((type: NotificationType, message: string) => {
@@ -179,19 +213,35 @@ export function useScreenRecorder({
     }
   }, [])
 
-  // 녹화 시작
+  // 녹화 시작 (여러 오디오 트랙 믹싱 지원)
   const startRecording = useCallback(async (
     screenTrack: MediaStreamTrack,
-    audioTrack?: MediaStreamTrack
+    audioTracks?: MediaStreamTrack[]
   ) => {
     try {
       setError(null)
       chunksRef.current = []
 
-      // 스트림 생성 (화면 + 오디오)
+      // 기존 AudioContext 정리
+      if (audioContextRef.current) {
+        audioContextRef.current.close()
+        audioContextRef.current = null
+      }
+
+      // 스트림 생성 (화면 + 믹싱된 오디오)
       const tracks: MediaStreamTrack[] = [screenTrack]
-      if (audioTrack) {
-        tracks.push(audioTrack)
+
+      // 여러 오디오 트랙이 있으면 믹싱
+      if (audioTracks && audioTracks.length > 0) {
+        const mixResult = mixAudioTracks(audioTracks)
+        if (mixResult) {
+          audioContextRef.current = mixResult.audioContext
+          // 믹싱된 오디오 스트림에서 첫 번째 트랙 사용
+          const mixedAudioTrack = mixResult.mixedStream.getAudioTracks()[0]
+          if (mixedAudioTrack) {
+            tracks.push(mixedAudioTrack)
+          }
+        }
       }
       const stream = new MediaStream(tracks)
 
@@ -243,6 +293,12 @@ export function useScreenRecorder({
 
     setRecordingState("stopping")
     stopTimer()
+
+    // AudioContext 정리
+    if (audioContextRef.current) {
+      audioContextRef.current.close()
+      audioContextRef.current = null
+    }
 
     return new Promise<void>((resolve) => {
       recorder.onstop = async () => {

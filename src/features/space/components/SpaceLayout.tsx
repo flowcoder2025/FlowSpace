@@ -907,6 +907,17 @@ function SpaceLayoutContent({
     return null
   }, [allParticipantTracks])
 
+  // 🎤 모든 참가자의 오디오 트랙 수집 (녹화 시 믹싱용)
+  const allAudioTracks = useMemo(() => {
+    const tracks: MediaStreamTrack[] = []
+    allParticipantTracks.forEach((track) => {
+      if (track.audioTrack && !track.isAudioMuted) {
+        tracks.push(track.audioTrack)
+      }
+    })
+    return tracks
+  }, [allParticipantTracks])
+
   // 📬 귓속말 히스토리 계산 (최근 대화 상대 닉네임 목록, 중복 제거)
   const whisperHistory = useMemo(() => {
     const nicknames: string[] = []
@@ -1060,8 +1071,8 @@ function SpaceLayoutContent({
     await toggleCamera()
   }, [toggleCamera])
 
-  const handleToggleScreenShare = useCallback(async () => {
-    await toggleScreenShare()
+  const handleToggleScreenShare = useCallback(async (options?: { audio?: boolean }) => {
+    await toggleScreenShare(options)
   }, [toggleScreenShare])
 
   const handleToggleChat = useCallback(() => {
@@ -1319,6 +1330,7 @@ function SpaceLayoutContent({
           canRecord={userRole === "OWNER" || userRole === "STAFF" || isSuperAdmin}
           spaceName={spaceName}
           audioTrack={activeScreenShare.audioTrack}
+          allAudioTracks={allAudioTracks}
         />
       )}
     </div>

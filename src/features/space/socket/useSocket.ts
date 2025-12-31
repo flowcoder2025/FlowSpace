@@ -205,11 +205,15 @@ export function useSocket({
     gameReadyRef.current = false
 
     // Create socket connection
+    // 🔧 연결 안정성 최적화: 무한 재연결 + 지수 백오프
     const socket: Socket<ServerToClientEvents, ClientToServerEvents> = io(SOCKET_URL, {
       transports: ["websocket", "polling"],
       reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000,
+      reconnectionAttempts: Infinity,     // 무한 재연결 시도 (기존 5회 → 무한)
+      reconnectionDelay: 1000,            // 첫 재연결 1초 후
+      reconnectionDelayMax: 10000,        // 최대 10초까지 지수 백오프
+      randomizationFactor: 0.5,           // 재연결 시간 랜덤화 (서버 부하 분산)
+      timeout: 30000,                     // 연결 타임아웃 30초 (기본 20초 → 30초)
     })
 
     socketRef.current = socket
@@ -223,11 +227,46 @@ export function useSocket({
       socket.emit("join:space", { spaceId, playerId, nickname, avatarColor, avatarConfig, sessionToken })
     })
 
-    socket.on("disconnect", () => {
-      console.log("[Socket] Disconnected from server")
+    socket.on("disconnect", (reason) => {
+      console.log("[Socket] Disconnected from server, reason:", reason)
       setIsConnected(false)
       // 파티 상태 초기화
       setPartyState({ partyId: null, partyName: null })
+
+      // 🔧 연결 끊김 사유 분석
+      if (reason === "io server disconnect") {
+        // 서버가 강제로 연결을 끊음 (세션 만료, 강퇴 등)
+        console.warn("[Socket] Server forced disconnect - may need to rejoin")
+      } else if (reason === "ping timeout") {
+        // ping 응답 타임아웃 - 네트워크 문제
+        console.warn("[Socket] Ping timeout - checking network stability")
+      } else if (reason === "transport close") {
+        // 전송 계층 닫힘 - 네트워크 전환 또는 일시적 끊김
+        console.warn("[Socket] Transport closed - attempting reconnect")
+      }
+    })
+
+    // 🔧 재연결 상태 모니터링
+    socket.io.on("reconnect_attempt", (attempt) => {
+      console.log(`[Socket] Reconnect attempt #${attempt}`)
+    })
+
+    socket.io.on("reconnect", (attempt) => {
+      console.log(`[Socket] Reconnected after ${attempt} attempts`)
+      // 재연결 성공 시 공간에 다시 입장
+      socket.emit("join:space", { spaceId, playerId, nickname, avatarColor, avatarConfig, sessionToken })
+    })
+
+    socket.io.on("reconnect_error", (error) => {
+      console.warn("[Socket] Reconnect error:", error.message)
+    })
+
+    socket.io.on("reconnect_failed", () => {
+      console.error("[Socket] Reconnect failed after all attempts")
+      setSocketError({
+        type: "connection_failed",
+        message: "서버 연결이 끊어졌습니다. 페이지를 새로고침해주세요.",
+      })
     })
 
     // Handle GAME_READY event - sync all pending players

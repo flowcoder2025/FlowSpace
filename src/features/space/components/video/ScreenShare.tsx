@@ -108,8 +108,10 @@ interface ScreenShareProps {
   canRecord?: boolean
   /** 🏷️ 공간 이름 (녹화 파일명용) */
   spaceName?: string
-  /** 🔊 오디오 트랙 (화면+음성 녹화용) */
+  /** 🔊 오디오 트랙 (화면+음성 녹화용) - 레거시 */
   audioTrack?: MediaStreamTrack
+  /** 🎤 모든 참가자의 오디오 트랙 (녹화 시 믹싱용) */
+  allAudioTracks?: MediaStreamTrack[]
 }
 
 // ============================================
@@ -123,6 +125,7 @@ export function ScreenShare({
   canRecord = false,
   spaceName = "recording",
   audioTrack,
+  allAudioTracks = [],
 }: ScreenShareProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -316,14 +319,19 @@ export function ScreenShare({
     }
   }, [])
 
-  // 🎬 녹화 시작/중지 핸들러
+  // 🎬 녹화 시작/중지 핸들러 (모든 참가자 오디오 믹싱)
   const handleToggleRecording = useCallback(async () => {
     if (isRecording) {
       await stopRecording()
     } else if (track.screenTrack) {
-      await startRecording(track.screenTrack, audioTrack)
+      // 모든 참가자의 오디오 트랙을 믹싱하여 녹화
+      // allAudioTracks가 비어있으면 현재 트랙의 오디오만 사용 (폴백)
+      const audioTracksToRecord = allAudioTracks.length > 0
+        ? allAudioTracks
+        : audioTrack ? [audioTrack] : []
+      await startRecording(track.screenTrack, audioTracksToRecord)
     }
-  }, [isRecording, track.screenTrack, audioTrack, startRecording, stopRecording])
+  }, [isRecording, track.screenTrack, audioTrack, allAudioTracks, startRecording, stopRecording])
 
   if (!track.screenTrack) {
     return null
@@ -478,8 +486,10 @@ interface ScreenShareOverlayProps {
   canRecord?: boolean
   /** 🏷️ 공간 이름 (녹화 파일명용) */
   spaceName?: string
-  /** 🔊 오디오 트랙 (화면+음성 녹화용) */
+  /** 🔊 오디오 트랙 (화면+음성 녹화용) - 레거시 */
   audioTrack?: MediaStreamTrack
+  /** 🎤 모든 참가자의 오디오 트랙 (녹화 시 믹싱용) */
+  allAudioTracks?: MediaStreamTrack[]
 }
 
 export function ScreenShareOverlay({
@@ -488,6 +498,7 @@ export function ScreenShareOverlay({
   canRecord,
   spaceName,
   audioTrack,
+  allAudioTracks,
 }: ScreenShareOverlayProps) {
   if (!track.screenTrack) {
     return null
@@ -501,6 +512,7 @@ export function ScreenShareOverlay({
         canRecord={canRecord}
         spaceName={spaceName}
         audioTrack={audioTrack}
+        allAudioTracks={allAudioTracks}
       />
     </div>
   )

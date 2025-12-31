@@ -382,6 +382,7 @@ const httpServer = createServer((req, res) => {
 })
 
 // Create Socket.io server attached to HTTP server
+// 🔧 연결 안정성 최적화: ping 간격/타임아웃 증가 (장시간 세션 지원)
 const io = new Server<
   ClientToServerEvents,
   ServerToClientEvents,
@@ -394,6 +395,10 @@ const io = new Server<
     credentials: true,
   },
   transports: ["websocket", "polling"],
+  // 🔧 연결 안정성 설정 (기본값: pingInterval=25000, pingTimeout=20000)
+  // 장시간 세션에서 탭 비활성화/백그라운드 시에도 안정적 연결 유지
+  pingInterval: 60000,   // 60초마다 ping (기본 25초 → 60초)
+  pingTimeout: 30000,    // 30초 내 응답 대기 (기본 20초 → 30초)
 })
 
 // Room state: spaceId -> Map<playerId, PlayerPosition>
