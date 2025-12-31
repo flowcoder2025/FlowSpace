@@ -1,96 +1,104 @@
-# TASK: 반응형 디자인 (ROADMAP 9순위)
+# TASK: 볼륨 조절 기능 개선
 
-> **시작일**: 2025-12-29
-> **ROADMAP 우선순위**: 🟢 9순위 (UX 개선)
-> **이전 태스크**: 에러 바운더리 강화 ✅ 완료
-> **근거**: 모바일/태블릿 사용자 경험 향상
+> **시작일**: 2025-12-31
+> **이전 태스크**: 반응형 디자인 ✅ 완료
+> **근거**: 사용자 피드백 - 볼륨 조절 UI/UX 문제
 
 ---
 
-## 1. 구현 내용
+## 1. 이슈 목록
 
-### 1.1 작업 목록
-
-| # | 작업 | 파일 | 상태 |
+| # | 이슈 | 원인 | 상태 |
 |:-:|------|------|:----:|
-| 1 | SpaceLayout 반응형 개선 | `SpaceLayout.tsx` | ✅ |
-| 2 | ControlBar 모바일 최적화 | `ControlBar.tsx` | ✅ |
-| 3 | 채팅 패널 반응형 크기 | `useChatDrag.ts` | ✅ |
+| 1 | 볼륨 조절이 실제 오디오에 적용 안됨 | 오디오 트랙 연결 후 볼륨 미적용 | ✅ |
+| 2 | 볼륨바 조절 시 사라짐 | hover 범위가 버튼에만 한정 | ✅ |
+| 3 | 작은 타일에서 볼륨바 잘림 | overflow-hidden + right-full | ✅ |
 
-### 1.2 변경된 파일
+---
 
-```
-src/features/space/components/SpaceLayout.tsx
-├── 참가자 패널: hidden sm:block sm:w-36 md:w-44
-├── 모바일: 숨김 버튼만 표시 (sm:hidden)
-└── 멤버 패널: 모바일 중앙 모달 스타일
+## 2. Phase 1: 볼륨 적용 로직 수정
 
-src/features/space/components/controls/ControlBar.tsx
-├── 모바일 패딩 축소: px-2 sm:px-3
-├── 장치 선택 드롭다운: hidden sm:flex
-└── 화면 공유 버튼: hidden sm:inline-flex
+### 2.1 문제 분석
+```tsx
+// 현재: useEffect에서 volume만 설정
+useEffect(() => {
+  const audio = audioRef.current
+  if (!audio || isLocal) return
+  audio.volume = isMuted ? 0 : volume
+}, [volume, isMuted, isLocal])
 
-src/features/space/hooks/useChatDrag.ts
-├── getDefaultSize(): 반응형 기본 크기
-├── getMinSize(): 반응형 최소 크기
-└── getDefaultPosition(): 모바일 중앙 배치
+// 문제: 오디오 트랙 연결 useEffect에서 볼륨 미적용
+// - 트랙 연결 시 audio.volume이 기본값(1)으로 초기화됨
 ```
 
----
-
-## 2. 반응형 브레이크포인트
-
-| 브레이크포인트 | 크기 | 변경 사항 |
-|--------------|------|----------|
-| **< 640px (sm)** | 모바일 | 참가자 패널 숨김, 컨트롤 버튼 축소, 채팅 중앙 |
-| **640px - 768px** | 태블릿 | 참가자 패널 작은 크기 (w-36) |
-| **>= 768px (md)** | 데스크톱 | 기본 크기 (w-44) |
+### 2.2 해결책
+- 오디오 트랙 연결 후에도 저장된 볼륨 적용
+- tryPlayAudio 성공 후 볼륨 설정 추가
 
 ---
 
-## 3. 주요 개선 사항
+## 3. Phase 2: 볼륨바 UI 개선
 
-### 3.1 SpaceLayout
-- 모바일에서 참가자 비디오 패널 숨김 (게임 화면 우선)
-- 모바일에서도 참가자 수/필터 버튼 접근 가능
-- 멤버 관리 패널: 모바일에서 중앙 모달 스타일
+### 3.1 문제 분석
+```tsx
+// 현재: group-hover로 버튼 hover 시에만 표시
+<div className="group/volume ...">
+  <button>...</button>  // hover 대상
+  <div className="hidden group-hover/volume:flex">  // 슬라이더
+    // 버튼에서 슬라이더로 이동 시 hover 범위 벗어남
+  </div>
+</div>
+```
 
-### 3.2 ControlBar
-- 장치 선택 드롭다운 모바일에서 숨김 (토글만 표시)
-- 화면 공유 버튼 모바일에서 숨김 (웹 제한)
-- 패딩/마진 모바일에서 축소
-
-### 3.3 채팅 패널
-- 모바일: 화면 너비 90%, 중앙 배치
-- 최소 크기 모바일에서 축소 (240x180)
-- 기본 위치 모바일에서 중앙 하단
+### 3.2 해결책
+- 상태 기반으로 슬라이더 표시 (useState + 지연 닫힘)
+- 또는 슬라이더가 버튼과 이어져 hover 유지되도록 레이아웃 변경
 
 ---
 
-## 4. 검증 항목
+## 4. Phase 3: 볼륨바 위치/오버플로우 개선
 
+### 4.1 문제 분석
+```tsx
+// 현재: 왼쪽으로 확장 (right-full)
+<div className="absolute right-full mr-1 ...">
+
+// 문제: 컨테이너 overflow-hidden으로 잘림
+className={cn(
+  "group relative aspect-video rounded-lg bg-black",
+  !isFullscreen && "overflow-hidden",  // 🔴 원인
+)}
+```
+
+### 4.2 해결책
+- 볼륨바를 아래쪽으로 확장 (top-full)
+- 또는 볼륨 컨트롤 영역만 overflow-visible 처리
+
+---
+
+## 5. 변경 대상 파일
+
+```
+src/features/space/components/video/VideoTile.tsx
+├── Phase 1: 볼륨 적용 로직 수정
+├── Phase 2: 볼륨바 표시 방식 개선
+└── Phase 3: 볼륨바 위치/레이아웃 변경
+
+src/features/space/components/video/ScreenShare.tsx
+├── 동일한 문제 수정 적용
+└── 화면공유 오디오 볼륨 적용
+```
+
+---
+
+## 6. 검증 항목
+
+- [x] 볼륨 슬라이더 조작 시 실제 오디오 볼륨 변경 확인
+- [x] 볼륨 설정이 새로고침 후에도 유지됨 (localStorage)
+- [x] 볼륨바 조절 중 사라지지 않음
+- [x] 작은 타일에서 볼륨바가 완전히 표시됨
 - [x] TypeScript 컴파일 에러 없음
 - [x] `npm run build` 성공
-- [x] Tailwind 반응형 클래스 적용 확인
-
----
-
-## 5. 완료 이력
-
-| 날짜 | 작업 | 비고 |
-|-----|------|------|
-| 2025-12-29 | 반응형 디자인 구현 | ROADMAP 9순위 ✅ |
-| 2025-12-29 | 에러 바운더리 강화 | ROADMAP 10순위 ✅ |
-| 2025-12-29 | 캐릭터 커스터마이징 Phase 1-2 | ROADMAP 5순위 ✅ |
-
----
-
-## 6. 다음 작업
-
-ROADMAP 우선순위에 따라:
-- ⏳ 6순위: 에셋 제작 (외부 의존)
-- ⏳ 7순위: 템플릿 맵 완성 (에셋 필요)
-- ⏳ 8순위: 오브젝트 상호작용 (에셋 완성 후)
 
 ---
 
@@ -98,7 +106,5 @@ ROADMAP 우선순위에 따라:
 
 | 날짜 | 버전 | 변경 |
 |-----|------|------|
-| 2025-12-29 | 4.0.0 | 반응형 디자인 완료 (ROADMAP 9순위) |
-| 2025-12-29 | 3.0.0 | 에러 바운더리 강화 완료 |
-| 2025-12-29 | 2.2.0 | 캐릭터 커스터마이징 Phase 1-2 완료 |
-| 2025-12-29 | 1.0.0 | 빌드 경고 정리 완료 |
+| 2025-12-31 | 1.0.0 | 볼륨 조절 기능 개선 태스크 생성 |
+| 2025-12-31 | 1.1.0 | ✅ 모든 Phase 완료 - 볼륨 적용 로직/UI/오버플로우 수정 |

@@ -155,6 +155,9 @@ export function VideoTile({
     const saved = localStorage.getItem(`${volumeStorageKey}-muted`)
     return saved === "true"
   })
+  // 🔧 Phase 2: 상태 기반 볼륨 슬라이더 표시 (hover 대신)
+  const [showVolumeSlider, setShowVolumeSlider] = useState(false)
+  const volumeHideTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   // 🎬 녹화 훅 (본인 화면 공유일 때만 사용)
   const {
@@ -182,15 +185,23 @@ export function VideoTile({
   // 화면공유 모드일 때는 screenTrack, 아니면 videoTrack 사용
   const activeVideoTrack = isScreenShare ? track.screenTrack : track.videoTrack
 
-  // 오디오 재생 시도 함수
+  // 오디오 재생 시도 함수 (볼륨도 함께 적용)
   const tryPlayAudio = useCallback(async () => {
     if (!audioRef.current || !track.audioTrack || isLocal) return
+
+    // 🔧 재생 전에 볼륨 먼저 설정 (브라우저에 따라 srcObject 후 즉시 적용 필요)
+    audioRef.current.volume = isMuted ? 0 : volume
 
     try {
       await audioRef.current.play()
       setAudioBlocked(false)
+      // 🔧 재생 성공 후에도 볼륨 다시 확인 적용 (일부 브라우저 이슈 대응)
+      audioRef.current.volume = isMuted ? 0 : volume
       if (IS_DEV) {
-        console.log("[VideoTile] Audio playback started for:", track.participantName)
+        console.log("[VideoTile] Audio playback started for:", track.participantName, {
+          volume: audioRef.current.volume,
+          isMuted,
+        })
       }
     } catch (error) {
       // NotAllowedError = 브라우저 autoplay 정책에 의해 차단됨
@@ -201,7 +212,7 @@ export function VideoTile({
         console.error("[VideoTile] Audio playback error:", error)
       }
     }
-  }, [track.audioTrack, track.participantName, isLocal])
+  }, [track.audioTrack, track.participantName, isLocal, volume, isMuted])
 
   // 🔧 비디오 엘리먼트 클리어 헬퍼 (브라우저 버퍼 완전 해제)
   const clearVideoElement = useCallback((video: HTMLVideoElement) => {
@@ -298,11 +309,15 @@ export function VideoTile({
       const stream = new MediaStream([track.audioTrack])
       audio.srcObject = stream
 
+      // 🔧 스트림 연결 직후 저장된 볼륨 즉시 적용
+      audio.volume = isMuted ? 0 : volume
+
       if (IS_DEV) {
         console.log("[VideoTile] Audio track attached for:", track.participantName, {
           trackId: track.audioTrack.id,
           enabled: track.audioTrack.enabled,
           readyState: track.audioTrack.readyState,
+          appliedVolume: audio.volume,
         })
       }
 
@@ -321,7 +336,7 @@ export function VideoTile({
     return () => {
       audio.srcObject = null
     }
-  }, [track.audioTrack, track.participantName, isLocal, tryPlayAudio])
+  }, [track.audioTrack, track.participantName, isLocal, tryPlayAudio, volume, isMuted])
 
   // 🔧 개선된 오디오 재생 시도 - once:true 제거, 지속적 재시도
   useEffect(() => {
@@ -364,6 +379,32 @@ export function VideoTile({
     setIsMuted(newMuted)
     localStorage.setItem(`${volumeStorageKey}-muted`, newMuted.toString())
   }, [isMuted, volumeStorageKey])
+
+  // 🔧 Phase 2: 볼륨 슬라이더 표시/숨김 핸들러 (지연 닫힘)
+  const handleVolumeAreaEnter = useCallback(() => {
+    // 닫힘 타이머 취소
+    if (volumeHideTimeoutRef.current) {
+      clearTimeout(volumeHideTimeoutRef.current)
+      volumeHideTimeoutRef.current = null
+    }
+    setShowVolumeSlider(true)
+  }, [])
+
+  const handleVolumeAreaLeave = useCallback(() => {
+    // 300ms 후에 닫힘 (드래그 중 마우스가 잠시 벗어나도 유지)
+    volumeHideTimeoutRef.current = setTimeout(() => {
+      setShowVolumeSlider(false)
+    }, 300)
+  }, [])
+
+  // 🔧 Phase 2: 볼륨 타이머 cleanup
+  useEffect(() => {
+    return () => {
+      if (volumeHideTimeoutRef.current) {
+        clearTimeout(volumeHideTimeoutRef.current)
+      }
+    }
+  }, [])
 
   // 🔊 볼륨/음소거 상태를 오디오 요소에 적용
   useEffect(() => {
@@ -601,7 +642,11 @@ export function VideoTile({
       >
         {/* 🔊 볼륨 조절 - 원격 참가자 오디오가 있을 때만 표시 */}
         {!isLocal && hasAudio && (
-          <div className="group/volume relative flex items-center">
+          <div
+            className="relative flex items-center"
+            onMouseEnter={handleVolumeAreaEnter}
+            onMouseLeave={handleVolumeAreaLeave}
+          >
             {/* 음소거 버튼 */}
             <button
               onClick={handleToggleMute}
@@ -614,24 +659,26 @@ export function VideoTile({
             >
               {isMuted ? <VolumeMuteIcon /> : volume > 0.5 ? <VolumeHighIcon /> : <VolumeLowIcon />}
             </button>
-            {/* 볼륨 슬라이더 (호버 시 표시) */}
-            <div className="absolute right-full mr-1 hidden items-center rounded bg-black/80 px-2 py-1 group-hover/volume:flex">
-              <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.05"
-                value={isMuted ? 0 : volume}
-                onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
-                className="h-1 w-20 cursor-pointer accent-primary"
-                title={`볼륨: ${Math.round((isMuted ? 0 : volume) * 100)}%`}
-                aria-label="볼륨 조절"
-                onClick={(e) => e.stopPropagation()}
-              />
-              <span className="ml-2 w-8 text-xs text-white">
-                {Math.round((isMuted ? 0 : volume) * 100)}%
-              </span>
-            </div>
+            {/* 🔧 Phase 2+3: 볼륨 슬라이더 (상태 기반 + 아래로 확장) */}
+            {showVolumeSlider && (
+              <div className="absolute right-0 top-full z-50 mt-1 flex items-center rounded bg-black/90 px-2 py-1.5 shadow-lg">
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={isMuted ? 0 : volume}
+                  onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
+                  className="h-1.5 w-24 cursor-pointer accent-primary"
+                  title={`볼륨: ${Math.round((isMuted ? 0 : volume) * 100)}%`}
+                  aria-label="볼륨 조절"
+                  onClick={(e) => e.stopPropagation()}
+                />
+                <span className="ml-2 w-8 text-xs text-white">
+                  {Math.round((isMuted ? 0 : volume) * 100)}%
+                </span>
+              </div>
+            )}
           </div>
         )}
         {/* 🎬 녹화 버튼 - 본인 화면 공유일 때만 표시 */}

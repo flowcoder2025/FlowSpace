@@ -162,6 +162,9 @@ export function ScreenShare({
     const saved = localStorage.getItem(`${volumeStorageKey}-muted`)
     return saved === "true"
   })
+  // 🔧 Phase 2: 상태 기반 볼륨 슬라이더 표시 (hover 대신)
+  const [showVolumeSlider, setShowVolumeSlider] = useState(false)
+  const volumeHideTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   // 🔧 PIP 원리 기반: 비디오 원본 크기
   const [videoNativeSize, setVideoNativeSize] = useState<{ width: number; height: number } | null>(null)
@@ -381,6 +384,32 @@ export function ScreenShare({
     localStorage.setItem(`${volumeStorageKey}-muted`, newMuted.toString())
   }, [isMuted, volumeStorageKey])
 
+  // 🔧 Phase 2: 볼륨 슬라이더 표시/숨김 핸들러 (지연 닫힘)
+  const handleVolumeAreaEnter = useCallback(() => {
+    // 닫힘 타이머 취소
+    if (volumeHideTimeoutRef.current) {
+      clearTimeout(volumeHideTimeoutRef.current)
+      volumeHideTimeoutRef.current = null
+    }
+    setShowVolumeSlider(true)
+  }, [])
+
+  const handleVolumeAreaLeave = useCallback(() => {
+    // 300ms 후에 닫힘 (드래그 중 마우스가 잠시 벗어나도 유지)
+    volumeHideTimeoutRef.current = setTimeout(() => {
+      setShowVolumeSlider(false)
+    }, 300)
+  }, [])
+
+  // 🔧 Phase 2: 볼륨 타이머 cleanup
+  useEffect(() => {
+    return () => {
+      if (volumeHideTimeoutRef.current) {
+        clearTimeout(volumeHideTimeoutRef.current)
+      }
+    }
+  }, [])
+
   // 🔊 볼륨/음소거 상태를 비디오 요소에 적용
   useEffect(() => {
     const video = videoRef.current
@@ -439,7 +468,11 @@ export function ScreenShare({
         </div>
         <div className="flex items-center gap-1">
           {/* 🔊 볼륨 조절 */}
-          <div className="group/volume relative flex items-center">
+          <div
+            className="relative flex items-center"
+            onMouseEnter={handleVolumeAreaEnter}
+            onMouseLeave={handleVolumeAreaLeave}
+          >
             {/* 음소거 버튼 */}
             <Button
               variant="ghost"
@@ -454,23 +487,25 @@ export function ScreenShare({
             >
               {isMuted ? <VolumeMuteIcon /> : volume > 0.5 ? <VolumeHighIcon /> : <VolumeLowIcon />}
             </Button>
-            {/* 볼륨 슬라이더 (호버 시 표시) */}
-            <div className="absolute right-full mr-1 hidden items-center rounded bg-black/80 px-2 py-1 group-hover/volume:flex">
-              <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.05"
-                value={isMuted ? 0 : volume}
-                onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
-                className="h-1 w-24 cursor-pointer accent-primary"
-                title={`볼륨: ${Math.round((isMuted ? 0 : volume) * 100)}%`}
-                aria-label="화면 공유 볼륨 조절"
-              />
-              <span className="ml-2 w-10 text-xs text-white">
-                {Math.round((isMuted ? 0 : volume) * 100)}%
-              </span>
-            </div>
+            {/* 🔧 Phase 2+3: 볼륨 슬라이더 (상태 기반 + 아래로 확장) */}
+            {showVolumeSlider && (
+              <div className="absolute right-0 top-full z-50 mt-1 flex items-center rounded bg-black/90 px-3 py-2 shadow-lg">
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={isMuted ? 0 : volume}
+                  onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
+                  className="h-1.5 w-28 cursor-pointer accent-primary"
+                  title={`볼륨: ${Math.round((isMuted ? 0 : volume) * 100)}%`}
+                  aria-label="화면 공유 볼륨 조절"
+                />
+                <span className="ml-2 w-10 text-xs text-white">
+                  {Math.round((isMuted ? 0 : volume) * 100)}%
+                </span>
+              </div>
+            )}
           </div>
           {/* 🎬 녹화 버튼 - 권한이 있을 때만 표시 */}
           {canRecord && (
