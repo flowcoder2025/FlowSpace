@@ -74,6 +74,24 @@ const StopIcon = () => (
   </svg>
 )
 
+const VolumeHighIcon = () => (
+  <svg className="size-3.5" fill="currentColor" viewBox="0 0 24 24">
+    <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z" />
+  </svg>
+)
+
+const VolumeLowIcon = () => (
+  <svg className="size-3.5" fill="currentColor" viewBox="0 0 24 24">
+    <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z" />
+  </svg>
+)
+
+const VolumeMuteIcon = () => (
+  <svg className="size-3.5" fill="currentColor" viewBox="0 0 24 24">
+    <path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z" />
+  </svg>
+)
+
 /**
  * 녹화 시간 포맷 (MM:SS 또는 HH:MM:SS)
  */
@@ -124,6 +142,19 @@ export function VideoTile({
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [isPipActive, setIsPipActive] = useState(false)
   const [showControls, setShowControls] = useState(false)
+
+  // 🔊 볼륨 상태 (참가자별 localStorage 저장)
+  const volumeStorageKey = `flow-volume-${track.participantId}`
+  const [volume, setVolume] = useState(() => {
+    if (typeof window === "undefined") return 1
+    const saved = localStorage.getItem(volumeStorageKey)
+    return saved ? parseFloat(saved) : 1
+  })
+  const [isMuted, setIsMuted] = useState(() => {
+    if (typeof window === "undefined") return false
+    const saved = localStorage.getItem(`${volumeStorageKey}-muted`)
+    return saved === "true"
+  })
 
   // 🎬 녹화 훅 (본인 화면 공유일 때만 사용)
   const {
@@ -315,6 +346,32 @@ export function VideoTile({
     e.stopPropagation()
     tryPlayAudio()
   }, [tryPlayAudio])
+
+  // 🔊 볼륨/음소거 핸들러
+  const handleVolumeChange = useCallback((newVolume: number) => {
+    setVolume(newVolume)
+    localStorage.setItem(volumeStorageKey, newVolume.toString())
+    // 볼륨을 올리면 자동으로 음소거 해제
+    if (newVolume > 0 && isMuted) {
+      setIsMuted(false)
+      localStorage.setItem(`${volumeStorageKey}-muted`, "false")
+    }
+  }, [volumeStorageKey, isMuted])
+
+  const handleToggleMute = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation()
+    const newMuted = !isMuted
+    setIsMuted(newMuted)
+    localStorage.setItem(`${volumeStorageKey}-muted`, newMuted.toString())
+  }, [isMuted, volumeStorageKey])
+
+  // 🔊 볼륨/음소거 상태를 오디오 요소에 적용
+  useEffect(() => {
+    const audio = audioRef.current
+    if (!audio || isLocal) return
+
+    audio.volume = isMuted ? 0 : volume
+  }, [volume, isMuted, isLocal])
 
   // Fullscreen change detection
   useEffect(() => {
@@ -542,6 +599,41 @@ export function VideoTile({
           showControls || isFullscreen ? "opacity-100" : "opacity-0"
         )}
       >
+        {/* 🔊 볼륨 조절 - 원격 참가자 오디오가 있을 때만 표시 */}
+        {!isLocal && hasAudio && (
+          <div className="group/volume relative flex items-center">
+            {/* 음소거 버튼 */}
+            <button
+              onClick={handleToggleMute}
+              className={cn(
+                "rounded bg-black/60 p-1.5 text-white transition-colors hover:bg-black/80",
+                isMuted && "text-red-400"
+              )}
+              title={isMuted ? "음소거 해제" : "음소거"}
+              aria-label={isMuted ? "음소거 해제" : "음소거"}
+            >
+              {isMuted ? <VolumeMuteIcon /> : volume > 0.5 ? <VolumeHighIcon /> : <VolumeLowIcon />}
+            </button>
+            {/* 볼륨 슬라이더 (호버 시 표시) */}
+            <div className="absolute right-full mr-1 hidden items-center rounded bg-black/80 px-2 py-1 group-hover/volume:flex">
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                value={isMuted ? 0 : volume}
+                onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
+                className="h-1 w-20 cursor-pointer accent-primary"
+                title={`볼륨: ${Math.round((isMuted ? 0 : volume) * 100)}%`}
+                aria-label="볼륨 조절"
+                onClick={(e) => e.stopPropagation()}
+              />
+              <span className="ml-2 w-8 text-xs text-white">
+                {Math.round((isMuted ? 0 : volume) * 100)}%
+              </span>
+            </div>
+          </div>
+        )}
         {/* 🎬 녹화 버튼 - 본인 화면 공유일 때만 표시 */}
         {showRecordButton && (
           <Button
