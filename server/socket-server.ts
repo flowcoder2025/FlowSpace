@@ -43,7 +43,8 @@ import type {
 } from "../src/features/space/socket/types"
 
 const PORT = parseInt(process.env.PORT || process.env.SOCKET_PORT || "3001", 10)
-const NEXT_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000"
+// 🔧 NEXT_PUBLIC_API_URL 또는 NEXT_PUBLIC_APP_URL 모두 지원 (Railway 호환성)
+const NEXT_API_URL = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
 // 🔒 보안: NODE_ENV === "development"로 명시적 제한
 // staging, test, 미설정 환경에서 인증 우회 방지
 const IS_DEV = process.env.NODE_ENV === "development"
