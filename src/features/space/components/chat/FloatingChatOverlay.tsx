@@ -166,6 +166,16 @@ export function FloatingChatOverlay({
     }
   }, [isActive])
 
+  // 🔧 전체화면 상태 변경 시 스크롤 복원
+  // Portal 대상이 변경되면서 ChatMessageList가 리마운트되어 스크롤이 초기화되는 문제 해결
+  useEffect(() => {
+    // 약간의 지연 후 스크롤 (Portal 리렌더링 완료 대기)
+    const timer = setTimeout(() => {
+      messageListRef.current?.scrollToBottom()
+    }, 100)
+    return () => clearTimeout(timer)
+  }, [isFullscreen])
+
   // 💬 답장 버튼 클릭 핸들러
   const handleReply = useCallback((message: ChatMessage) => {
     // 답장 대상 정보 설정
