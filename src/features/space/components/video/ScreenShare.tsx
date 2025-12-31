@@ -487,9 +487,9 @@ export function ScreenShare({
             >
               {isMuted ? <VolumeMuteIcon /> : volume > 0.5 ? <VolumeHighIcon /> : <VolumeLowIcon />}
             </Button>
-            {/* 🔧 Phase 2+3: 볼륨 슬라이더 (상태 기반 + 아래로 확장) */}
+            {/* 🔧 볼륨 슬라이더 (상태 기반 + 왼쪽으로 확장 - 화면공유는 넓이 충분) */}
             {showVolumeSlider && (
-              <div className="absolute right-0 top-full z-50 mt-1 flex items-center rounded bg-black/90 px-3 py-2 shadow-lg">
+              <div className="absolute right-full top-1/2 z-50 mr-1 flex -translate-y-1/2 items-center rounded bg-black/90 px-3 py-2 shadow-lg">
                 <input
                   type="range"
                   min="0"
