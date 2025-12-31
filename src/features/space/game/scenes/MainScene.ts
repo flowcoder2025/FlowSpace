@@ -696,10 +696,11 @@ export class MainScene extends Phaser.Scene {
         nickname?: string
         avatarConfig?: AvatarConfig
       }
+      // 🔧 Fix: 씬이 완전히 종료 중이면 무시, 초기화 중이면 pending에 추가
+      if (!this.isSceneActive) {
+        return // 씬 완전 종료
+      }
       if (!this.isSceneTrulyActive()) {
-        if (this.isSceneActive && !this.sys?.displayList) {
-          return
-        }
         this.pendingRemotePlayerEvents.push({ type: "update", data: position })
         return
       }
@@ -712,11 +713,15 @@ export class MainScene extends Phaser.Scene {
         nickname?: string
         avatarConfig?: AvatarConfig
       }
+      // 🔧 Fix: 씬이 완전히 종료 중이면 무시, 초기화 중이면 pending에 추가
+      if (!this.isSceneActive) {
+        return // 씬 완전 종료
+      }
       if (!this.isSceneTrulyActive()) {
-        if (this.isSceneActive && !this.sys?.displayList) {
-          return
-        }
         this.pendingRemotePlayerEvents.push({ type: "join", data: position })
+        if (IS_DEV) {
+          console.log("[MainScene] Queued remote player join (scene initializing):", position.id, position.nickname)
+        }
         return
       }
       this.addRemotePlayer(position)
@@ -724,10 +729,11 @@ export class MainScene extends Phaser.Scene {
 
     this.handleRemotePlayerLeave = (data: unknown) => {
       const { id } = data as { id: string }
+      // 🔧 Fix: 씬이 완전히 종료 중이면 무시, 초기화 중이면 pending에 추가
+      if (!this.isSceneActive) {
+        return // 씬 완전 종료
+      }
       if (!this.isSceneTrulyActive()) {
-        if (this.isSceneActive && !this.sys?.displayList) {
-          return
-        }
         this.pendingRemotePlayerEvents.push({
           type: "leave",
           data: { id } as PlayerPosition,
