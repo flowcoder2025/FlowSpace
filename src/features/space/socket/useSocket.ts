@@ -450,6 +450,15 @@ export function useSocket({
       onWhisperErrorRef.current?.(data.message)
     })
 
+    // 📝 Whisper ID update (귓속말 DB 저장 후 ID 업데이트)
+    socket.on("whisper:messageIdUpdate", (data: { tempId: string; realId: string }) => {
+      if (IS_DEV) {
+        console.log("[Socket] Whisper ID updated:", data.tempId, "→", data.realId)
+      }
+      // 기존 onMessageIdUpdate 콜백 재사용 (동일한 ID 교체 로직)
+      onMessageIdUpdateRef.current?.(data.tempId, data.realId)
+    })
+
     // 🎉 Party events (파티/구역 채팅) - 단순히 메시지만 처리
     socket.on("party:joined", (data) => {
       if (IS_DEV) {

@@ -15,7 +15,7 @@ import { EditorPanel, EditorModeIndicator } from "./editor"
 import { useSocket } from "../socket"
 import { LiveKitRoomProvider, useLiveKitMedia } from "../livekit"
 import { useNotificationSound, useChatStorage, usePastMessages, mergePastMessages } from "../hooks"
-import { generateFullHelpMessages, getNextRotatingHint, HINT_INTERVAL_MS } from "../utils/commandHints"
+import { generateFullHelpMessages, getNextRotatingHint, getWelcomeMessage, HINT_INTERVAL_MS } from "../utils/commandHints"
 import { useEditorCommands } from "../hooks/useEditorCommands"
 import { useEditorStore } from "../stores/editorStore"
 import { eventBridge, GameEvents, type EditorCanvasClickPayload } from "../game/events"
@@ -978,10 +978,32 @@ function SpaceLayoutContent({
     return nicknames  // 최신 대화 상대부터 정렬됨
   }, [messages, resolvedUserId])
 
-  // 💡 회전 힌트 시스템 - 1분마다 명령어 팁 표시
+  // 💡 환영 메시지 + 회전 힌트 시스템
+  // - 최초 입장 시: 전체 조작법 안내 1회
+  // - 이후: 5분마다 랜덤 팁 표시
+  const hasShownWelcome = useRef(false)
+
   useEffect(() => {
     const hasPermission = userRole === "OWNER" || userRole === "STAFF" || isSuperAdmin
 
+    // 🎉 최초 입장 시 환영 메시지 (1회만)
+    if (!hasShownWelcome.current) {
+      hasShownWelcome.current = true
+      const welcomeMessage: ChatMessage = {
+        id: `welcome-${Date.now()}`,
+        senderId: "system",
+        senderNickname: "시스템",
+        content: getWelcomeMessage(hasPermission),
+        timestamp: new Date(),
+        type: "system",
+      }
+      // 약간의 딜레이 후 표시 (UI가 완전히 로드된 후)
+      setTimeout(() => {
+        setMessages((prev) => addMessagesWithLimit(prev, welcomeMessage))
+      }, 500)
+    }
+
+    // 💡 5분마다 회전 힌트 표시
     const hintInterval = setInterval(() => {
       const hint = getNextRotatingHint(hasPermission)
       const hintMessage: ChatMessage = {

@@ -300,8 +300,50 @@ export function getRandomHint(hasPermission: boolean = false): string {
 // Constants
 // ============================================
 
-/** 힌트 표시 간격 (밀리초) - 기본 1분 */
-export const HINT_INTERVAL_MS = 60 * 1000
+/** 힌트 표시 간격 (밀리초) - 5분 */
+export const HINT_INTERVAL_MS = 5 * 60 * 1000  // 300,000ms = 5분
 
 /** 도움말 명령어 패턴 */
 export const HELP_COMMAND_PATTERN = /^@(help|도움말|\?)\s*$/i
+
+// ============================================
+// Welcome Message (최초 입장 시)
+// ============================================
+
+/**
+ * 최초 입장 시 표시할 환영 메시지
+ * 기본 조작법을 한 번에 안내
+ */
+export const WELCOME_MESSAGE = `🎮 FlowSpace에 오신 것을 환영합니다!
+
+【기본 조작】
+• WASD / 방향키: 캐릭터 이동
+• Space: 점프
+• E: 오브젝트 상호작용
+• Enter: 채팅 시작 / ESC: 채팅 종료
+
+【채팅 명령어】
+• /닉네임 메시지: 귓속말 보내기
+• @도움말: 전체 명령어 보기
+
+💡 5분마다 유용한 팁이 표시됩니다!`
+
+/**
+ * 관리자용 추가 환영 메시지
+ */
+export const ADMIN_WELCOME_ADDITION = `
+【관리 명령어 (스탭/오너)】
+• @mute / @음소거: 사용자 음소거
+• @kick / @강퇴: 사용자 강퇴
+• @공지: 전체 공지 전송
+• @편집기: 맵 에디터 열기`
+
+/**
+ * 환영 메시지 생성
+ * @param hasPermission - 관리 권한 보유 여부
+ */
+export function getWelcomeMessage(hasPermission: boolean = false): string {
+  return hasPermission
+    ? WELCOME_MESSAGE + ADMIN_WELCOME_ADDITION
+    : WELCOME_MESSAGE
+}

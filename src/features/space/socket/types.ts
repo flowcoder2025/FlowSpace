@@ -352,6 +352,7 @@ export interface ServerToClientEvents {
   "whisper:receive": (message: ChatMessageData) => void
   "whisper:sent": (message: ChatMessageData) => void  // 송신 확인 (내가 보낸 귓속말)
   "whisper:error": (data: { message: string }) => void
+  "whisper:messageIdUpdate": (data: { tempId: string; realId: string }) => void  // 📝 귓속말 ID 업데이트 (DB 저장 후)
 
   // Chat error (음소거 등)
   "chat:error": (data: { message: string }) => void

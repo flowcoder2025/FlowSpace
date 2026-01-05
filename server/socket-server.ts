@@ -758,9 +758,9 @@ io.on("connection", (socket) => {
     }
   })
 
-  // 📬 Whisper (귓속말) - 특정 닉네임의 사용자에게만 전송 (답장 지원)
+  // 📬 Whisper (귓속말) - 특정 닉네임의 사용자에게만 전송 (답장 지원) + DB 저장
   socket.on("whisper:send", ({ targetNickname, content, replyTo }) => {
-    const { spaceId, playerId, nickname } = socket.data
+    const { spaceId, playerId, nickname, sessionToken } = socket.data
 
     if (!spaceId || !playerId || !content.trim()) return
 
@@ -790,9 +790,10 @@ io.on("connection", (socket) => {
     // 첫 번째 소켓에서 playerId 가져오기 (메시지 데이터용)
     const targetPlayerId = targetSockets[0].data.playerId
 
-    // 귓속말 메시지 생성 (답장 정보 포함)
+    // 🔄 1. Optimistic Broadcasting: 임시 ID로 즉시 전송
+    const tempId = `whisper-${Date.now()}-${playerId}`
     const whisperMessage: ChatMessageData = {
-      id: `whisper-${Date.now()}-${playerId}`,
+      id: tempId,
       senderId: playerId,
       senderNickname: nickname || "Unknown",
       content: content.trim(),
@@ -815,6 +816,40 @@ io.on("connection", (socket) => {
     if (IS_DEV) {
       console.log(`[Socket] Whisper from ${nickname} to ${targetNickname}: ${content.trim().substring(0, 30)}...`)
     }
+
+    // 📝 2. 백그라운드 DB 저장 (비동기, 블로킹 없음) - Cron과 일관성 유지 (90일 보관)
+    const senderType = sessionToken?.startsWith("auth-") ? "USER" : "GUEST"
+    const senderId = sessionToken?.replace("auth-", "").replace("guest-", "") || playerId
+
+    prisma.chatMessage.create({
+      data: {
+        spaceId,
+        senderId,
+        senderType,
+        senderName: nickname || "Unknown",
+        content: content.trim(),
+        type: "WHISPER",
+        targetId: targetPlayerId,  // 귓속말 대상 ID (targetName은 클라이언트에서 관리)
+      },
+    }).then((savedMessage) => {
+      // 🔄 3. ID 업데이트 전송 (발신자 + 수신자에게만)
+      const idUpdateData = { tempId, realId: savedMessage.id }
+
+      // 송신자에게 전송
+      socket.emit("whisper:messageIdUpdate", idUpdateData)
+
+      // 모든 수신자 소켓에 전송
+      for (const targetSocket of targetSockets) {
+        targetSocket.emit("whisper:messageIdUpdate", idUpdateData)
+      }
+
+      if (IS_DEV) {
+        console.log(`[Socket] Whisper saved to DB: ${tempId} → ${savedMessage.id}`)
+      }
+    }).catch((error) => {
+      console.error("[Socket] Failed to save whisper message:", error)
+      // DB 저장 실패해도 메시지는 이미 전송됨 (localStorage 저장 불가)
+    })
   })
 
   // 🎉 Party join (파티/구역 입장) - 단순히 구역 내 메시지를 받기 위한 룸 참가

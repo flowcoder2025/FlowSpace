@@ -279,18 +279,30 @@ export function FloatingChatOverlay({
     [currentUserId, onReact]
   )
 
-  // 조작 안내 시스템 메시지
-  const GUIDE_MESSAGE: ChatMessage = useMemo(() => ({
-    id: "system-guide-controls",
-    type: "system",
-    senderId: "system",
-    senderNickname: "시스템",
-    content: "WASD/방향키 이동 · Space 점프 · E 상호작용 · 명령어: @도움말(@help)",
-    timestamp: new Date(0), // 항상 맨 위에 표시
-    reactions: [],
-  }), [])
+  // 📢 공지사항 추출 (가장 최신 announcement만)
+  const latestAnnouncement = useMemo(() => {
+    const announcements = messages.filter(msg => msg.type === "announcement")
+    if (announcements.length === 0) return null
+    // 가장 최신 공지 (timestamp 기준)
+    return announcements.reduce((latest, current) =>
+      current.timestamp > latest.timestamp ? current : latest
+    )
+  }, [messages])
 
-  // 📬 탭별 필터링 + 로컬 리액션 적용 + 안내 메시지 추가
+  // 📢 공지사항 배너 상태 (접기/펼치기, 닫기)
+  const [isAnnouncementExpanded, setIsAnnouncementExpanded] = useState(true)
+  const [dismissedAnnouncementId, setDismissedAnnouncementId] = useState<string | null>(null)
+
+  // 새 공지가 오면 다시 표시 (의도된 동작: 새 공지 수신 시 배너 자동 펼침)
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    if (latestAnnouncement && latestAnnouncement.id !== dismissedAnnouncementId) {
+      setIsAnnouncementExpanded(true)
+    }
+  }, [latestAnnouncement, dismissedAnnouncementId])
+  /* eslint-enable react-hooks/set-state-in-effect */
+
+  // 📬 탭별 필터링 + 로컬 리액션 적용
   const displayMessages = useMemo(() => {
     // 1. 탭에 따라 메시지 필터링
     const filteredMessages = filterMessagesByTab(messages, activeTab, currentUserId)
@@ -301,13 +313,8 @@ export function FloatingChatOverlay({
       reactions: localReactions[msg.id] || msg.reactions || [],
     }))
 
-    // 3. 안내 메시지를 맨 앞에 추가 (전체 탭에서만)
-    if (activeTab === "all") {
-      return [GUIDE_MESSAGE, ...messagesWithReactions]
-    }
-
     return messagesWithReactions
-  }, [messages, localReactions, GUIDE_MESSAGE, activeTab, currentUserId])
+  }, [messages, localReactions, activeTab, currentUserId])
 
   // 채팅 영역 ref (외부 클릭 감지용)
   const chatOverlayRef = useRef<HTMLDivElement>(null)
@@ -419,6 +426,93 @@ export function FloatingChatOverlay({
           fontSize={chatFontSize}
           onFontSizeChange={handleFontSizeChange}
         />
+      )}
+
+      {/* 📢 공지사항 고정 배너 (카카오톡 스타일) */}
+      {latestAnnouncement && dismissedAnnouncementId !== latestAnnouncement.id && activeTab === "all" && (
+        <div className="mx-2 mt-1">
+          <div
+            className={cn(
+              "relative rounded-lg overflow-hidden",
+              "bg-gradient-to-r from-amber-500/20 to-orange-500/20",
+              "border border-amber-500/30",
+              "backdrop-blur-sm",
+              "transition-all duration-200"
+            )}
+          >
+            {/* 배너 헤더 (항상 표시) */}
+            <div
+              className="flex items-center justify-between px-3 py-1.5 cursor-pointer hover:bg-white/5"
+              onClick={() => setIsAnnouncementExpanded(!isAnnouncementExpanded)}
+            >
+              <div className="flex items-center gap-2 min-w-0 flex-1">
+                <span className="text-amber-400 text-sm shrink-0">📢</span>
+                <span className="text-amber-200 text-xs font-medium shrink-0">공지</span>
+                {!isAnnouncementExpanded && (
+                  <span className="text-white/70 text-xs truncate">
+                    {latestAnnouncement.content.replace(/^📢\s*/, "").slice(0, 30)}
+                    {latestAnnouncement.content.length > 30 ? "..." : ""}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                {/* 펼치기/접기 버튼 */}
+                <button
+                  className="p-1 hover:bg-white/10 rounded text-white/60 hover:text-white/90 transition-colors"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setIsAnnouncementExpanded(!isAnnouncementExpanded)
+                  }}
+                  title={isAnnouncementExpanded ? "접기" : "펼치기"}
+                >
+                  <svg
+                    className={cn("w-3 h-3 transition-transform", isAnnouncementExpanded && "rotate-180")}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                {/* 닫기 버튼 */}
+                <button
+                  className="p-1 hover:bg-white/10 rounded text-white/60 hover:text-white/90 transition-colors"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setDismissedAnnouncementId(latestAnnouncement.id)
+                  }}
+                  title="닫기"
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            {/* 배너 내용 (펼쳤을 때만 표시) */}
+            {isAnnouncementExpanded && (
+              <div className="px-3 pb-2">
+                <p className="text-white/90 text-xs whitespace-pre-wrap break-words">
+                  {latestAnnouncement.content.replace(/^📢\s*/, "")}
+                </p>
+                <div className="flex items-center justify-between mt-1.5 pt-1.5 border-t border-white/10">
+                  <span className="text-white/50 text-[10px]">
+                    {latestAnnouncement.senderNickname}
+                  </span>
+                  <span className="text-white/40 text-[10px]">
+                    {new Date(latestAnnouncement.timestamp).toLocaleString("ko-KR", {
+                      month: "short",
+                      day: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {/* 메시지 목록 - 동적 높이 */}
