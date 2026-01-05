@@ -396,10 +396,11 @@ const io = new Server<
     credentials: true,
   },
   transports: ["websocket", "polling"],
-  // 🔧 연결 안정성 설정 (기본값: pingInterval=25000, pingTimeout=20000)
-  // 장시간 세션에서 탭 비활성화/백그라운드 시에도 안정적 연결 유지
-  pingInterval: 60000,   // 60초마다 ping (기본 25초 → 60초)
-  pingTimeout: 30000,    // 30초 내 응답 대기 (기본 20초 → 30초)
+  // 🔧 연결 안정성 설정 (로드 밸런서/프록시 호환)
+  // - Vercel/Railway 등 대부분의 호스팅은 30-60초 idle timeout 적용
+  // - 더 짧은 ping 간격으로 연결 유지 신호를 자주 보내 idle disconnect 방지
+  pingInterval: 25000,   // 25초마다 ping (로드 밸런서 idle timeout 대비)
+  pingTimeout: 10000,    // 10초 내 응답 대기 (빠른 장애 감지)
 })
 
 // Room state: spaceId -> Map<playerId, PlayerPosition>

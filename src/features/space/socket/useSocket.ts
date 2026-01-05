@@ -205,15 +205,19 @@ export function useSocket({
     gameReadyRef.current = false
 
     // Create socket connection
-    // 🔧 연결 안정성 최적화: 무한 재연결 + 지수 백오프
+    // 🔧 연결 안정성 최적화: 무한 재연결 + 지수 백오프 + 빠른 재연결
     const socket: Socket<ServerToClientEvents, ClientToServerEvents> = io(SOCKET_URL, {
       transports: ["websocket", "polling"],
       reconnection: true,
       reconnectionAttempts: Infinity,     // 무한 재연결 시도 (기존 5회 → 무한)
-      reconnectionDelay: 1000,            // 첫 재연결 1초 후
-      reconnectionDelayMax: 10000,        // 최대 10초까지 지수 백오프
+      reconnectionDelay: 500,             // 첫 재연결 0.5초 후 (기존 1초 → 0.5초, 빠른 복구)
+      reconnectionDelayMax: 5000,         // 최대 5초까지 지수 백오프 (기존 10초 → 5초)
       randomizationFactor: 0.5,           // 재연결 시간 랜덤화 (서버 부하 분산)
-      timeout: 30000,                     // 연결 타임아웃 30초 (기본 20초 → 30초)
+      timeout: 20000,                     // 연결 타임아웃 20초
+      // 🔧 추가 안정성 옵션
+      upgrade: true,                      // polling → websocket 업그레이드 허용
+      rememberUpgrade: true,              // 성공한 업그레이드 기억 (재연결 시 바로 WebSocket 시도)
+      autoConnect: true,                  // 생성 시 자동 연결
     })
 
     socketRef.current = socket
