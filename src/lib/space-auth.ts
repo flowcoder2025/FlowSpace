@@ -42,13 +42,28 @@ export interface SpaceAuthResult {
 
 /**
  * 사용자가 플랫폼 Super Admin인지 확인
+ *
+ * @param userId - 확인할 사용자 ID
+ * @returns SuperAdmin 여부 (에러 발생 시 false 반환)
  */
 export async function isSuperAdmin(userId: string): Promise<boolean> {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { isSuperAdmin: true },
-  })
-  return user?.isSuperAdmin ?? false
+  try {
+    // userId 유효성 검사
+    if (!userId || typeof userId !== "string") {
+      console.warn("[isSuperAdmin] Invalid userId:", userId)
+      return false
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { isSuperAdmin: true },
+    })
+    return user?.isSuperAdmin ?? false
+  } catch (error) {
+    // DB 연결 실패 등의 에러 시 안전하게 false 반환
+    console.error("[isSuperAdmin] Error checking admin status:", error)
+    return false
+  }
 }
 
 // ============================================
