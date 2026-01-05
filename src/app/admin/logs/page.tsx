@@ -26,7 +26,20 @@ interface EventLog {
   id: string
   spaceId: string
   spaceName: string
-  eventType: "ENTER" | "EXIT" | "INTERACTION" | "CHAT" | "VOICE_START" | "VOICE_END"
+  eventType:
+    | "ENTER"
+    | "EXIT"
+    | "INTERACTION"
+    | "CHAT"
+    | "VOICE_START"
+    | "VOICE_END"
+    // Phase 6: 관리 이벤트
+    | "MEMBER_MUTED"
+    | "MEMBER_UNMUTED"
+    | "MEMBER_KICKED"
+    | "MESSAGE_DELETED"
+    | "STAFF_ASSIGNED"
+    | "STAFF_REMOVED"
   user: {
     id: string
     name: string | null
@@ -51,12 +64,20 @@ const eventTypeConfig: Record<
   EventLog["eventType"],
   { label: string; color: string; bgColor: string }
 > = {
+  // 기본 이벤트
   ENTER: { label: "입장", color: "text-green-700", bgColor: "bg-green-100" },
   EXIT: { label: "퇴장", color: "text-red-700", bgColor: "bg-red-100" },
   INTERACTION: { label: "상호작용", color: "text-blue-700", bgColor: "bg-blue-100" },
   CHAT: { label: "채팅", color: "text-purple-700", bgColor: "bg-purple-100" },
   VOICE_START: { label: "음성 시작", color: "text-yellow-700", bgColor: "bg-yellow-100" },
   VOICE_END: { label: "음성 종료", color: "text-gray-700", bgColor: "bg-gray-100" },
+  // Phase 6: 관리 이벤트
+  MEMBER_MUTED: { label: "음소거", color: "text-orange-700", bgColor: "bg-orange-100" },
+  MEMBER_UNMUTED: { label: "음소거 해제", color: "text-teal-700", bgColor: "bg-teal-100" },
+  MEMBER_KICKED: { label: "강퇴", color: "text-red-700", bgColor: "bg-red-100" },
+  MESSAGE_DELETED: { label: "메시지 삭제", color: "text-slate-700", bgColor: "bg-slate-100" },
+  STAFF_ASSIGNED: { label: "스탭 임명", color: "text-indigo-700", bgColor: "bg-indigo-100" },
+  STAFF_REMOVED: { label: "스탭 해제", color: "text-amber-700", bgColor: "bg-amber-100" },
 }
 
 // ============================================

@@ -53,7 +53,20 @@ interface EventLog {
   id: string
   spaceId: string
   spaceName: string
-  eventType: "ENTER" | "EXIT" | "INTERACTION" | "CHAT" | "VOICE_START" | "VOICE_END"
+  eventType:
+    | "ENTER"
+    | "EXIT"
+    | "INTERACTION"
+    | "CHAT"
+    | "VOICE_START"
+    | "VOICE_END"
+    // Phase 6: 관리 이벤트
+    | "MEMBER_MUTED"
+    | "MEMBER_UNMUTED"
+    | "MEMBER_KICKED"
+    | "MESSAGE_DELETED"
+    | "STAFF_ASSIGNED"
+    | "STAFF_REMOVED"
   user: {
     id: string
     name: string | null
@@ -209,23 +222,41 @@ function ActivityItem({
     )
   }
 
-  const typeLabel = {
+  const typeLabelMap: Record<EventLog["eventType"], string> = {
+    // 기본 이벤트
     ENTER: "입장",
     EXIT: "퇴장",
     INTERACTION: "상호작용",
     CHAT: "채팅",
     VOICE_START: "음성 시작",
     VOICE_END: "음성 종료",
-  }[eventType]
+    // Phase 6: 관리 이벤트
+    MEMBER_MUTED: "음소거",
+    MEMBER_UNMUTED: "음소거 해제",
+    MEMBER_KICKED: "강퇴",
+    MESSAGE_DELETED: "메시지 삭제",
+    STAFF_ASSIGNED: "스탭 임명",
+    STAFF_REMOVED: "스탭 해제",
+  }
+  const typeLabel = typeLabelMap[eventType] || eventType
 
-  const typeColor = {
+  const typeColorMap: Record<EventLog["eventType"], string> = {
+    // 기본 이벤트
     ENTER: "bg-green-500",
     EXIT: "bg-red-500",
     INTERACTION: "bg-blue-500",
     CHAT: "bg-purple-500",
     VOICE_START: "bg-yellow-500",
     VOICE_END: "bg-gray-500",
-  }[eventType]
+    // Phase 6: 관리 이벤트
+    MEMBER_MUTED: "bg-orange-500",
+    MEMBER_UNMUTED: "bg-teal-500",
+    MEMBER_KICKED: "bg-red-600",
+    MESSAGE_DELETED: "bg-slate-500",
+    STAFF_ASSIGNED: "bg-indigo-500",
+    STAFF_REMOVED: "bg-amber-500",
+  }
+  const typeColor = typeColorMap[eventType] || "bg-gray-400"
 
   const userName = user?.name || "알 수 없음"
 

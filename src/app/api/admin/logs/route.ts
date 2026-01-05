@@ -139,12 +139,20 @@ export async function GET(request: NextRequest) {
     // CSV export
     if (format === "csv") {
       const eventTypeLabels: Record<string, string> = {
+        // 기본 이벤트
         ENTER: "입장",
         EXIT: "퇴장",
         INTERACTION: "상호작용",
         CHAT: "채팅",
         VOICE_START: "음성 시작",
         VOICE_END: "음성 종료",
+        // Phase 6: 관리 이벤트
+        MEMBER_MUTED: "음소거",
+        MEMBER_UNMUTED: "음소거 해제",
+        MEMBER_KICKED: "강퇴",
+        MESSAGE_DELETED: "메시지 삭제",
+        STAFF_ASSIGNED: "스탭 임명",
+        STAFF_REMOVED: "스탭 해제",
       }
 
       const csvHeader = "이벤트 유형,사용자,사용자 유형,공간,시간\n"
