@@ -15,6 +15,7 @@ import { EditorPanel, EditorModeIndicator } from "./editor"
 import { useSocket } from "../socket"
 import { LiveKitRoomProvider, useLiveKitMedia } from "../livekit"
 import { useNotificationSound, useChatStorage, usePastMessages, mergePastMessages } from "../hooks"
+import { generateFullHelpMessages, getNextRotatingHint, HINT_INTERVAL_MS } from "../utils/commandHints"
 import { useEditorCommands } from "../hooks/useEditorCommands"
 import { useEditorStore } from "../stores/editorStore"
 import { eventBridge, GameEvents, type EditorCanvasClickPayload } from "../game/events"
@@ -977,6 +978,26 @@ function SpaceLayoutContent({
     return nicknames  // 최신 대화 상대부터 정렬됨
   }, [messages, resolvedUserId])
 
+  // 💡 회전 힌트 시스템 - 1분마다 명령어 팁 표시
+  useEffect(() => {
+    const hasPermission = userRole === "OWNER" || userRole === "STAFF" || isSuperAdmin
+
+    const hintInterval = setInterval(() => {
+      const hint = getNextRotatingHint(hasPermission)
+      const hintMessage: ChatMessage = {
+        id: `hint-${Date.now()}`,
+        senderId: "system",
+        senderNickname: "시스템",
+        content: hint,
+        timestamp: new Date(),
+        type: "system",
+      }
+      setMessages((prev) => addMessagesWithLimit(prev, hintMessage))
+    }, HINT_INTERVAL_MS)
+
+    return () => clearInterval(hintInterval)
+  }, [userRole, isSuperAdmin])
+
   // 🔧 마지막으로 닫은 화면공유 트랙 ID (새 화면공유 감지용)
   // 파생 상태 패턴: closedScreenTrackId와 현재 트랙 ID 비교로 표시 여부 결정
   const [closedScreenTrackId, setClosedScreenTrackId] = useState<string | null>(null)
@@ -1028,75 +1049,26 @@ function SpaceLayoutContent({
           sendAnnounce(result.message)
         }
         break
-      case "help":
-        // 도움말 시스템 메시지 표시 (로컬 전용)
-        const helpMessages: ChatMessage[] = [
-          {
-            id: `help-header-${Date.now()}`,
-            senderId: "system",
-            senderNickname: "시스템",
-            content: "━━━━━━━━ 📋 채팅 명령어 도움말 ━━━━━━━━",
-            timestamp: new Date(),
-            type: "system",
-          },
-          {
-            id: `help-chat-${Date.now()}`,
-            senderId: "system",
-            senderNickname: "시스템",
-            content: `💬 일반 채팅
-   메시지 입력 후 Enter → 모두에게 공개`,
-            timestamp: new Date(),
-            type: "system",
-          },
-          {
-            id: `help-whisper-${Date.now()}`,
-            senderId: "system",
-            senderNickname: "시스템",
-            content: `📬 귓속말
-   /닉네임 메시지 → 1:1 비밀 대화
-   예: /홍길동 안녕하세요
-   💡 TIP: / 입력 후 ↑↓ 방향키로 최근 대화 상대 선택`,
-            timestamp: new Date(),
-            type: "system",
-          },
-          {
-            id: `help-admin-${Date.now()}`,
-            senderId: "system",
-            senderNickname: "시스템",
-            content: `🛡️ 관리자 명령어 (@로 시작)
-   @mute 닉네임 [분] [사유] → 채팅 금지
-   @unmute 닉네임 → 채팅 금지 해제
-   @kick 닉네임 [사유] → 강퇴
-   @ban 닉네임 [사유] → 영구 차단
-   @announce 메시지 → 공지사항 전송`,
-            timestamp: new Date(),
-            type: "system",
-          },
-          {
-            id: `help-keys-${Date.now()}`,
-            senderId: "system",
-            senderNickname: "시스템",
-            content: `⌨️ 단축키
-   Enter → 채팅 모드 켜기/메시지 전송
-   ESC → 채팅 모드 끄기
-   WASD/방향키 → 캐릭터 이동
-   Space → 점프  |  E → 상호작용`,
-            timestamp: new Date(),
-            type: "system",
-          },
-          {
-            id: `help-footer-${Date.now()}`,
-            senderId: "system",
-            senderNickname: "시스템",
-            content: "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
-            timestamp: new Date(),
-            type: "system",
-          },
-        ]
+      case "help": {
+        // 도움말 시스템 메시지 표시 (권한에 따라 다른 내용)
+        const hasPermission = userRole === "OWNER" || userRole === "STAFF" || isSuperAdmin
+        const helpLines = generateFullHelpMessages(hasPermission)
+
+        // 각 줄을 개별 시스템 메시지로 변환
+        const helpMessages: ChatMessage[] = helpLines.map((line, index) => ({
+          id: `help-${Date.now()}-${index}`,
+          senderId: "system",
+          senderNickname: "시스템",
+          content: line,
+          timestamp: new Date(),
+          type: "system" as const,
+        }))
+
         setMessages((prev) => addMessagesWithLimit(prev, helpMessages))
         break
+      }
     }
-  }, [sendMuteCommand, sendUnmuteCommand, sendKickCommand, sendAnnounce])
+  }, [sendMuteCommand, sendUnmuteCommand, sendKickCommand, sendAnnounce, userRole, isSuperAdmin])
 
   const handleToggleMic = useCallback(async () => {
     await toggleMicrophone()
