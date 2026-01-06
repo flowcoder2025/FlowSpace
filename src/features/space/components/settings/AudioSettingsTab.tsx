@@ -11,7 +11,7 @@
  * - 마이크 테스트
  */
 
-import { useEffect } from "react"
+import { useEffect, useRef } from "react"
 import { cn } from "@/lib/utils"
 import { Switch } from "@/components/ui/switch"
 import { Slider } from "@/components/ui/slider"
@@ -53,7 +53,15 @@ export function AudioSettingsTab({ className }: AudioSettingsTabProps) {
     setOutputDevice,
   } = useAudioSettings()
 
-  const { volume, start, stop, isActive, error: volumeError } = useVolumeMeter()
+  const { volume, start, stop, error: volumeError } = useVolumeMeter()
+
+  // 📌 start/stop 함수 참조를 ref로 유지 (의존성 문제 해결)
+  const startRef = useRef(start)
+  const stopRef = useRef(stop)
+  useEffect(() => {
+    startRef.current = start
+    stopRef.current = stop
+  }, [start, stop])
 
   // 설정 탭 열릴 때 권한 요청
   useEffect(() => {
@@ -63,10 +71,10 @@ export function AudioSettingsTab({ className }: AudioSettingsTabProps) {
   // 볼륨 미터 시작/중지
   useEffect(() => {
     if (hasPermission && selectedAudioInput) {
-      start(selectedAudioInput)
+      startRef.current(selectedAudioInput)
     }
-    return () => stop()
-  }, [hasPermission, selectedAudioInput, start, stop])
+    return () => stopRef.current()
+  }, [hasPermission, selectedAudioInput]) // 📌 start/stop 제거 - ref 사용
 
   // 장치 선택 동기화
   const handleInputDeviceSelect = (deviceId: string) => {

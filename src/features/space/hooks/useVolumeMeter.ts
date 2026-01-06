@@ -50,6 +50,7 @@ export function useVolumeMeter(): UseVolumeMeterReturn {
   const streamRef = useRef<MediaStream | null>(null)
   const animationFrameRef = useRef<number | null>(null)
   const ownedStreamRef = useRef(false) // 내부에서 생성한 스트림인지 여부
+  const isActiveRef = useRef(false) // 📌 isActive를 ref로도 관리 (의존성 문제 해결)
 
   // 볼륨 측정 루프 (ref를 사용하여 재귀 참조 문제 해결)
   const measureVolumeRef = useRef<() => void>(() => {})
@@ -108,6 +109,7 @@ export function useVolumeMeter(): UseVolumeMeterReturn {
     analyserRef.current = null
     setVolume(0)
     setIsActive(false)
+    isActiveRef.current = false // 📌 ref도 업데이트
   }, [])
 
   // 측정 중지
@@ -119,7 +121,7 @@ export function useVolumeMeter(): UseVolumeMeterReturn {
   const start = useCallback(
     async (deviceIdOrStream?: string | MediaStream) => {
       // 이미 활성화 상태면 중지 후 재시작
-      if (isActive) {
+      if (isActiveRef.current) {
         cleanupResources()
       }
 
@@ -164,14 +166,16 @@ export function useVolumeMeter(): UseVolumeMeterReturn {
 
         // 측정 시작
         setIsActive(true)
+        isActiveRef.current = true // 📌 ref도 업데이트
         measureVolumeRef.current()
       } catch (err) {
         console.error("[useVolumeMeter] 시작 실패:", err)
         setError("마이크 접근 권한이 필요합니다.")
         setIsActive(false)
+        isActiveRef.current = false
       }
     },
-    [isActive, cleanupResources]
+    [cleanupResources] // 📌 isActive 제거 - ref 사용으로 의존성 불필요
   )
 
   // 컴포넌트 언마운트 시 정리
