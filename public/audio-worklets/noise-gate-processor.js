@@ -17,15 +17,17 @@ class NoiseGateProcessor extends AudioWorkletProcessor {
     super()
 
     // 게이트 상태
-    this.isGateOpen = false
-    this.currentGain = 0 // 0 = closed, 1 = open
+    // 📌 기본값: 패스스루 (enabled=false, gain=1)
+    // 명시적으로 setEnabled(true)가 호출되기 전까지 모든 오디오 통과
+    this.isGateOpen = true   // 게이트 열림 (패스스루)
+    this.currentGain = 1     // 1 = 전체 볼륨 통과
 
     // 기본 파라미터 (메시지로 업데이트 가능)
     this.threshold = 0.02 // RMS 임계값 (0-1)
     this.hysteresis = 0.005 // 히스테리시스 (채터링 방지)
     this.attackTime = 0.01 // 게이트 열림 시간 (초)
     this.releaseTime = 0.1 // 게이트 닫힘 시간 (초)
-    this.enabled = true // 게이트 활성화 여부
+    this.enabled = false // 📌 기본 비활성화 (패스스루)
 
     // 샘플레이트 기반 계산 (sampleRate는 전역 변수)
     this.attackCoeff = 0
