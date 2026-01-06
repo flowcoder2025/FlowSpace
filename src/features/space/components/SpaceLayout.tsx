@@ -17,7 +17,7 @@ import { EditorPanel, EditorModeIndicator } from "./editor"
 import { IOSAudioActivator } from "./IOSAudioActivator"
 import { useSocket } from "../socket"
 import { LiveKitRoomProvider, useLiveKitMedia } from "../livekit"
-import { useNotificationSound, useChatStorage, usePastMessages, mergePastMessages, useAudioSettings } from "../hooks"
+import { useNotificationSound, useChatStorage, usePastMessages, mergePastMessages, useAudioSettings, useVoiceActivityGate } from "../hooks"
 import { generateFullHelpMessages, getNextRotatingHint, getWelcomeMessage, HINT_INTERVAL_MS } from "../utils/commandHints"
 import { useEditorCommands } from "../hooks/useEditorCommands"
 import { useEditorStore } from "../stores/editorStore"
@@ -434,17 +434,35 @@ function SpaceLayoutContent({
     participantTracks,
     localParticipantId,
     localAudioTrack,
-    setLocalMicrophoneMuted,
+    setLocalAudioGated,
   } = useLiveKitMedia()
 
   // 📌 오디오 설정 (VAD 감도)
   const { settings: audioSettings } = useAudioSettings()
 
-  // 🚫 VAD 기능 비활성화 (말 중 마이크 강제 뮤트 문제 발생)
-  // 잡음 제거는 LiveKit의 noiseSuppression으로 처리
-  // TODO: VAD 로직 재설계 후 재활성화 검토
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const _vadDisabled = { audioSettings, localAudioTrack, setLocalMicrophoneMuted }
+  // 🔊 VAD (Voice Activity Detection) - 입력 감도 기반 오디오 게이트
+  // sensitivity 0 = VAD 비활성화, 1-100 = 게이트 임계값
+  const { isBelowThreshold } = useVoiceActivityGate({
+    audioTrack: localAudioTrack,
+    sensitivity: audioSettings.inputSensitivity,
+    enabled: audioSettings.inputSensitivity > 0,
+  })
+
+  // 🔊 VAD 게이트 적용 (입력 감도 미만일 때 소스 레벨에서 오디오 차단)
+  // publication.mute() 대신 MediaStreamTrack.enabled 직접 제어
+  useEffect(() => {
+    // 마이크가 꺼져있으면 VAD 미적용
+    if (!mediaState.isMicrophoneEnabled) return
+
+    // VAD 활성화 여부와 임계값 기반 게이트 결정
+    // - sensitivity = 0: VAD 비활성화 → 게이트 열림 (오디오 출력)
+    // - sensitivity > 0 && isBelowThreshold: 입력 레벨이 임계값 미만 → 게이트 닫힘 (오디오 차단)
+    // - sensitivity > 0 && !isBelowThreshold: 입력 레벨이 임계값 이상 → 게이트 열림 (오디오 출력)
+    const shouldBeGated = audioSettings.inputSensitivity > 0 && isBelowThreshold
+
+    // 소스 레벨에서 직접 오디오 제어 (track.enabled)
+    setLocalAudioGated(shouldBeGated)
+  }, [isBelowThreshold, audioSettings.inputSensitivity, mediaState.isMicrophoneEnabled, setLocalAudioGated])
 
   // 🎨 에디터 상태 구독
   const isEditorActive = useEditorStore((state) => state.mode.isActive)

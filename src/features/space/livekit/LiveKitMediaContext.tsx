@@ -61,8 +61,10 @@ export interface LiveKitMediaContextValue {
   toggleCamera: () => Promise<boolean>
   toggleMicrophone: () => Promise<boolean>
   toggleScreenShare: (options?: ScreenShareOptions) => Promise<boolean>
-  /** VAD 게이트용: 로컬 마이크 뮤트/언뮤트 (트랙 유지) */
+  /** VAD 게이트용: 로컬 마이크 뮤트/언뮤트 (트랙 유지) - 레거시, setLocalAudioGated 사용 권장 */
   setLocalMicrophoneMuted: (muted: boolean) => Promise<boolean>
+  /** 📌 소스 레벨 오디오 게이트: MediaStreamTrack.enabled 직접 제어 */
+  setLocalAudioGated: (gated: boolean) => boolean
   /** 📌 오디오 옵션 변경 시 마이크 재시작 (동적 적용) */
   restartMicrophoneWithOptions: (options: AudioCaptureOptionsInput) => Promise<boolean>
 }
@@ -83,6 +85,7 @@ const defaultContextValue: LiveKitMediaContextValue = {
   toggleMicrophone: async () => false,
   toggleScreenShare: async () => false,
   setLocalMicrophoneMuted: async () => false,
+  setLocalAudioGated: () => false,
   restartMicrophoneWithOptions: async () => false,
 }
 
@@ -1031,6 +1034,51 @@ export function LiveKitMediaInternalProvider({ children }: { children: ReactNode
     }
   }, [localParticipant])
 
+  // 📌 소스 레벨 오디오 게이트: MediaStreamTrack.enabled 직접 제어
+  // publication.mute()와 달리 WebRTC 소스 레벨에서 오디오를 차단
+  // - gated=true: 오디오 출력 차단 (track.enabled=false)
+  // - gated=false: 오디오 출력 허용 (track.enabled=true)
+  const setLocalAudioGated = useCallback((gated: boolean): boolean => {
+    if (!localParticipant) {
+      return false
+    }
+
+    try {
+      const publication = localParticipant.getTrackPublication(Track.Source.Microphone)
+      if (!publication?.track) {
+        if (IS_DEV) {
+          console.log("[LiveKitMediaContext] setLocalAudioGated: No track found")
+        }
+        return false
+      }
+
+      // MediaStreamTrack 직접 접근
+      const mediaStreamTrack = publication.track.mediaStreamTrack
+      if (!mediaStreamTrack) {
+        if (IS_DEV) {
+          console.log("[LiveKitMediaContext] setLocalAudioGated: No mediaStreamTrack")
+        }
+        return false
+      }
+
+      // 소스 레벨에서 오디오 enabled/disabled 제어
+      // enabled=false: 트랙은 유지되지만 무음 프레임 전송
+      mediaStreamTrack.enabled = !gated
+
+      if (IS_DEV) {
+        console.log("[LiveKitMediaContext] setLocalAudioGated:", {
+          gated,
+          trackEnabled: mediaStreamTrack.enabled,
+        })
+      }
+
+      return true
+    } catch (error) {
+      console.error("[LiveKitMediaContext] setLocalAudioGated error:", error)
+      return false
+    }
+  }, [localParticipant])
+
   // 📌 오디오 옵션 변경 시 마이크 재시작 (동적 적용)
   // LiveKit은 트랙 캡처 시에만 옵션을 적용하므로, 설정 변경 시 마이크를 재시작해야 함
   const restartMicrophoneWithOptions = useCallback(async (options: AudioCaptureOptionsInput): Promise<boolean> => {
@@ -1150,6 +1198,7 @@ export function LiveKitMediaInternalProvider({ children }: { children: ReactNode
       toggleMicrophone,
       toggleScreenShare,
       setLocalMicrophoneMuted,
+      setLocalAudioGated,
       restartMicrophoneWithOptions,
     }),
     [
@@ -1163,6 +1212,7 @@ export function LiveKitMediaInternalProvider({ children }: { children: ReactNode
       toggleMicrophone,
       toggleScreenShare,
       setLocalMicrophoneMuted,
+      setLocalAudioGated,
       restartMicrophoneWithOptions,
     ]
   )
