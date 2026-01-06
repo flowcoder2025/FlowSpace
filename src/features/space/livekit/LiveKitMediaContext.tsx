@@ -430,18 +430,40 @@ export function LiveKitMediaInternalProvider({ children }: { children: ReactNode
 
   // 연결 시 자동으로 오디오 시작 (브라우저 autoplay 정책 대응)
   // 📌 iOS Safari: 사용자 제스처 없이 오디오 재생 불가 → 첫 터치까지 반복 시도
+  // 📌 핵심 개선: room.startAudio()만으로는 개별 <audio> 엘리먼트 재생이 안 됨
+  //    → 모든 <audio> 엘리먼트의 play()를 직접 호출해야 함
   useEffect(() => {
     if (!room || !isConnected) return
 
-    // 🔧 오디오 unlock 시도 함수
+    // 🔧 모든 <audio> 엘리먼트 재생 시도 (iOS Safari용)
+    const playAllAudioElements = () => {
+      const audioElements = document.querySelectorAll("audio")
+      audioElements.forEach((audio) => {
+        if (audio.paused && audio.srcObject) {
+          audio.play().catch(() => {
+            // 개별 실패는 무시 (다음 시도에서 성공할 수 있음)
+          })
+        }
+      })
+      if (IS_DEV && audioElements.length > 0) {
+        console.log(`[LiveKitMediaContext] 🔊 Attempted to play ${audioElements.length} audio elements`)
+      }
+    }
+
+    // 🔧 오디오 unlock 시도 함수 (강화된 버전)
     const tryUnlockAudio = async () => {
       if (audioUnlockedRef.current) return true
 
       try {
+        // 1. LiveKit AudioContext resume
         await room.startAudio()
+
+        // 2. 📌 핵심: 모든 <audio> 엘리먼트 직접 재생 시도
+        playAllAudioElements()
+
         audioUnlockedRef.current = true
         if (IS_DEV) {
-          console.log("[LiveKitMediaContext] ✅ Audio context unlocked")
+          console.log("[LiveKitMediaContext] ✅ Audio context unlocked + audio elements played")
         }
         return true
       } catch {
@@ -455,19 +477,27 @@ export function LiveKitMediaInternalProvider({ children }: { children: ReactNode
 
     // 🔧 사용자 인터랙션 시 오디오 unlock 시도 (성공할 때까지 반복)
     // iOS Safari: getUserMedia 권한 요청이 지연되면 첫 터치 전까지 오디오 blocked
-    const handleUserInteraction = () => {
-      if (audioUnlockedRef.current) return
-      tryUnlockAudio()
+    const handleUserInteraction = async () => {
+      // 📌 이미 unlock 되었어도 새로운 <audio> 엘리먼트가 추가될 수 있으므로 항상 재생 시도
+      await tryUnlockAudio()
+
+      // 📌 추가 안전장치: unlock 후에도 한 번 더 모든 audio 재생 시도
+      if (audioUnlockedRef.current) {
+        playAllAudioElements()
+      }
     }
 
     // 📌 once: true 제거 - 성공할 때까지 계속 시도
+    // 📌 passive: true 추가 - iOS에서 스크롤 성능 최적화
     document.addEventListener("click", handleUserInteraction)
-    document.addEventListener("touchstart", handleUserInteraction) // 📌 터치 이벤트 추가
+    document.addEventListener("touchstart", handleUserInteraction, { passive: true })
+    document.addEventListener("touchend", handleUserInteraction, { passive: true }) // 📌 touchend도 추가
     document.addEventListener("keydown", handleUserInteraction)
 
     return () => {
       document.removeEventListener("click", handleUserInteraction)
       document.removeEventListener("touchstart", handleUserInteraction)
+      document.removeEventListener("touchend", handleUserInteraction)
       document.removeEventListener("keydown", handleUserInteraction)
     }
   }, [room, isConnected])
@@ -773,6 +803,21 @@ export function LiveKitMediaInternalProvider({ children }: { children: ReactNode
     return { type: "unknown", message: errorMessage }
   }, [])
 
+  // 🔧 모든 <audio> 엘리먼트 재생 시도 (iOS Safari용) - 토글 함수에서 재사용
+  const playAllAudioElements = useCallback(() => {
+    const audioElements = document.querySelectorAll("audio")
+    audioElements.forEach((audio) => {
+      if (audio.paused && audio.srcObject) {
+        audio.play().catch(() => {
+          // 개별 실패는 무시
+        })
+      }
+    })
+    if (IS_DEV && audioElements.length > 0) {
+      console.log(`[LiveKitMediaContext] 🔊 Toggle triggered: played ${audioElements.length} audio elements`)
+    }
+  }, [])
+
   // Toggle camera
   // 📌 iOS Safari: setCameraEnabled 후 터치 이벤트가 먹통되는 문제 대응
   const toggleCamera = useCallback(async (): Promise<boolean> => {
@@ -791,6 +836,8 @@ export function LiveKitMediaInternalProvider({ children }: { children: ReactNode
       if (room) {
         await room.startAudio().catch(() => {})
         audioUnlockedRef.current = true
+        // 📌 핵심: 모든 <audio> 엘리먼트 직접 재생 시도
+        playAllAudioElements()
       }
 
       const newState = !localParticipant.isCameraEnabled
@@ -819,7 +866,7 @@ export function LiveKitMediaInternalProvider({ children }: { children: ReactNode
       setMediaError(parseMediaError(error))
       return false
     }
-  }, [localParticipant, room, parseMediaError])
+  }, [localParticipant, room, parseMediaError, playAllAudioElements])
 
   // Toggle microphone
   // 📌 iOS Safari: setMicrophoneEnabled 후 터치 이벤트가 먹통되는 문제 대응
@@ -839,6 +886,8 @@ export function LiveKitMediaInternalProvider({ children }: { children: ReactNode
       if (room) {
         await room.startAudio().catch(() => {})
         audioUnlockedRef.current = true
+        // 📌 핵심: 모든 <audio> 엘리먼트 직접 재생 시도
+        playAllAudioElements()
       }
 
       const newState = !localParticipant.isMicrophoneEnabled
@@ -870,7 +919,7 @@ export function LiveKitMediaInternalProvider({ children }: { children: ReactNode
       setMediaError(parseMediaError(error))
       return false
     }
-  }, [localParticipant, room, parseMediaError])
+  }, [localParticipant, room, parseMediaError, playAllAudioElements])
 
   // Toggle screen share (with optional audio)
   const toggleScreenShare = useCallback(async (options?: ScreenShareOptions): Promise<boolean> => {

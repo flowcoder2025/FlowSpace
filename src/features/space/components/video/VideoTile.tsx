@@ -363,14 +363,39 @@ export function VideoTile({
     }
 
     // 사용자 인터랙션 시 오디오 재생 시도 (once 제거 - 성공할 때까지 반복 시도)
+    // 📌 touchstart/touchend 추가 - iOS Safari용
     document.addEventListener("click", handleUserInteraction)
+    document.addEventListener("touchstart", handleUserInteraction, { passive: true })
+    document.addEventListener("touchend", handleUserInteraction, { passive: true })
     document.addEventListener("keydown", handleUserInteraction)
 
     return () => {
       document.removeEventListener("click", handleUserInteraction)
+      document.removeEventListener("touchstart", handleUserInteraction)
+      document.removeEventListener("touchend", handleUserInteraction)
       document.removeEventListener("keydown", handleUserInteraction)
     }
   }, [audioBlocked, tryPlayAudio])
+
+  // 📌 iOS Safari: audio가 실제로 재생되면 audioBlocked 상태 자동 해제
+  useEffect(() => {
+    const audio = audioRef.current
+    if (!audio || isLocal) return
+
+    const handlePlaying = () => {
+      if (audioBlocked) {
+        setAudioBlocked(false)
+        if (IS_DEV) {
+          console.log("[VideoTile] Audio now playing, clearing blocked state for:", track.participantName)
+        }
+      }
+    }
+
+    audio.addEventListener("playing", handlePlaying)
+    return () => {
+      audio.removeEventListener("playing", handlePlaying)
+    }
+  }, [audioBlocked, isLocal, track.participantName])
 
   // 🔧 명시적 오디오 활성화 버튼 핸들러
   const handleEnableAudio = useCallback((e: React.MouseEvent) => {

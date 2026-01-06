@@ -419,10 +419,10 @@ export function ControlBar({
           </DropdownMenu>
         </div>
 
-        {/* Screen Share Toggle + Audio Option - 📱 모바일에서 숨김, 미지원 환경에서 안내 */}
-        {/* 화면공유 지원 환경에서만 표시 */}
+        {/* Screen Share Toggle + Audio Option - 📱 모바일에서도 표시, iOS만 미지원 안내 */}
+        {/* 화면공유 지원 환경 (데스크톱 + Android) */}
         {isScreenShareSupported ? (
-          <div className="group hidden sm:flex items-center">
+          <div className="group flex items-center">
             <Button
               variant="outline"
               size="icon"
@@ -435,17 +435,18 @@ export function ControlBar({
                   onToggleScreenShare({ audio: false })
                 }
               }}
-              className="rounded-r-none border-r-0 border-white/30 text-white bg-transparent hover:bg-white/10 group-hover:border-primary focus-visible:ring-0 focus-visible:ring-offset-0"
+              className="sm:rounded-r-none sm:border-r-0 border-white/30 text-white bg-transparent hover:bg-white/10 group-hover:border-primary focus-visible:ring-0 focus-visible:ring-offset-0"
               aria-label={isScreenSharing ? "화면 공유 중지" : "화면 공유"}
             >
               <ScreenShareIcon active={isScreenSharing} />
             </Button>
+            {/* 📱 데스크톱에서만 드롭다운 표시 (모바일은 기본 동작만) */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="outline"
                   size="icon"
-                  className="w-6 rounded-l-none border-l-0 px-1 border-white/30 text-white bg-transparent hover:bg-white/10 group-hover:border-primary focus-visible:ring-0 focus-visible:ring-offset-0"
+                  className="hidden sm:flex w-6 rounded-l-none border-l-0 px-1 border-white/30 text-white bg-transparent hover:bg-white/10 group-hover:border-primary focus-visible:ring-0 focus-visible:ring-offset-0"
                   aria-label="화면 공유 옵션"
                 >
                   <ChevronDownIcon />
@@ -498,8 +499,8 @@ export function ControlBar({
             </DropdownMenu>
           </div>
         ) : (
-          /* 📌 화면공유 미지원 환경: 비활성 버튼 + 클릭 시 안내 */
-          <div className="group hidden sm:flex items-center relative">
+          /* 📌 화면공유 미지원 환경 (iOS): 비활성 버튼 + 클릭 시 안내 */
+          <div className="group flex items-center relative">
             <Button
               variant="outline"
               size="icon"
