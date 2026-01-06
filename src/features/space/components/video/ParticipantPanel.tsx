@@ -12,6 +12,8 @@ import {
   DropdownMenuLabel,
 } from "@/components/ui"
 import { VideoTile } from "./VideoTile"
+import { useAudioSettings } from "../../hooks/useAudioSettings"
+import { useVideoSettings } from "../../hooks/useVideoSettings"
 import type { ParticipantTrack } from "../../livekit/types"
 
 // ============================================
@@ -181,6 +183,10 @@ export function ParticipantPanel({
   const [internalViewMode, setInternalViewMode] = useState<ParticipantViewMode>("sidebar")
   const [sortOrder, setSortOrder] = useState<ParticipantSortOrder>("name-asc")
   const [copied, setCopied] = useState(false)
+
+  // 📌 미디어 설정 로드 (전역 출력 볼륨, 미러 모드)
+  const { settings: audioSettings } = useAudioSettings()
+  const { settings: videoSettings } = useVideoSettings()
 
   // 외부 제어 또는 내부 상태 사용
   const viewMode = externalViewMode ?? internalViewMode
@@ -486,6 +492,8 @@ export function ParticipantPanel({
                   canRecord={canRecord}
                   spaceName={spaceName}
                   allAudioTracks={allAudioTracks}
+                  globalOutputVolume={audioSettings.outputVolume}
+                  mirrorLocalVideo={videoSettings.mirrorMode}
                   className="ring-2 ring-primary/50"
                 />
               ))}
@@ -498,6 +506,8 @@ export function ParticipantPanel({
               key={`${track.participantId}-${track.revision ?? 0}`}
               track={track}
               isLocal={track.participantId === localParticipantId}
+              globalOutputVolume={audioSettings.outputVolume}
+              mirrorLocalVideo={videoSettings.mirrorMode}
             />
           ))}
         </div>
@@ -627,6 +637,8 @@ export function ParticipantPanel({
                 canRecord={canRecord}
                 spaceName={spaceName}
                 allAudioTracks={allAudioTracks}
+                globalOutputVolume={audioSettings.outputVolume}
+                mirrorLocalVideo={videoSettings.mirrorMode}
                 className="ring-2 ring-primary/50 w-full aspect-video"
               />
             ))}
@@ -650,6 +662,8 @@ export function ParticipantPanel({
               <VideoTile
                 track={track}
                 isLocal={track.participantId === localParticipantId}
+                globalOutputVolume={audioSettings.outputVolume}
+                mirrorLocalVideo={videoSettings.mirrorMode}
                 className="h-full"
               />
             </div>

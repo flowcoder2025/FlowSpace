@@ -121,6 +121,10 @@ interface VideoTileProps {
   spaceName?: string
   /** 🎤 모든 참가자의 오디오 트랙 (녹화 시 믹싱용) */
   allAudioTracks?: MediaStreamTrack[]
+  /** 🔊 전역 출력 볼륨 (0-100, 개별 볼륨과 곱해짐) */
+  globalOutputVolume?: number
+  /** 🪞 로컬 비디오 미러 모드 */
+  mirrorLocalVideo?: boolean
 }
 
 // ============================================
@@ -134,6 +138,8 @@ export function VideoTile({
   canRecord = false,
   spaceName = "recording",
   allAudioTracks = [],
+  globalOutputVolume = 100,
+  mirrorLocalVideo = true,
 }: VideoTileProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
@@ -186,21 +192,26 @@ export function VideoTile({
   const activeVideoTrack = isScreenShare ? track.screenTrack : track.videoTrack
 
   // 오디오 재생 시도 함수 (볼륨도 함께 적용)
+  // 📌 전역 출력 볼륨(globalOutputVolume)과 개별 볼륨을 곱함
   const tryPlayAudio = useCallback(async () => {
     if (!audioRef.current || !track.audioTrack || isLocal) return
 
+    // 개별 볼륨 * 전역 볼륨 (둘 다 0-1 범위로 변환)
+    const effectiveVolume = (volume * globalOutputVolume) / 100
+
     // 🔧 재생 전에 볼륨 먼저 설정 (브라우저에 따라 srcObject 후 즉시 적용 필요)
-    audioRef.current.volume = isMuted ? 0 : volume
+    audioRef.current.volume = isMuted ? 0 : effectiveVolume
 
     try {
       await audioRef.current.play()
       setAudioBlocked(false)
       // 🔧 재생 성공 후에도 볼륨 다시 확인 적용 (일부 브라우저 이슈 대응)
-      audioRef.current.volume = isMuted ? 0 : volume
+      audioRef.current.volume = isMuted ? 0 : effectiveVolume
       if (IS_DEV) {
         console.log("[VideoTile] Audio playback started for:", track.participantName, {
           volume: audioRef.current.volume,
           isMuted,
+          globalOutputVolume,
         })
       }
     } catch (error) {
@@ -212,7 +223,7 @@ export function VideoTile({
         console.error("[VideoTile] Audio playback error:", error)
       }
     }
-  }, [track.audioTrack, track.participantName, isLocal, volume, isMuted])
+  }, [track.audioTrack, track.participantName, isLocal, volume, isMuted, globalOutputVolume])
 
   // 🔧 비디오 엘리먼트 클리어 헬퍼 (브라우저 버퍼 완전 해제)
   const clearVideoElement = useCallback((video: HTMLVideoElement) => {
@@ -301,6 +312,7 @@ export function VideoTile({
   }, [activeVideoTrack, shouldShowVideo, isTrackMuted, track.participantName, track.participantId, track.revision, isScreenShare, isTrackActuallyLive, clearVideoElement, isLocal])
 
   // Attach audio track to audio element (for remote participants only)
+  // 📌 전역 출력 볼륨(globalOutputVolume)과 개별 볼륨을 곱함
   useEffect(() => {
     const audio = audioRef.current
     if (!audio || isLocal) return
@@ -309,8 +321,11 @@ export function VideoTile({
       const stream = new MediaStream([track.audioTrack])
       audio.srcObject = stream
 
+      // 개별 볼륨 * 전역 볼륨 (둘 다 0-1 범위로 변환)
+      const effectiveVolume = (volume * globalOutputVolume) / 100
+
       // 🔧 스트림 연결 직후 저장된 볼륨 즉시 적용
-      audio.volume = isMuted ? 0 : volume
+      audio.volume = isMuted ? 0 : effectiveVolume
 
       if (IS_DEV) {
         console.log("[VideoTile] Audio track attached for:", track.participantName, {
@@ -318,6 +333,7 @@ export function VideoTile({
           enabled: track.audioTrack.enabled,
           readyState: track.audioTrack.readyState,
           appliedVolume: audio.volume,
+          globalOutputVolume,
         })
       }
 
@@ -336,7 +352,7 @@ export function VideoTile({
     return () => {
       audio.srcObject = null
     }
-  }, [track.audioTrack, track.participantName, isLocal, tryPlayAudio, volume, isMuted])
+  }, [track.audioTrack, track.participantName, isLocal, tryPlayAudio, volume, isMuted, globalOutputVolume])
 
   // 🔧 개선된 오디오 재생 시도 - once:true 제거, 지속적 재시도
   useEffect(() => {
@@ -407,12 +423,15 @@ export function VideoTile({
   }, [])
 
   // 🔊 볼륨/음소거 상태를 오디오 요소에 적용
+  // 📌 전역 출력 볼륨(globalOutputVolume)과 개별 볼륨을 곱함
   useEffect(() => {
     const audio = audioRef.current
     if (!audio || isLocal) return
 
-    audio.volume = isMuted ? 0 : volume
-  }, [volume, isMuted, isLocal])
+    // 개별 볼륨 * 전역 볼륨 (둘 다 0-1 범위로 변환)
+    const effectiveVolume = (volume * globalOutputVolume) / 100
+    audio.volume = isMuted ? 0 : effectiveVolume
+  }, [volume, isMuted, isLocal, globalOutputVolume])
 
   // Fullscreen change detection
   useEffect(() => {
@@ -521,6 +540,7 @@ export function VideoTile({
       {/* hidden(display:none) 대신 opacity-0 + absolute로 숨김 - IntersectionObserver가 감지할 수 있도록 */}
       {/* 🔧 absolute z-0: 전체화면 시 Portal로 렌더링되는 채팅 오버레이(z-max)가 위에 표시되도록 */}
       {/* z-index는 positioned 요소(relative/absolute/fixed)에만 적용됨 */}
+      {/* 🪞 로컬 비디오 + 미러 모드 + 일반 비디오(화면공유 제외)일 때 좌우 반전 */}
       <video
         ref={videoRef}
         autoPlay
@@ -530,7 +550,9 @@ export function VideoTile({
           "absolute inset-0 size-full z-0",
           // 🔧 화면 공유는 object-contain (잘리지 않음), 일반 비디오는 object-cover (꽉 채움)
           isScreenShare ? "object-contain bg-black" : "object-cover",
-          !shouldShowVideo && "opacity-0 pointer-events-none"
+          !shouldShowVideo && "opacity-0 pointer-events-none",
+          // 🪞 미러 모드: 로컬 + 일반 비디오(화면공유 제외) + mirrorLocalVideo 활성화
+          isLocal && !isScreenShare && mirrorLocalVideo && "scale-x-[-1]"
         )}
       />
 

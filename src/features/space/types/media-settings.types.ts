@@ -193,17 +193,25 @@ export const STORAGE_KEYS = {
 
 /**
  * AudioSettings를 LiveKit AudioCaptureOptions로 변환
+ *
+ * 📌 주의: inputSensitivity와 inputVolume은 LiveKit에서 직접 지원하지 않음
+ * - inputSensitivity: 클라이언트 VAD로 구현 필요 (현재 시각적 표시용)
+ * - inputVolume: Web Audio API GainNode로 구현 필요 (현재 미구현)
  */
 export function toAudioCaptureOptions(settings: AudioSettings): {
   noiseSuppression: boolean
   echoCancellation: boolean
   autoGainControl: boolean
+  // 📌 voiceIsolation 추가 (실험적 - 일부 브라우저만 지원)
+  voiceIsolation?: boolean
   deviceId?: string
 } {
   return {
     noiseSuppression: settings.noiseSuppression,
     echoCancellation: settings.echoCancellation,
     autoGainControl: settings.autoGainControl,
+    // 📌 voiceIsolation: 브라우저가 지원하면 적용
+    ...(settings.voiceIsolation && { voiceIsolation: true }),
     ...(settings.selectedInputDeviceId && {
       deviceId: settings.selectedInputDeviceId,
     }),

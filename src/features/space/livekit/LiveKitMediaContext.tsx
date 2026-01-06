@@ -425,26 +425,49 @@ export function LiveKitMediaInternalProvider({ children }: { children: ReactNode
     }
   }, [room, isConnected])  // 🔧 participants 제거 - 이벤트 드리븐으로 처리
 
+  // 🔧 iOS Safari 오디오 unlock 상태 추적
+  const audioUnlockedRef = useRef(false)
+
   // 연결 시 자동으로 오디오 시작 (브라우저 autoplay 정책 대응)
+  // 📌 iOS Safari: 사용자 제스처 없이 오디오 재생 불가 → 첫 터치까지 반복 시도
   useEffect(() => {
     if (!room || !isConnected) return
 
-    room.startAudio().then(() => {
-      if (IS_DEV) {
-        console.log("[LiveKitMediaContext] Audio context started")
-      }
-    }).catch(() => {
-      // 사용자 인터랙션 없이는 실패할 수 있음 - 정상적인 동작
-    })
+    // 🔧 오디오 unlock 시도 함수
+    const tryUnlockAudio = async () => {
+      if (audioUnlockedRef.current) return true
 
-    const handleUserInteraction = () => {
-      room.startAudio().catch(() => {})
+      try {
+        await room.startAudio()
+        audioUnlockedRef.current = true
+        if (IS_DEV) {
+          console.log("[LiveKitMediaContext] ✅ Audio context unlocked")
+        }
+        return true
+      } catch {
+        // 사용자 인터랙션 없이는 실패할 수 있음 - 정상적인 동작
+        return false
+      }
     }
-    document.addEventListener("click", handleUserInteraction, { once: true })
-    document.addEventListener("keydown", handleUserInteraction, { once: true })
+
+    // 초기 시도
+    tryUnlockAudio()
+
+    // 🔧 사용자 인터랙션 시 오디오 unlock 시도 (성공할 때까지 반복)
+    // iOS Safari: getUserMedia 권한 요청이 지연되면 첫 터치 전까지 오디오 blocked
+    const handleUserInteraction = () => {
+      if (audioUnlockedRef.current) return
+      tryUnlockAudio()
+    }
+
+    // 📌 once: true 제거 - 성공할 때까지 계속 시도
+    document.addEventListener("click", handleUserInteraction)
+    document.addEventListener("touchstart", handleUserInteraction) // 📌 터치 이벤트 추가
+    document.addEventListener("keydown", handleUserInteraction)
 
     return () => {
       document.removeEventListener("click", handleUserInteraction)
+      document.removeEventListener("touchstart", handleUserInteraction)
       document.removeEventListener("keydown", handleUserInteraction)
     }
   }, [room, isConnected])
@@ -751,6 +774,7 @@ export function LiveKitMediaInternalProvider({ children }: { children: ReactNode
   }, [])
 
   // Toggle camera
+  // 📌 iOS Safari: setCameraEnabled 후 터치 이벤트가 먹통되는 문제 대응
   const toggleCamera = useCallback(async (): Promise<boolean> => {
     if (!localParticipant) {
       setMediaError({
@@ -763,8 +787,10 @@ export function LiveKitMediaInternalProvider({ children }: { children: ReactNode
     try {
       setMediaError(null)
 
+      // 🔧 오디오 unlock 시도 (카메라 토글도 사용자 제스처이므로 이 시점에 unlock 가능)
       if (room) {
         await room.startAudio().catch(() => {})
+        audioUnlockedRef.current = true
       }
 
       const newState = !localParticipant.isCameraEnabled
@@ -773,6 +799,20 @@ export function LiveKitMediaInternalProvider({ children }: { children: ReactNode
       }
 
       await localParticipant.setCameraEnabled(newState)
+
+      // 📌 iOS Safari 터치 이벤트 복구
+      if (typeof window !== "undefined" && /iPad|iPhone|iPod/.test(navigator.userAgent)) {
+        requestAnimationFrame(() => {
+          const activeEl = document.activeElement as HTMLElement | null
+          if (activeEl && typeof activeEl.blur === "function") {
+            activeEl.blur()
+          }
+          if (IS_DEV) {
+            console.log("[LiveKitMediaContext] iOS touch event recovery executed")
+          }
+        })
+      }
+
       return true
     } catch (error) {
       console.error("[LiveKitMediaContext] Camera toggle error:", error)
@@ -782,6 +822,7 @@ export function LiveKitMediaInternalProvider({ children }: { children: ReactNode
   }, [localParticipant, room, parseMediaError])
 
   // Toggle microphone
+  // 📌 iOS Safari: setMicrophoneEnabled 후 터치 이벤트가 먹통되는 문제 대응
   const toggleMicrophone = useCallback(async (): Promise<boolean> => {
     if (!localParticipant) {
       setMediaError({
@@ -794,8 +835,10 @@ export function LiveKitMediaInternalProvider({ children }: { children: ReactNode
     try {
       setMediaError(null)
 
+      // 🔧 오디오 unlock 시도 (마이크 토글이 사용자 제스처이므로 이 시점에 unlock 가능)
       if (room) {
         await room.startAudio().catch(() => {})
+        audioUnlockedRef.current = true
       }
 
       const newState = !localParticipant.isMicrophoneEnabled
@@ -804,6 +847,23 @@ export function LiveKitMediaInternalProvider({ children }: { children: ReactNode
       }
 
       await localParticipant.setMicrophoneEnabled(newState)
+
+      // 📌 iOS Safari 터치 이벤트 복구
+      // getUserMedia 권한 다이얼로그 후 터치 이벤트가 먹통되는 문제 대응
+      // requestAnimationFrame으로 다음 프레임까지 대기 후 blur 처리
+      if (typeof window !== "undefined" && /iPad|iPhone|iPod/.test(navigator.userAgent)) {
+        requestAnimationFrame(() => {
+          // 현재 포커스된 요소가 있으면 blur
+          const activeEl = document.activeElement as HTMLElement | null
+          if (activeEl && typeof activeEl.blur === "function") {
+            activeEl.blur()
+          }
+          if (IS_DEV) {
+            console.log("[LiveKitMediaContext] iOS touch event recovery executed")
+          }
+        })
+      }
+
       return true
     } catch (error) {
       console.error("[LiveKitMediaContext] Microphone toggle error:", error)

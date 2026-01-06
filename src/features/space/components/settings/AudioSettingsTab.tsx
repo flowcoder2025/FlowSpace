@@ -145,7 +145,7 @@ export function AudioSettingsTab({ className }: AudioSettingsTabProps) {
             step={1}
           />
           <p className="text-xs text-muted-foreground">
-            낮을수록 더 작은 소리도 인식합니다
+            볼륨 미터의 감지 기준선입니다 (시각적 가이드)
           </p>
         </div>
       </section>
