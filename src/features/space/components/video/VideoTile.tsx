@@ -161,9 +161,7 @@ export function VideoTile({
     const saved = localStorage.getItem(`${volumeStorageKey}-muted`)
     return saved === "true"
   })
-  // 🔧 Phase 2: 상태 기반 볼륨 슬라이더 표시 (hover 대신)
-  const [showVolumeSlider, setShowVolumeSlider] = useState(false)
-  const volumeHideTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  // 볼륨바는 타일 호버 시 하단에 표시 (showControls로 통합)
 
   // 🎬 녹화 훅 (본인 화면 공유일 때만 사용)
   const {
@@ -421,31 +419,6 @@ export function VideoTile({
     localStorage.setItem(`${volumeStorageKey}-muted`, newMuted.toString())
   }, [isMuted, volumeStorageKey])
 
-  // 🔧 Phase 2: 볼륨 슬라이더 표시/숨김 핸들러 (지연 닫힘)
-  const handleVolumeAreaEnter = useCallback(() => {
-    // 닫힘 타이머 취소
-    if (volumeHideTimeoutRef.current) {
-      clearTimeout(volumeHideTimeoutRef.current)
-      volumeHideTimeoutRef.current = null
-    }
-    setShowVolumeSlider(true)
-  }, [])
-
-  const handleVolumeAreaLeave = useCallback(() => {
-    // 300ms 후에 닫힘 (드래그 중 마우스가 잠시 벗어나도 유지)
-    volumeHideTimeoutRef.current = setTimeout(() => {
-      setShowVolumeSlider(false)
-    }, 300)
-  }, [])
-
-  // 🔧 Phase 2: 볼륨 타이머 cleanup
-  useEffect(() => {
-    return () => {
-      if (volumeHideTimeoutRef.current) {
-        clearTimeout(volumeHideTimeoutRef.current)
-      }
-    }
-  }, [])
 
   // 🔊 볼륨/음소거 상태를 오디오 요소에 적용
   // 📌 전역 출력 볼륨(globalOutputVolume)과 개별 볼륨을 곱함
@@ -687,47 +660,6 @@ export function VideoTile({
           showControls || isFullscreen ? "opacity-100" : "opacity-0"
         )}
       >
-        {/* 🔊 볼륨 조절 - 원격 참가자 오디오가 있을 때만 표시 */}
-        {!isLocal && hasAudio && (
-          <div
-            className="relative flex items-center"
-            onMouseEnter={handleVolumeAreaEnter}
-            onMouseLeave={handleVolumeAreaLeave}
-          >
-            {/* 음소거 버튼 */}
-            <button
-              onClick={handleToggleMute}
-              className={cn(
-                "rounded bg-black/60 p-1.5 text-white transition-colors hover:bg-black/80",
-                isMuted && "text-red-400"
-              )}
-              title={isMuted ? "음소거 해제" : "음소거"}
-              aria-label={isMuted ? "음소거 해제" : "음소거"}
-            >
-              {isMuted ? <VolumeMuteIcon /> : volume > 0.5 ? <VolumeHighIcon /> : <VolumeLowIcon />}
-            </button>
-            {/* 🔧 Phase 2+3: 볼륨 슬라이더 (상태 기반 + 아래로 확장) */}
-            {showVolumeSlider && (
-              <div className="absolute right-0 top-full z-50 mt-1 flex items-center rounded bg-black/90 px-2 py-1.5 shadow-lg">
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.05"
-                  value={isMuted ? 0 : volume}
-                  onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
-                  className="h-1.5 w-24 cursor-pointer accent-primary"
-                  title={`볼륨: ${Math.round((isMuted ? 0 : volume) * 100)}%`}
-                  aria-label="볼륨 조절"
-                  onClick={(e) => e.stopPropagation()}
-                />
-                <span className="ml-2 w-8 text-xs text-white">
-                  {Math.round((isMuted ? 0 : volume) * 100)}%
-                </span>
-              </div>
-            )}
-          </div>
-        )}
         {/* 🎬 녹화 버튼 - 본인 화면 공유일 때만 표시 */}
         {showRecordButton && (
           <Button
@@ -772,6 +704,45 @@ export function VideoTile({
 
       {/* Overlay info (bottom) */}
       <div className="absolute inset-x-0 bottom-0 bg-linear-to-t from-black/70 to-transparent p-2">
+        {/* 🔊 볼륨바 - 원격 참가자 + 호버 시에만 표시 */}
+        {!isLocal && hasAudio && (
+          <div
+            className={cn(
+              "mb-2 flex items-center gap-2 transition-all duration-200",
+              showControls ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2 pointer-events-none"
+            )}
+          >
+            <button
+              onClick={handleToggleMute}
+              className="shrink-0 text-white/80 hover:text-white transition-colors"
+              title={isMuted ? "음소거 해제" : "음소거"}
+              aria-label={isMuted ? "음소거 해제" : "음소거"}
+            >
+              {isMuted ? <VolumeMuteIcon /> : volume > 0.5 ? <VolumeHighIcon /> : <VolumeLowIcon />}
+            </button>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.05"
+              value={isMuted ? 0 : volume}
+              onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
+              className="h-1 w-full cursor-pointer appearance-none rounded-full bg-white/30 accent-primary
+                [&::-webkit-slider-thumb]:size-3 [&::-webkit-slider-thumb]:appearance-none
+                [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white
+                [&::-webkit-slider-thumb]:shadow-md [&::-webkit-slider-thumb]:transition-transform
+                [&::-webkit-slider-thumb]:hover:scale-125
+                [&::-moz-range-thumb]:size-3 [&::-moz-range-thumb]:rounded-full
+                [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-white"
+              title={`볼륨: ${Math.round((isMuted ? 0 : volume) * 100)}%`}
+              aria-label="볼륨 조절"
+              onClick={(e) => e.stopPropagation()}
+            />
+            <span className="shrink-0 w-8 text-xs text-white/80 text-right">
+              {Math.round((isMuted ? 0 : volume) * 100)}%
+            </span>
+          </div>
+        )}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
             {track.isSpeaking && (

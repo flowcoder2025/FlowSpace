@@ -7,6 +7,7 @@ import { FloatingChatOverlay, type AdminCommandResult } from "./chat"
 import { ParticipantPanel, type ParticipantViewMode } from "./video/ParticipantPanel"
 import { ScreenShareOverlay } from "./video/ScreenShare"
 import { ControlBar } from "./controls/ControlBar"
+import { VirtualJoystick } from "./controls/VirtualJoystick"
 import { GameCanvas } from "./game/GameCanvas"
 import { SpaceSettingsModal } from "./SpaceSettingsModal"
 import { MediaSettingsModal, type MediaSettingsTab } from "./settings"
@@ -134,6 +135,12 @@ function SpaceLayoutContent({
   // Panel visibility
   const [isChatOpen, setIsChatOpen] = useState(true)
   const [isMemberPanelOpen, setIsMemberPanelOpen] = useState(false)
+
+  // 🎮 모바일(터치) 디바이스 감지
+  const isTouchDevice = useMemo(() => {
+    if (typeof window === "undefined") return false
+    return "ontouchstart" in window || navigator.maxTouchPoints > 0
+  }, [])
 
   // 🎬 참가자 패널 뷰 모드 (sidebar | grid | hidden)
   const [participantViewMode, setParticipantViewMode] = useState<ParticipantViewMode>("sidebar")
@@ -1333,6 +1340,13 @@ function SpaceLayoutContent({
               />
             </div>
           </>
+        )}
+
+        {/* 🎮 모바일 조이스틱 (터치 디바이스에서만 표시) */}
+        {isTouchDevice && (
+          <div className="pointer-events-auto absolute bottom-20 left-4 z-20">
+            <VirtualJoystick size={100} opacity={0.7} />
+          </div>
         )}
 
         {/* 플로팅 컨트롤 바 (하단 중앙) */}

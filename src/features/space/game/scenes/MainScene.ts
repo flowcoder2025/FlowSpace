@@ -13,6 +13,7 @@ import {
   type ChatFocusPayload,
   type EditorModePayload,
   type EditorCanvasClickPayload,
+  type JoystickMovePayload,
 } from "../events"
 import {
   createCharacterAnimationsFromSpritesheet,
@@ -85,6 +86,8 @@ export class MainScene extends Phaser.Scene {
   private playerBaseScale = 1 // Base scale for custom character sprites
   private isChatActive = false // 채팅 활성화 시 게임 입력 차단
   private isEditorActive = false // 🎨 에디터 모드 활성화 시 클릭 → 배치
+  // 🎮 조이스틱 입력 상태
+  private joystickInput: { x: number; y: number; force: number } = { x: 0, y: 0, force: 0 }
   private playerId: string = ""
   private playerNickname: string = ""
   private playerAvatarColor: AvatarColor = "default" // Legacy, kept for compatibility
@@ -109,6 +112,8 @@ export class MainScene extends Phaser.Scene {
   private handleChatFocusChanged!: (data: unknown) => void
   private handleEditorModeChanged!: (data: unknown) => void // 🎨 에디터 모드 이벤트
   private handleEditorPlaceObject!: (data: unknown) => void // 🎨 오브젝트 배치 이벤트
+  private handleJoystickMove!: (data: unknown) => void // 🎮 조이스틱 이동 이벤트
+  private handleJoystickStop!: (data: unknown) => void // 🎮 조이스틱 정지 이벤트
 
   // 🎨 배치된 오브젝트 관리
   private placedObjects: Map<string, Phaser.GameObjects.Container> = new Map()
@@ -871,6 +876,22 @@ export class MainScene extends Phaser.Scene {
       }
     }
 
+    // 🎮 조이스틱 이벤트 핸들러
+    this.handleJoystickMove = (data: unknown) => {
+      const { x, y, force } = data as JoystickMovePayload
+      this.joystickInput = { x, y, force }
+      if (IS_DEV) {
+        console.log(`[MainScene] 🎮 Joystick move: x=${x.toFixed(2)}, y=${y.toFixed(2)}, force=${force.toFixed(2)}`)
+      }
+    }
+
+    this.handleJoystickStop = () => {
+      this.joystickInput = { x: 0, y: 0, force: 0 }
+      if (IS_DEV) {
+        console.log("[MainScene] 🎮 Joystick stop")
+      }
+    }
+
     eventBridge.on(GameEvents.REMOTE_PLAYER_UPDATE, this.handleRemotePlayerUpdate)
     eventBridge.on(GameEvents.REMOTE_PLAYER_JOIN, this.handleRemotePlayerJoin)
     eventBridge.on(GameEvents.REMOTE_PLAYER_LEAVE, this.handleRemotePlayerLeave)
@@ -880,6 +901,8 @@ export class MainScene extends Phaser.Scene {
     eventBridge.on(GameEvents.CHAT_FOCUS_CHANGED, this.handleChatFocusChanged)
     eventBridge.on(GameEvents.EDITOR_MODE_CHANGED, this.handleEditorModeChanged)
     eventBridge.on(GameEvents.EDITOR_PLACE_OBJECT, this.handleEditorPlaceObject)
+    eventBridge.on(GameEvents.JOYSTICK_MOVE, this.handleJoystickMove)
+    eventBridge.on(GameEvents.JOYSTICK_STOP, this.handleJoystickStop)
   }
 
   private processPendingRemotePlayerEvents() {
@@ -1305,24 +1328,47 @@ export class MainScene extends Phaser.Scene {
     let moved = false
     let newDirection = this.playerDirection
 
-    if (this.cursors.left.isDown || this.wasd.A.isDown) {
-      playerBody.setVelocityX(-PLAYER_SPEED)
-      newDirection = "left"
-      moved = true
-    } else if (this.cursors.right.isDown || this.wasd.D.isDown) {
-      playerBody.setVelocityX(PLAYER_SPEED)
-      newDirection = "right"
-      moved = true
-    }
+    // 🎮 조이스틱 입력 체크 (키보드보다 우선)
+    const hasJoystickInput = this.joystickInput.force > 0.1
 
-    if (this.cursors.up.isDown || this.wasd.W.isDown) {
-      playerBody.setVelocityY(-PLAYER_SPEED)
-      newDirection = "up"
+    if (hasJoystickInput) {
+      // 조이스틱 입력 처리
+      const { x: joyX, y: joyY, force } = this.joystickInput
+
+      // 속도 계산 (force에 비례)
+      const velocityX = joyX * PLAYER_SPEED * force
+      const velocityY = joyY * PLAYER_SPEED * force
+
+      playerBody.setVelocity(velocityX, velocityY)
+
+      // 방향 결정 (더 큰 입력 축 기준)
+      if (Math.abs(joyX) > Math.abs(joyY)) {
+        newDirection = joyX < 0 ? "left" : "right"
+      } else {
+        newDirection = joyY < 0 ? "up" : "down"
+      }
       moved = true
-    } else if (this.cursors.down.isDown || this.wasd.S.isDown) {
-      playerBody.setVelocityY(PLAYER_SPEED)
-      newDirection = "down"
-      moved = true
+    } else {
+      // 키보드 입력 처리 (기존 로직)
+      if (this.cursors.left.isDown || this.wasd.A.isDown) {
+        playerBody.setVelocityX(-PLAYER_SPEED)
+        newDirection = "left"
+        moved = true
+      } else if (this.cursors.right.isDown || this.wasd.D.isDown) {
+        playerBody.setVelocityX(PLAYER_SPEED)
+        newDirection = "right"
+        moved = true
+      }
+
+      if (this.cursors.up.isDown || this.wasd.W.isDown) {
+        playerBody.setVelocityY(-PLAYER_SPEED)
+        newDirection = "up"
+        moved = true
+      } else if (this.cursors.down.isDown || this.wasd.S.isDown) {
+        playerBody.setVelocityY(PLAYER_SPEED)
+        newDirection = "down"
+        moved = true
+      }
     }
 
     if (Phaser.Input.Keyboard.JustDown(this.spaceKey)) {
@@ -1405,6 +1451,12 @@ export class MainScene extends Phaser.Scene {
     }
     if (this.handleEditorPlaceObject) {
       eventBridge.off(GameEvents.EDITOR_PLACE_OBJECT, this.handleEditorPlaceObject)
+    }
+    if (this.handleJoystickMove) {
+      eventBridge.off(GameEvents.JOYSTICK_MOVE, this.handleJoystickMove)
+    }
+    if (this.handleJoystickStop) {
+      eventBridge.off(GameEvents.JOYSTICK_STOP, this.handleJoystickStop)
     }
 
     // 🎨 배치된 오브젝트 정리

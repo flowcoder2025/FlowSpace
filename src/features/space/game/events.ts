@@ -75,6 +75,10 @@ export const GameEvents = {
   EDITOR_CANVAS_CLICK: "editor:canvasClick",
   EDITOR_PLACE_OBJECT: "editor:placeObject",
   EDITOR_DELETE_OBJECT: "editor:deleteObject",
+
+  // 🎮 Mobile joystick events (모바일 조이스틱)
+  JOYSTICK_MOVE: "joystick:move",
+  JOYSTICK_STOP: "joystick:stop",
 } as const
 
 // Player position type
@@ -114,4 +118,14 @@ export interface EditorPlaceObjectPayload {
   gridX: number
   gridY: number
   rotation?: number
+}
+
+// 🎮 Joystick payload types (모바일 조이스틱)
+export interface JoystickMovePayload {
+  /** X 방향 (-1 ~ 1, 왼쪽 ~ 오른쪽) */
+  x: number
+  /** Y 방향 (-1 ~ 1, 위 ~ 아래) */
+  y: number
+  /** 입력 강도 (0 ~ 1) */
+  force: number
 }
