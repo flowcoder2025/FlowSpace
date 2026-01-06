@@ -14,6 +14,7 @@ import { useState, useCallback } from "react"
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
@@ -85,6 +86,9 @@ export function MediaSettingsModal({
             <Settings className="size-5" />
             음성 및 비디오 설정
           </DialogTitle>
+          <DialogDescription className="sr-only">
+            마이크, 스피커, 카메라 장치 및 고급 설정을 구성합니다.
+          </DialogDescription>
         </DialogHeader>
 
         <Tabs

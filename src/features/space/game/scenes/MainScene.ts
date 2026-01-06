@@ -102,6 +102,15 @@ export class MainScene extends Phaser.Scene {
     data: PlayerPosition & { avatarColor?: AvatarColor; nickname?: string; avatarConfig?: AvatarConfig }
   }> = []
 
+  // 🎨 Queue for pending editor place objects (received before scene is ready)
+  private pendingEditorPlaceObjects: Array<{
+    objectId: string
+    assetId: string
+    gridX: number
+    gridY: number
+    rotation?: number
+  }> = []
+
   // Event handler references for cleanup
   private handleRemotePlayerUpdate!: (data: unknown) => void
   private handleRemotePlayerJoin!: (data: unknown) => void
@@ -263,6 +272,9 @@ export class MainScene extends Phaser.Scene {
 
     // Process any remote player events that arrived before scene was ready
     this.processPendingRemotePlayerEvents()
+
+    // Process any editor place objects that arrived before scene was ready
+    this.processPendingEditorPlaceObjects()
 
     // Emit game ready event
     this.time.delayedCall(0, () => {
@@ -796,7 +808,7 @@ export class MainScene extends Phaser.Scene {
 
     // 🎨 오브젝트 배치 이벤트 핸들러
     this.handleEditorPlaceObject = (data: unknown) => {
-      const { objectId, assetId, gridX, gridY } = data as {
+      const placeData = data as {
         objectId: string
         assetId: string
         gridX: number
@@ -804,76 +816,14 @@ export class MainScene extends Phaser.Scene {
         rotation?: number
       }
 
-      // 씬이 비활성화 상태면 무시
+      // 📌 씬이 비활성화 상태면 큐에 추가 (경고 대신)
       if (!this.isSceneTrulyActive()) {
-        console.warn(`[MainScene] ⚠️ Scene not active, skipping object placement`)
+        this.pendingEditorPlaceObjects.push(placeData)
         return
       }
 
-      // 에셋 메타데이터 조회
-      const assetMeta = getAssetById(assetId)
-
-      // 타일 크기 가져오기
-      const mapConfig = this.tileMapSystem.getMapConfig()
-      const TILE_SIZE = mapConfig.TILE_SIZE
-
-      // 에셋 크기 (타일 단위)
-      const assetWidth = assetMeta?.size?.width ?? 1
-      const assetHeight = assetMeta?.size?.height ?? 1
-
-      // 월드 좌표 계산 (에셋 크기 반영)
-      const worldX = gridX * TILE_SIZE + (TILE_SIZE * assetWidth) / 2
-      const worldY = gridY * TILE_SIZE + (TILE_SIZE * assetHeight) / 2
-
-      // 카테고리별 색상 매핑
-      const categoryColors: Record<string, { fill: number; stroke: number; icon: string }> = {
-        interactive: { fill: 0xfbbf24, stroke: 0xf59e0b, icon: "⚡" }, // 노란색
-        furniture: { fill: 0xa3866a, stroke: 0x8b6f5c, icon: "🪑" },   // 갈색
-        decoration: { fill: 0x4ade80, stroke: 0x22c55e, icon: "🌳" }, // 초록색
-        wall: { fill: 0x9ca3af, stroke: 0x6b7280, icon: "🧱" },       // 회색
-        floor: { fill: 0x60a5fa, stroke: 0x3b82f6, icon: "🏠" },      // 파란색
-      }
-
-      const category = assetMeta?.categoryId ?? "decoration"
-      const colors = categoryColors[category] ?? categoryColors.decoration
-
-      // 오브젝트 컨테이너 생성
-      const container = this.add.container(worldX, worldY)
-      container.setDepth(50 + gridY) // Y좌표 기반 깊이 (자연스러운 정렬)
-
-      // 배경 사각형 (에셋 크기 반영)
-      const bgWidth = TILE_SIZE * assetWidth - 4
-      const bgHeight = TILE_SIZE * assetHeight - 4
-      const background = this.add.rectangle(0, 0, bgWidth, bgHeight, colors.fill, 0.85)
-      background.setStrokeStyle(2, colors.stroke)
-
-      // 아이콘 표시
-      const iconText = this.add.text(0, -4, colors.icon, {
-        fontSize: assetWidth > 1 || assetHeight > 1 ? "18px" : "14px",
-      })
-      iconText.setOrigin(0.5, 0.5)
-
-      // 에셋 이름 표시 (짧게)
-      const displayName = assetMeta?.name ?? assetId
-      const shortName = displayName.length > 4 ? displayName.slice(0, 4) : displayName
-      const nameText = this.add.text(0, 8, shortName, {
-        fontSize: "9px",
-        fontFamily: "sans-serif",
-        color: "#ffffff",
-        stroke: "#000000",
-        strokeThickness: 2,
-      })
-      nameText.setOrigin(0.5, 0.5)
-
-      // 컨테이너에 추가
-      container.add([background, iconText, nameText])
-
-      // 저장 (컨테이너로 저장)
-      this.placedObjects.set(objectId, container)
-
-      if (IS_DEV) {
-        console.log(`[MainScene] 🎯 Object placed: ${assetId} (${category}) at grid(${gridX}, ${gridY}), size: ${assetWidth}x${assetHeight}`)
-      }
+      // 실제 배치 수행
+      this.placeEditorObject(placeData)
     }
 
     // 🎮 조이스틱 이벤트 핸들러
@@ -903,6 +853,99 @@ export class MainScene extends Phaser.Scene {
     eventBridge.on(GameEvents.EDITOR_PLACE_OBJECT, this.handleEditorPlaceObject)
     eventBridge.on(GameEvents.JOYSTICK_MOVE, this.handleJoystickMove)
     eventBridge.on(GameEvents.JOYSTICK_STOP, this.handleJoystickStop)
+  }
+
+  /**
+   * 🎨 에디터 오브젝트 실제 배치 로직
+   */
+  private placeEditorObject(data: {
+    objectId: string
+    assetId: string
+    gridX: number
+    gridY: number
+    rotation?: number
+  }) {
+    const { objectId, assetId, gridX, gridY } = data
+
+    // 에셋 메타데이터 조회
+    const assetMeta = getAssetById(assetId)
+
+    // 타일 크기 가져오기
+    const mapConfig = this.tileMapSystem.getMapConfig()
+    const TILE_SIZE = mapConfig.TILE_SIZE
+
+    // 에셋 크기 (타일 단위)
+    const assetWidth = assetMeta?.size?.width ?? 1
+    const assetHeight = assetMeta?.size?.height ?? 1
+
+    // 월드 좌표 계산 (에셋 크기 반영)
+    const worldX = gridX * TILE_SIZE + (TILE_SIZE * assetWidth) / 2
+    const worldY = gridY * TILE_SIZE + (TILE_SIZE * assetHeight) / 2
+
+    // 카테고리별 색상 매핑
+    const categoryColors: Record<string, { fill: number; stroke: number; icon: string }> = {
+      interactive: { fill: 0xfbbf24, stroke: 0xf59e0b, icon: "⚡" }, // 노란색
+      furniture: { fill: 0xa3866a, stroke: 0x8b6f5c, icon: "🪑" },   // 갈색
+      decoration: { fill: 0x4ade80, stroke: 0x22c55e, icon: "🌳" }, // 초록색
+      wall: { fill: 0x9ca3af, stroke: 0x6b7280, icon: "🧱" },       // 회색
+      floor: { fill: 0x60a5fa, stroke: 0x3b82f6, icon: "🏠" },      // 파란색
+    }
+
+    const category = assetMeta?.categoryId ?? "decoration"
+    const colors = categoryColors[category] ?? categoryColors.decoration
+
+    // 오브젝트 컨테이너 생성
+    const container = this.add.container(worldX, worldY)
+    container.setDepth(50 + gridY) // Y좌표 기반 깊이 (자연스러운 정렬)
+
+    // 배경 사각형 (에셋 크기 반영)
+    const bgWidth = TILE_SIZE * assetWidth - 4
+    const bgHeight = TILE_SIZE * assetHeight - 4
+    const background = this.add.rectangle(0, 0, bgWidth, bgHeight, colors.fill, 0.85)
+    background.setStrokeStyle(2, colors.stroke)
+
+    // 아이콘 표시
+    const iconText = this.add.text(0, -4, colors.icon, {
+      fontSize: assetWidth > 1 || assetHeight > 1 ? "18px" : "14px",
+    })
+    iconText.setOrigin(0.5, 0.5)
+
+    // 에셋 이름 표시 (짧게)
+    const displayName = assetMeta?.name ?? assetId
+    const shortName = displayName.length > 4 ? displayName.slice(0, 4) : displayName
+    const nameText = this.add.text(0, 8, shortName, {
+      fontSize: "9px",
+      fontFamily: "sans-serif",
+      color: "#ffffff",
+      stroke: "#000000",
+      strokeThickness: 2,
+    })
+    nameText.setOrigin(0.5, 0.5)
+
+    // 컨테이너에 추가
+    container.add([background, iconText, nameText])
+
+    // 저장 (컨테이너로 저장)
+    this.placedObjects.set(objectId, container)
+
+    if (IS_DEV) {
+      console.log(`[MainScene] 🎯 Object placed: ${assetId} (${category}) at grid(${gridX}, ${gridY}), size: ${assetWidth}x${assetHeight}`)
+    }
+  }
+
+  /**
+   * 🎨 대기 중인 에디터 오브젝트 배치 처리
+   */
+  private processPendingEditorPlaceObjects() {
+    if (this.pendingEditorPlaceObjects.length > 0 && IS_DEV) {
+      console.log(`[MainScene] Processing ${this.pendingEditorPlaceObjects.length} pending editor objects`)
+    }
+    while (this.pendingEditorPlaceObjects.length > 0) {
+      const obj = this.pendingEditorPlaceObjects.shift()
+      if (obj) {
+        this.placeEditorObject(obj)
+      }
+    }
   }
 
   private processPendingRemotePlayerEvents() {
