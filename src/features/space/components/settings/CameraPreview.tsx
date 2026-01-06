@@ -13,7 +13,11 @@ import { useState, useRef, useEffect, useCallback } from "react"
 import { cn } from "@/lib/utils"
 import { Camera, CameraOff, Loader2, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import type { VideoResolutionPreset, FrameRateOption } from "../../types/media-settings.types"
+import {
+  VIDEO_RESOLUTION_PRESETS,
+  type VideoResolutionPreset,
+  type FrameRateOption,
+} from "../../types/media-settings.types"
 
 interface CameraPreviewProps {
   /** 카메라 장치 ID */
@@ -67,13 +71,47 @@ export function CameraPreview({
     setIsLoading(true)
 
     try {
+      // 📌 해상도 및 프레임레이트를 실제 constraints에 적용
+      const videoConstraints: MediaTrackConstraints = {}
+
+      // 장치 ID 설정
+      if (deviceId) {
+        videoConstraints.deviceId = { exact: deviceId }
+      }
+
+      // 해상도 설정
+      if (resolution && VIDEO_RESOLUTION_PRESETS[resolution]) {
+        const preset = VIDEO_RESOLUTION_PRESETS[resolution]
+        videoConstraints.width = { ideal: preset.width }
+        videoConstraints.height = { ideal: preset.height }
+      }
+
+      // 프레임레이트 설정
+      if (frameRate) {
+        videoConstraints.frameRate = { ideal: frameRate }
+      }
+
       const constraints: MediaStreamConstraints = {
-        video: deviceId ? { deviceId: { exact: deviceId } } : true,
+        video: Object.keys(videoConstraints).length > 0 ? videoConstraints : true,
         audio: false,
       }
 
+      console.log("[CameraPreview] 카메라 시작 constraints:", constraints)
+
       const stream = await navigator.mediaDevices.getUserMedia(constraints)
       streamRef.current = stream
+
+      // 📌 실제 적용된 설정 로깅
+      const videoTrack = stream.getVideoTracks()[0]
+      if (videoTrack) {
+        const settings = videoTrack.getSettings()
+        console.log("[CameraPreview] 실제 적용된 설정:", {
+          width: settings.width,
+          height: settings.height,
+          frameRate: settings.frameRate,
+          deviceId: settings.deviceId,
+        })
+      }
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream
@@ -88,9 +126,10 @@ export function CameraPreview({
     } finally {
       setIsLoading(false)
     }
-  }, [deviceId, cleanup, onStreamStart])
+  }, [deviceId, resolution, frameRate, cleanup, onStreamStart])
 
-  // enabled 상태에 따른 자동 시작/정지
+  // enabled 상태 및 설정 변경에 따른 자동 시작/정지
+  // 📌 resolution/frameRate 변경 시에도 카메라 재시작
   useEffect(() => {
     if (enabled) {
       startCamera()
@@ -99,7 +138,7 @@ export function CameraPreview({
     }
 
     return () => cleanup()
-  }, [enabled, deviceId, startCamera, cleanup])
+  }, [enabled, startCamera, cleanup])
 
   return (
     <div className={cn("relative overflow-hidden rounded-lg bg-muted", className)}>

@@ -34,12 +34,15 @@ interface MediaSettingsModalProps {
   onOpenChange: (open: boolean) => void
   /** 기본 탭 (드롭다운에서 진입 시 설정) */
   defaultTab?: MediaSettingsTab
+  /** 📌 설정 적용 콜백 (모달 닫힐 때 호출, 비디오 설정 변경 시 카메라 재시작 등) */
+  onApply?: () => void
 }
 
 export function MediaSettingsModal({
   open,
   onOpenChange,
   defaultTab = "audio",
+  onApply,
 }: MediaSettingsModalProps) {
   // 📌 모달이 열릴 때마다 defaultTab으로 초기화되도록 key를 사용하지 않고
   // 내부 상태를 관리. openedWithTab을 추적하여 열릴 때만 초기화
@@ -133,7 +136,11 @@ export function MediaSettingsModal({
             <Button
               variant="default"
               size="sm"
-              onClick={() => onOpenChange(false)}
+              onClick={() => {
+                // 📌 설정 적용 콜백 호출 (카메라 재시작 등)
+                onApply?.()
+                onOpenChange(false)
+              }}
             >
               완료
             </Button>

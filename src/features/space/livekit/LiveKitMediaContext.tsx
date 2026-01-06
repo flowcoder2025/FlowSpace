@@ -69,6 +69,12 @@ export interface LiveKitMediaContextValue {
   replaceAudioTrackWithProcessed: (processedTrack: MediaStreamTrack) => Promise<boolean>
   /** 📌 오디오 옵션 변경 시 마이크 재시작 (동적 적용) */
   restartMicrophoneWithOptions: (options: AudioCaptureOptionsInput) => Promise<boolean>
+  /** 📌 카메라 장치 전환 (설정 변경 시 사용) */
+  switchCameraDevice: (deviceId: string) => Promise<boolean>
+  /** 📌 마이크 장치 전환 (설정 변경 시 사용) */
+  switchMicrophoneDevice: (deviceId: string) => Promise<boolean>
+  /** 📌 카메라 설정 재적용 (해상도/프레임레이트 변경 시 카메라 재시작) */
+  restartCamera: () => Promise<boolean>
 }
 
 // Default value (when not in LiveKit context)
@@ -90,6 +96,9 @@ const defaultContextValue: LiveKitMediaContextValue = {
   setLocalAudioGated: () => false,
   replaceAudioTrackWithProcessed: async () => false,
   restartMicrophoneWithOptions: async () => false,
+  switchCameraDevice: async () => false,
+  switchMicrophoneDevice: async () => false,
+  restartCamera: async () => false,
 }
 
 // Create context
@@ -1198,6 +1207,100 @@ export function LiveKitMediaInternalProvider({ children }: { children: ReactNode
     }
   }, [localParticipant, parseMediaError])
 
+  // 📌 카메라 장치 전환
+  const switchCameraDevice = useCallback(async (deviceId: string): Promise<boolean> => {
+    if (!room) {
+      setMediaError({
+        type: "not_connected",
+        message: "LiveKit에 연결되지 않았습니다.",
+      })
+      return false
+    }
+
+    try {
+      setMediaError(null)
+      await room.switchActiveDevice("videoinput", deviceId)
+      if (IS_DEV) {
+        console.log("[LiveKitMediaContext] Camera switched to:", deviceId)
+      }
+      return true
+    } catch (error) {
+      console.error("[LiveKitMediaContext] Camera switch error:", error)
+      setMediaError(parseMediaError(error))
+      return false
+    }
+  }, [room, parseMediaError])
+
+  // 📌 마이크 장치 전환
+  const switchMicrophoneDevice = useCallback(async (deviceId: string): Promise<boolean> => {
+    if (!room) {
+      setMediaError({
+        type: "not_connected",
+        message: "LiveKit에 연결되지 않았습니다.",
+      })
+      return false
+    }
+
+    try {
+      setMediaError(null)
+      await room.switchActiveDevice("audioinput", deviceId)
+      if (IS_DEV) {
+        console.log("[LiveKitMediaContext] Microphone switched to:", deviceId)
+      }
+      return true
+    } catch (error) {
+      console.error("[LiveKitMediaContext] Microphone switch error:", error)
+      setMediaError(parseMediaError(error))
+      return false
+    }
+  }, [room, parseMediaError])
+
+  // 📌 카메라 설정 재적용 (해상도/프레임레이트 변경 시 카메라 재시작)
+  // LiveKit의 videoCaptureDefaults는 방 연결 시점에만 적용되므로,
+  // 설정 변경 시 카메라를 껐다 켜서 새 설정 적용
+  const restartCamera = useCallback(async (): Promise<boolean> => {
+    if (!localParticipant) {
+      setMediaError({
+        type: "not_connected",
+        message: "LiveKit에 연결되지 않았습니다.",
+      })
+      return false
+    }
+
+    const wasEnabled = localParticipant.isCameraEnabled
+    if (!wasEnabled) {
+      if (IS_DEV) {
+        console.log("[LiveKitMediaContext] Camera not enabled, skip restart")
+      }
+      return true
+    }
+
+    try {
+      setMediaError(null)
+      if (IS_DEV) {
+        console.log("[LiveKitMediaContext] Restarting camera with new settings...")
+      }
+
+      // 1. 카메라 끄기
+      await localParticipant.setCameraEnabled(false)
+
+      // 2. 짧은 딜레이 (장치 해제 대기)
+      await new Promise(resolve => setTimeout(resolve, 100))
+
+      // 3. 카메라 다시 켜기 (새 설정이 roomOptions에서 적용됨)
+      await localParticipant.setCameraEnabled(true)
+
+      if (IS_DEV) {
+        console.log("[LiveKitMediaContext] Camera restarted successfully")
+      }
+      return true
+    } catch (error) {
+      console.error("[LiveKitMediaContext] Camera restart error:", error)
+      setMediaError(parseMediaError(error))
+      return false
+    }
+  }, [localParticipant, parseMediaError])
+
   // Toggle screen share (with optional audio)
   const toggleScreenShare = useCallback(async (options?: ScreenShareOptions): Promise<boolean> => {
     if (!localParticipant) {
@@ -1267,6 +1370,9 @@ export function LiveKitMediaInternalProvider({ children }: { children: ReactNode
       setLocalAudioGated,
       replaceAudioTrackWithProcessed,
       restartMicrophoneWithOptions,
+      switchCameraDevice,
+      switchMicrophoneDevice,
+      restartCamera,
     }),
     [
       participantTracks,
@@ -1282,6 +1388,9 @@ export function LiveKitMediaInternalProvider({ children }: { children: ReactNode
       setLocalAudioGated,
       replaceAudioTrackWithProcessed,
       restartMicrophoneWithOptions,
+      switchCameraDevice,
+      switchMicrophoneDevice,
+      restartCamera,
     ]
   )
 

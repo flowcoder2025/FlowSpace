@@ -435,6 +435,8 @@ function SpaceLayoutContent({
     localParticipantId,
     localAudioTrack,
     replaceAudioTrackWithProcessed,
+    restartCamera,           // 📌 비디오 설정 적용용
+    switchCameraDevice,      // 📌 카메라 장치 전환용
   } = useLiveKitMedia()
 
   // 📌 오디오 설정 (VAD 감도)
@@ -1517,6 +1519,7 @@ function SpaceLayoutContent({
         open={isMediaSettingsOpen}
         onOpenChange={setIsMediaSettingsOpen}
         defaultTab={mediaSettingsDefaultTab}
+        onApply={restartCamera}  // 📌 설정 적용 시 카메라 재시작
       />
 
       {/* Screen Share Overlay - Show when someone is sharing (except self) */}
