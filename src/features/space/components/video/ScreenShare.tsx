@@ -237,6 +237,16 @@ export function ScreenShare({
       const stream = new MediaStream([track.screenTrack])
       video.srcObject = stream
 
+      // 🔧 명시적 play() 호출 - autoPlay가 동작하지 않는 경우 대비
+      // VideoTile.tsx와 동일한 패턴 적용
+      video.play().catch((err) => {
+        // NotAllowedError: autoplay 정책에 의해 차단 (사용자 인터랙션 필요)
+        // AbortError: useEffect 재실행으로 인한 중단 (정상 동작)
+        if (err.name !== "NotAllowedError" && err.name !== "AbortError") {
+          console.error("[ScreenShare] Video play error:", err)
+        }
+      })
+
       // 🔧 loadedmetadata 이벤트 콜백에서만 크기 설정 (React 19 규칙 준수)
       const handleLoadedMetadata = () => {
         const { videoWidth, videoHeight } = video
