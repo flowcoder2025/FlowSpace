@@ -177,6 +177,7 @@ interface ControlBarProps {
   onToggleScreenShare: (options?: ScreenShareOptions) => void
   onToggleChat: () => void
   onOpenSettings?: () => void
+  onOpenMediaSettings?: (tab: "audio" | "video") => void
   onDismissError?: () => void
 }
 
@@ -195,6 +196,7 @@ export function ControlBar({
   onToggleScreenShare,
   onToggleChat,
   onOpenSettings,
+  onOpenMediaSettings,
   onDismissError,
 }: ControlBarProps) {
   // 미디어 장치 훅
@@ -317,6 +319,20 @@ export function ControlBar({
                   ))
                 )}
               </DropdownMenuRadioGroup>
+
+              {/* 음성 및 비디오 설정 */}
+              {onOpenMediaSettings && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={() => onOpenMediaSettings("audio")}
+                    className="flex items-center gap-2"
+                  >
+                    <SettingsIcon />
+                    <span>음성 및 비디오 설정</span>
+                  </DropdownMenuItem>
+                </>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -378,6 +394,20 @@ export function ControlBar({
                   ))
                 )}
               </DropdownMenuRadioGroup>
+
+              {/* 음성 및 비디오 설정 */}
+              {onOpenMediaSettings && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={() => onOpenMediaSettings("video")}
+                    className="flex items-center gap-2"
+                  >
+                    <SettingsIcon />
+                    <span>음성 및 비디오 설정</span>
+                  </DropdownMenuItem>
+                </>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

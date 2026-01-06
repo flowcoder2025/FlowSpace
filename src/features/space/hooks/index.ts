@@ -7,6 +7,9 @@ export { useFullscreen, useFullscreenToggle } from "./useFullscreen"
 export { useNotificationSound, type NotificationSoundType } from "./useNotificationSound"
 export { useChatStorage } from "./useChatStorage"
 export { useMediaDevices, type MediaDeviceInfo } from "./useMediaDevices"
+export { useAudioSettings } from "./useAudioSettings"
+export { useVideoSettings } from "./useVideoSettings"
+export { useVolumeMeter } from "./useVolumeMeter"
 export { useScreenRecorder, type RecordingState, type NotificationType } from "./useScreenRecorder"
 
 // Editor hooks

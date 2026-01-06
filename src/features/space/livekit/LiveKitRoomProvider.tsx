@@ -16,6 +16,8 @@ import { useState, useEffect, useCallback, useMemo, ReactNode } from "react"
 import { LiveKitRoom } from "@livekit/components-react"
 import { RoomOptions } from "livekit-client"
 import { LiveKitMediaInternalProvider } from "./LiveKitMediaContext"
+import { useAudioSettings } from "../hooks/useAudioSettings"
+import { useVideoSettings } from "../hooks/useVideoSettings"
 
 const LIVEKIT_URL = process.env.NEXT_PUBLIC_LIVEKIT_URL || "ws://localhost:7880"
 const IS_DEV = process.env.NODE_ENV === "development"
@@ -75,6 +77,10 @@ export function LiveKitRoomProvider({
     connectionError: null,
     effectiveParticipantId: null,
   })
+
+  // 📌 사용자 미디어 설정 로드
+  const { audioCaptureOptions } = useAudioSettings()
+  const { videoCaptureOptions } = useVideoSettings()
 
   // Fetch token from API
   const fetchToken = useCallback(async () => {
@@ -192,13 +198,16 @@ export function LiveKitRoomProvider({
   // 🔧 adaptiveStream: false로 설정하여 모든 트랙 즉시 구독
   // adaptiveStream: true는 비디오 요소가 뷰포트에 있을 때만 미디어 데이터를 수신하는데,
   // VideoTile에서 shouldShowVideo가 false일 때 비디오가 숨겨져서 catch-22 발생
+  //
+  // 📌 사용자 설정 적용:
+  // - audioCaptureDefaults: 잡음 제거, 에코 제거, 자동 게인 등
+  // - videoCaptureDefaults: 해상도, 프레임레이트, 카메라 방향 등
   const roomOptions = useMemo((): RoomOptions => ({
     adaptiveStream: false,  // 🔧 즉시 구독으로 변경
     dynacast: true,
-    videoCaptureDefaults: {
-      resolution: { width: 640, height: 480, frameRate: 24 },
-    },
-  }), [])
+    audioCaptureDefaults: audioCaptureOptions,
+    videoCaptureDefaults: videoCaptureOptions,
+  }), [audioCaptureOptions, videoCaptureOptions])
 
   // Connection handlers
   const handleConnected = useCallback(() => {

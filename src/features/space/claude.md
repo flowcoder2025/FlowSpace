@@ -19,9 +19,18 @@
 │   ├── SpaceHeader.tsx    # 상단 헤더
 │   ├── /chat              # 📌 플로팅 채팅 시스템
 │   │   ├── FloatingChatOverlay.tsx  # 게임 위 플로팅 채팅창
-│   │   ├── ChatTabs.tsx             # 전체/귓속말/파티 탭 (NEW)
+│   │   ├── ChatTabs.tsx             # 전체/귓속말/파티 탭
 │   │   ├── ChatMessageList.tsx      # 스크롤 가능 메시지 목록
 │   │   ├── ChatInputArea.tsx        # 채팅 입력 영역
+│   │   └── index.ts
+│   ├── /settings          # 📌 미디어 설정 시스템 (NEW - 2026-01)
+│   │   ├── MediaSettingsModal.tsx   # 메인 설정 모달 (탭 네비게이션)
+│   │   ├── AudioSettingsTab.tsx     # 음성 설정 탭
+│   │   ├── VideoSettingsTab.tsx     # 비디오 설정 탭
+│   │   ├── DeviceSelector.tsx       # 장치 선택 드롭다운
+│   │   ├── VolumeMeter.tsx          # 실시간 볼륨 미터
+│   │   ├── MicrophoneTest.tsx       # 마이크 테스트 (녹음/재생)
+│   │   ├── CameraPreview.tsx        # 카메라 미리보기
 │   │   └── index.ts
 │   ├── /sidebar
 │   │   └── ChatPanel.tsx  # 좌측 채팅 패널 (레거시, 미사용)
@@ -33,7 +42,7 @@
 │   ├── /game
 │   │   └── GameCanvas.tsx        # Phaser 캔버스 래퍼
 │   └── /controls
-│       └── ControlBar.tsx        # 하단 컨트롤 바
+│       └── ControlBar.tsx        # 하단 컨트롤 바 (설정 메뉴 포함)
 │
 ├── /game                  # 📌 Phaser 게임 엔진
 │   ├── PhaserGame.tsx     # Phaser 인스턴스 React 래퍼
@@ -65,14 +74,18 @@
 ├── /hooks                 # 📌 공간 관련 훅
 │   ├── useChatMode.ts     # 채팅 모드 상태 관리
 │   ├── useChatDrag.ts     # 채팅창 드래그/리사이즈
-│   ├── useChatStorage.ts  # 채팅 메시지 영속성 (NEW)
+│   ├── useChatStorage.ts  # 채팅 메시지 영속성
 │   ├── useFullscreen.ts   # 전체화면 상태 감지
-│   ├── useNotificationSound.ts  # 알림 사운드 (NEW)
-│   ├── useMediaDevices.ts # 미디어 장치 관리 (NEW)
+│   ├── useNotificationSound.ts  # 알림 사운드
+│   ├── useMediaDevices.ts # 미디어 장치 관리 (Option C: 지연된 권한 요청)
+│   ├── useAudioSettings.ts # 📌 오디오 설정 관리 (NEW - 2026-01)
+│   ├── useVideoSettings.ts # 📌 비디오 설정 관리 (NEW - 2026-01)
+│   ├── useVolumeMeter.ts  # 📌 실시간 볼륨 측정 (NEW - 2026-01)
 │   └── index.ts
 │
 └── /types
-    └── space.types.ts     # 공간 관련 타입
+    ├── space.types.ts     # 공간 관련 타입
+    └── media-settings.types.ts # 📌 미디어 설정 타입 (NEW - 2026-01)
 ```
 
 ---
@@ -185,11 +198,38 @@ className={cn(
 **버튼**:
 | 버튼 | 기능 | 상태 |
 |-----|------|------|
-| 마이크 | 음성 on/off | `isMicOn` |
-| 카메라 | 영상 on/off | `isCameraOn` |
+| 마이크 | 음성 on/off + 장치 선택 드롭다운 | `isMicOn` |
+| 카메라 | 영상 on/off + 장치 선택 드롭다운 | `isCameraOn` |
 | 화면공유 | 화면 공유 토글 | `isScreenSharing` |
 | 채팅 | 채팅 패널 토글 | `isChatOpen` |
 | 참가자 | 참가자 패널 토글 | `isParticipantsOpen` |
+
+**미디어 설정 메뉴** (2026-01 추가):
+- 마이크/카메라 드롭다운에 "음성 및 비디오 설정" 메뉴 추가
+- 설정 아이콘(⚙️)으로 `MediaSettingsModal` 열기
+- 마이크 버튼 → 음성 탭, 카메라 버튼 → 비디오 탭 기본 선택
+
+### 3.6 MediaSettingsModal (NEW - 2026-01)
+
+**역할**: 디스코드 스타일 미디어 설정 모달
+
+**구조**:
+```
+MediaSettingsModal
+├── 탭 네비게이션 (음성/비디오)
+├── AudioSettingsTab
+│   ├── DeviceSelector (입력/출력 장치)
+│   ├── VolumeMeter (실시간 볼륨)
+│   ├── 음성 처리 토글 (잡음/에코/게인/음성분리)
+│   ├── 입력 감도 슬라이더
+│   └── MicrophoneTest (녹음/재생)
+├── VideoSettingsTab
+│   ├── DeviceSelector (카메라)
+│   ├── CameraPreview (미리보기)
+│   ├── 해상도 프리셋 (480p/720p/1080p)
+│   ├── 프레임레이트 (15/24/30/60fps)
+│   └── 미러 모드 토글
+└── 하단 버튼 (기본값 복원/완료)
 
 ### 3.4 ChatTabs.tsx (NEW - 2025-12-11)
 
@@ -357,18 +397,108 @@ const { playNotification } = useNotificationSound()
 - 새 메시지 수신 시 사운드 재생
 - 귓속말/멘션 시 강조 알림
 
-### 4.9 useMediaDevices (NEW - 2025-12-11)
+### 4.9 useMediaDevices (Option C - 2026-01 개선)
 
-**역할**: 미디어 장치 (카메라/마이크) 관리
+**역할**: 미디어 장치 (카메라/마이크) 관리 + 지연된 권한 요청
 
 ```tsx
-const { devices, selectedCamera, selectedMic, selectDevice } = useMediaDevices()
+const {
+  audioInputDevices,      // 마이크 목록
+  audioOutputDevices,     // 스피커 목록
+  videoInputDevices,      // 카메라 목록
+  selectedAudioInput,     // 선택된 마이크
+  selectedVideoInput,     // 선택된 카메라
+  selectedAudioOutput,    // 선택된 스피커
+  selectAudioInput,       // 마이크 선택 함수
+  selectVideoInput,       // 카메라 선택 함수
+  selectAudioOutput,      // 스피커 선택 함수
+  requestPermission,      // 📌 권한 요청 (설정 열 때 호출)
+  hasPermission,          // 📌 권한 획득 여부
+  isLoading,
+  error,
+} = useMediaDevices()
 ```
 
-**기능**:
-- 사용 가능한 장치 목록 조회
-- 장치 선택 및 전환
-- 권한 요청 처리
+**Option C (지연된 권한 요청)**:
+- 마운트 시 `getUserMedia` 호출하지 않음 (iOS Safari 호환성)
+- 설정 드롭다운 열 때 `requestPermission()` 호출
+- 권한 획득 후 장치 label 포함된 목록 갱신
+
+### 4.10 useAudioSettings (NEW - 2026-01)
+
+**역할**: 오디오 설정 관리 + localStorage 영속성
+
+```tsx
+const {
+  settings,               // AudioSettings 전체
+  audioCaptureOptions,    // LiveKit AudioCaptureOptions로 변환
+  toggleNoiseSuppression, // 잡음 제거 토글
+  toggleEchoCancellation, // 에코 제거 토글
+  toggleAutoGainControl,  // 자동 게인 토글
+  toggleVoiceIsolation,   // 음성 분리 토글 (실험적)
+  setInputVolume,         // 입력 볼륨 (0-100)
+  setOutputVolume,        // 출력 볼륨 (0-100)
+  setInputSensitivity,    // 입력 감도 임계값
+  setInputDevice,         // 입력 장치 선택
+  setOutputDevice,        // 출력 장치 선택
+  resetToDefaults,        // 기본값 복원
+} = useAudioSettings()
+```
+
+**설정 항목**:
+| 옵션 | 기본값 | LiveKit 옵션 |
+|-----|-------|--------------|
+| noiseSuppression | true | AudioCaptureOptions.noiseSuppression |
+| echoCancellation | true | AudioCaptureOptions.echoCancellation |
+| autoGainControl | true | AudioCaptureOptions.autoGainControl |
+| voiceIsolation | false | 실험적 기능 |
+| inputVolume | 100 | - |
+| outputVolume | 100 | - |
+| inputSensitivity | 30 | VAD threshold |
+
+### 4.11 useVideoSettings (NEW - 2026-01)
+
+**역할**: 비디오 설정 관리 + localStorage 영속성
+
+```tsx
+const {
+  settings,              // VideoSettings 전체
+  videoCaptureOptions,   // LiveKit VideoCaptureOptions로 변환
+  setResolution,         // 해상도 프리셋 (480p/720p/1080p)
+  setFrameRate,          // 프레임레이트 (15/24/30/60)
+  setFacingMode,         // 카메라 방향 (user/environment)
+  toggleMirrorMode,      // 미러 모드 토글
+  setVideoDevice,        // 카메라 선택
+  resetToDefaults,       // 기본값 복원
+} = useVideoSettings()
+```
+
+**해상도 프리셋**:
+| 프리셋 | 해상도 | 용도 |
+|-------|-------|------|
+| 480p | 640x480 | 저대역폭 |
+| 720p | 1280x720 | 기본 (권장) |
+| 1080p | 1920x1080 | 고화질 |
+
+### 4.12 useVolumeMeter (NEW - 2026-01)
+
+**역할**: Web Audio API 기반 실시간 볼륨 측정
+
+```tsx
+const {
+  volume,    // 현재 볼륨 레벨 (0-100)
+  start,     // 측정 시작 (deviceId 또는 MediaStream)
+  stop,      // 측정 중지
+  isActive,  // 측정 활성화 여부
+  error,     // 에러 상태
+} = useVolumeMeter()
+```
+
+**동작 원리**:
+- AnalyserNode로 오디오 레벨 분석
+- RMS (Root Mean Square) 계산
+- requestAnimationFrame 기반 60fps 업데이트
+- 외부 MediaStream 또는 deviceId로 시작 가능
 
 ---
 
@@ -530,3 +660,9 @@ DEBUG=socket.io* npm run socket:dev
 | 2025-12-11 | 귓속말/파티 시스템 추가 (ChatTabs, whisper/party 이벤트) |
 | 2025-12-11 | 추가 훅 문서화 (useChatStorage, useNotificationSound, useMediaDevices) |
 | 2025-12-16 | 화면 공유 크롭 문제 해결 (VideoTile object-contain 적용) |
+| 2026-01-06 | 📌 미디어 설정 시스템 추가 (디스코드 스타일 설정 패널) |
+| 2026-01-06 | - /components/settings 폴더: MediaSettingsModal, Audio/VideoSettingsTab 등 7개 컴포넌트 |
+| 2026-01-06 | - 새 훅: useAudioSettings, useVideoSettings, useVolumeMeter |
+| 2026-01-06 | - useMediaDevices Option C 적용 (지연된 권한 요청 - iOS Safari 호환) |
+| 2026-01-06 | - LiveKitRoomProvider: audioCaptureDefaults/videoCaptureDefaults 동적 적용 |
+| 2026-01-06 | - ControlBar: 마이크/카메라 드롭다운에 설정 메뉴 추가 |

@@ -9,6 +9,7 @@ import { ScreenShareOverlay } from "./video/ScreenShare"
 import { ControlBar } from "./controls/ControlBar"
 import { GameCanvas } from "./game/GameCanvas"
 import { SpaceSettingsModal } from "./SpaceSettingsModal"
+import { MediaSettingsModal, type MediaSettingsTab } from "./settings"
 import { MemberPanel } from "./MemberPanel"
 import { RecordingIndicator } from "./RecordingIndicator"
 import { EditorPanel, EditorModeIndicator } from "./editor"
@@ -138,6 +139,10 @@ function SpaceLayoutContent({
 
   // Settings modal
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+
+  // 🔧 미디어 설정 모달
+  const [isMediaSettingsOpen, setIsMediaSettingsOpen] = useState(false)
+  const [mediaSettingsDefaultTab, setMediaSettingsDefaultTab] = useState<MediaSettingsTab>("audio")
 
   // Chat messages
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -1123,6 +1128,12 @@ function SpaceLayoutContent({
     setIsSettingsOpen(true)
   }, [])
 
+  // 🔧 미디어 설정 모달 열기 (탭 지정)
+  const handleOpenMediaSettings = useCallback((tab: MediaSettingsTab) => {
+    setMediaSettingsDefaultTab(tab)
+    setIsMediaSettingsOpen(true)
+  }, [])
+
   const handleSaveSettings = useCallback((nickname: string, avatar: string) => {
     // 🔄 Hot reload: 로컬 상태 업데이트 + 소켓으로 프로필 전송
     // avatar는 이제 "classic:default" 또는 "custom:office_male" 형식
@@ -1335,6 +1346,7 @@ function SpaceLayoutContent({
           onToggleScreenShare={handleToggleScreenShare}
           onToggleChat={handleToggleChat}
           onOpenSettings={handleOpenSettings}
+          onOpenMediaSettings={handleOpenMediaSettings}
           onDismissError={handleDismissError}
         />
       </div>
@@ -1347,6 +1359,13 @@ function SpaceLayoutContent({
         currentNickname={currentNickname}
         currentAvatar={currentAvatar}
         onSave={handleSaveSettings}
+      />
+
+      {/* 🔧 미디어 설정 모달 */}
+      <MediaSettingsModal
+        open={isMediaSettingsOpen}
+        onOpenChange={setIsMediaSettingsOpen}
+        defaultTab={mediaSettingsDefaultTab}
       />
 
       {/* Screen Share Overlay - Show when someone is sharing (except self) */}
