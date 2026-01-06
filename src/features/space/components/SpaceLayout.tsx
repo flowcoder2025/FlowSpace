@@ -17,7 +17,7 @@ import { EditorPanel, EditorModeIndicator } from "./editor"
 import { IOSAudioActivator } from "./IOSAudioActivator"
 import { useSocket } from "../socket"
 import { LiveKitRoomProvider, useLiveKitMedia } from "../livekit"
-import { useNotificationSound, useChatStorage, usePastMessages, mergePastMessages, useAudioSettings, useVoiceActivityGate } from "../hooks"
+import { useNotificationSound, useChatStorage, usePastMessages, mergePastMessages, useAudioSettings, useAudioGateProcessor } from "../hooks"
 import { generateFullHelpMessages, getNextRotatingHint, getWelcomeMessage, HINT_INTERVAL_MS } from "../utils/commandHints"
 import { useEditorCommands } from "../hooks/useEditorCommands"
 import { useEditorStore } from "../stores/editorStore"
@@ -434,35 +434,63 @@ function SpaceLayoutContent({
     participantTracks,
     localParticipantId,
     localAudioTrack,
-    setLocalAudioGated,
+    replaceAudioTrackWithProcessed,
   } = useLiveKitMedia()
 
   // 📌 오디오 설정 (VAD 감도)
   const { settings: audioSettings } = useAudioSettings()
 
-  // 🔊 VAD (Voice Activity Detection) - 입력 감도 기반 오디오 게이트
-  // sensitivity 0 = VAD 비활성화, 1-100 = 게이트 임계값
-  const { isBelowThreshold } = useVoiceActivityGate({
-    audioTrack: localAudioTrack,
+  // 🔊 AudioWorklet 기반 전문급 노이즈 게이트
+  // - 별도 스레드에서 오디오 처리 (메인 스레드 차단 없음)
+  // - 부드러운 Attack/Release 엔벨로프
+  // - 히스테리시스로 채터링 방지
+  const {
+    processedTrack,
+    // isGateOpen, // 향후 UI 피드백용 (게이트 상태 표시)
+    isInitialized: isGateInitialized,
+    error: gateError,
+  } = useAudioGateProcessor({
+    inputTrack: localAudioTrack,
     sensitivity: audioSettings.inputSensitivity,
-    enabled: audioSettings.inputSensitivity > 0,
+    enabled: mediaState.isMicrophoneEnabled && audioSettings.inputSensitivity > 0,
   })
 
-  // 🔊 VAD 게이트 적용 (입력 감도 미만일 때 소스 레벨에서 오디오 차단)
-  // publication.mute() 대신 MediaStreamTrack.enabled 직접 제어
+  // 🔊 AudioWorklet 처리된 트랙을 LiveKit에 적용
+  // processedTrack이 준비되면 기존 마이크 트랙을 교체
+  const hasReplacedTrackRef = useRef(false)
+
   useEffect(() => {
-    // 마이크가 꺼져있으면 VAD 미적용
-    if (!mediaState.isMicrophoneEnabled) return
+    // 조건: 게이트 초기화 완료 + 처리된 트랙 존재 + 마이크 활성화 + 아직 교체 안함
+    if (
+      isGateInitialized &&
+      processedTrack &&
+      mediaState.isMicrophoneEnabled &&
+      !hasReplacedTrackRef.current
+    ) {
+      replaceAudioTrackWithProcessed(processedTrack)
+        .then((success) => {
+          if (success) {
+            hasReplacedTrackRef.current = true
+            console.log("[SpaceLayout] AudioWorklet 처리된 트랙으로 교체 완료")
+          }
+        })
+        .catch((err) => {
+          console.error("[SpaceLayout] 트랙 교체 실패:", err)
+        })
+    }
 
-    // VAD 활성화 여부와 임계값 기반 게이트 결정
-    // - sensitivity = 0: VAD 비활성화 → 게이트 열림 (오디오 출력)
-    // - sensitivity > 0 && isBelowThreshold: 입력 레벨이 임계값 미만 → 게이트 닫힘 (오디오 차단)
-    // - sensitivity > 0 && !isBelowThreshold: 입력 레벨이 임계값 이상 → 게이트 열림 (오디오 출력)
-    const shouldBeGated = audioSettings.inputSensitivity > 0 && isBelowThreshold
+    // 마이크가 꺼지면 다음에 다시 교체할 수 있도록 플래그 리셋
+    if (!mediaState.isMicrophoneEnabled) {
+      hasReplacedTrackRef.current = false
+    }
+  }, [isGateInitialized, processedTrack, mediaState.isMicrophoneEnabled, replaceAudioTrackWithProcessed])
 
-    // 소스 레벨에서 직접 오디오 제어 (track.enabled)
-    setLocalAudioGated(shouldBeGated)
-  }, [isBelowThreshold, audioSettings.inputSensitivity, mediaState.isMicrophoneEnabled, setLocalAudioGated])
+  // 🔊 게이트 에러 로깅 (개발 모드)
+  useEffect(() => {
+    if (gateError && process.env.NODE_ENV === "development") {
+      console.warn("[SpaceLayout] AudioGate 에러:", gateError)
+    }
+  }, [gateError])
 
   // 🎨 에디터 상태 구독
   const isEditorActive = useEditorStore((state) => state.mode.isActive)

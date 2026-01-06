@@ -65,6 +65,8 @@ export interface LiveKitMediaContextValue {
   setLocalMicrophoneMuted: (muted: boolean) => Promise<boolean>
   /** 📌 소스 레벨 오디오 게이트: MediaStreamTrack.enabled 직접 제어 */
   setLocalAudioGated: (gated: boolean) => boolean
+  /** 📌 AudioWorklet 처리된 트랙으로 교체 */
+  replaceAudioTrackWithProcessed: (processedTrack: MediaStreamTrack) => Promise<boolean>
   /** 📌 오디오 옵션 변경 시 마이크 재시작 (동적 적용) */
   restartMicrophoneWithOptions: (options: AudioCaptureOptionsInput) => Promise<boolean>
 }
@@ -86,6 +88,7 @@ const defaultContextValue: LiveKitMediaContextValue = {
   toggleScreenShare: async () => false,
   setLocalMicrophoneMuted: async () => false,
   setLocalAudioGated: () => false,
+  replaceAudioTrackWithProcessed: async () => false,
   restartMicrophoneWithOptions: async () => false,
 }
 
@@ -1079,6 +1082,69 @@ export function LiveKitMediaInternalProvider({ children }: { children: ReactNode
     }
   }, [localParticipant])
 
+  // 📌 AudioWorklet 처리된 트랙으로 교체
+  // LiveKit의 기존 마이크 트랙을 AudioWorklet에서 처리된 트랙으로 교체
+  const replaceAudioTrackWithProcessed = useCallback(async (processedTrack: MediaStreamTrack): Promise<boolean> => {
+    if (!localParticipant) {
+      if (IS_DEV) {
+        console.log("[LiveKitMediaContext] replaceAudioTrackWithProcessed: No local participant")
+      }
+      return false
+    }
+
+    try {
+      const publication = localParticipant.getTrackPublication(Track.Source.Microphone)
+      if (!publication?.track) {
+        if (IS_DEV) {
+          console.log("[LiveKitMediaContext] replaceAudioTrackWithProcessed: No publication track")
+        }
+        return false
+      }
+
+      // LiveKit LocalTrack의 replaceTrack 메서드 사용
+      // 이 메서드는 WebRTC RTCRtpSender.replaceTrack()을 내부적으로 호출
+      // 재협상 없이 트랙만 교체되므로 끊김 없이 전환됨
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const localTrack = publication.track as any
+
+      if (typeof localTrack.replaceTrack === "function") {
+        await localTrack.replaceTrack(processedTrack)
+
+        if (IS_DEV) {
+          console.log("[LiveKitMediaContext] replaceAudioTrackWithProcessed: Track replaced successfully")
+        }
+        return true
+      } else {
+        // replaceTrack이 없는 경우 RTCRtpSender를 통한 교체 시도
+        if (IS_DEV) {
+          console.log("[LiveKitMediaContext] replaceAudioTrackWithProcessed: replaceTrack not available, using fallback")
+        }
+
+        // Room context에서 RTCPeerConnection 접근
+        if (room) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const engine = (room as any).engine
+          const sender = engine?.publisher?.pc?.getSenders()?.find(
+            (s: RTCRtpSender) => s.track?.kind === "audio"
+          )
+          if (sender) {
+            await sender.replaceTrack(processedTrack)
+            if (IS_DEV) {
+              console.log("[LiveKitMediaContext] replaceAudioTrackWithProcessed: Track replaced via RTCRtpSender")
+            }
+            return true
+          }
+        }
+
+        console.warn("[LiveKitMediaContext] replaceAudioTrackWithProcessed: Could not replace track")
+        return false
+      }
+    } catch (error) {
+      console.error("[LiveKitMediaContext] replaceAudioTrackWithProcessed error:", error)
+      return false
+    }
+  }, [localParticipant, room])
+
   // 📌 오디오 옵션 변경 시 마이크 재시작 (동적 적용)
   // LiveKit은 트랙 캡처 시에만 옵션을 적용하므로, 설정 변경 시 마이크를 재시작해야 함
   const restartMicrophoneWithOptions = useCallback(async (options: AudioCaptureOptionsInput): Promise<boolean> => {
@@ -1199,6 +1265,7 @@ export function LiveKitMediaInternalProvider({ children }: { children: ReactNode
       toggleScreenShare,
       setLocalMicrophoneMuted,
       setLocalAudioGated,
+      replaceAudioTrackWithProcessed,
       restartMicrophoneWithOptions,
     }),
     [
@@ -1213,6 +1280,7 @@ export function LiveKitMediaInternalProvider({ children }: { children: ReactNode
       toggleScreenShare,
       setLocalMicrophoneMuted,
       setLocalAudioGated,
+      replaceAudioTrackWithProcessed,
       restartMicrophoneWithOptions,
     ]
   )
