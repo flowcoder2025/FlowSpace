@@ -117,6 +117,16 @@ export function useAudioGateProcessor({
 
   // AudioWorklet 초기화 및 파이프라인 설정
   useEffect(() => {
+    // 📌 sensitivity가 0이면 AudioWorklet 파이프라인을 생성하지 않음
+    // 이 경우 원본 LiveKit 트랙이 그대로 사용됨 (성능 최적화 + 호환성)
+    if (sensitivity === 0) {
+      cleanup()
+      if (IS_DEV) {
+        console.log("[useAudioGateProcessor] Sensitivity is 0, skipping AudioWorklet pipeline")
+      }
+      return
+    }
+
     // 입력 트랙이 없거나 유효하지 않으면 정리
     if (!inputTrack || inputTrack.readyState !== "live") {
       cleanup()
@@ -218,7 +228,7 @@ export function useAudioGateProcessor({
       isMounted = false
       cleanup()
     }
-  }, [inputTrack, cleanup, attackTime, releaseTime]) // sensitivity와 enabled는 별도 effect에서 처리
+  }, [inputTrack, sensitivity, cleanup, attackTime, releaseTime]) // 📌 sensitivity 추가: 0이면 파이프라인 생성 안함
 
   // Sensitivity 변경 시 Worklet에 전달
   useEffect(() => {

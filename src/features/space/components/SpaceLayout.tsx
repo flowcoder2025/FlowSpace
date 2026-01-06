@@ -462,12 +462,14 @@ function SpaceLayoutContent({
   const hasReplacedTrackRef = useRef(false)
 
   useEffect(() => {
-    // 조건: 게이트 초기화 완료 + 처리된 트랙 존재 + 마이크 활성화 + 아직 교체 안함
+    // 📌 조건: 게이트 초기화 완료 + 처리된 트랙 존재 + 마이크 활성화 + 아직 교체 안함 + sensitivity > 0
+    // sensitivity가 0이면 AudioWorklet을 사용하지 않고 원본 LiveKit 트랙 사용
     if (
       isGateInitialized &&
       processedTrack &&
       mediaState.isMicrophoneEnabled &&
-      !hasReplacedTrackRef.current
+      !hasReplacedTrackRef.current &&
+      audioSettings.inputSensitivity > 0 // 📌 노이즈 게이트 활성화 시에만 트랙 교체
     ) {
       replaceAudioTrackWithProcessed(processedTrack)
         .then((success) => {
@@ -485,7 +487,7 @@ function SpaceLayoutContent({
     if (!mediaState.isMicrophoneEnabled) {
       hasReplacedTrackRef.current = false
     }
-  }, [isGateInitialized, processedTrack, mediaState.isMicrophoneEnabled, replaceAudioTrackWithProcessed])
+  }, [isGateInitialized, processedTrack, mediaState.isMicrophoneEnabled, replaceAudioTrackWithProcessed, audioSettings.inputSensitivity])
 
   // 🔊 게이트 에러 로깅 (개발 모드)
   useEffect(() => {
