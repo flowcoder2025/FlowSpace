@@ -17,7 +17,7 @@ import { EditorPanel, EditorModeIndicator } from "./editor"
 import { IOSAudioActivator } from "./IOSAudioActivator"
 import { useSocket } from "../socket"
 import { LiveKitRoomProvider, useLiveKitMedia } from "../livekit"
-import { useNotificationSound, useChatStorage, usePastMessages, mergePastMessages, useVoiceActivityGate, useAudioSettings } from "../hooks"
+import { useNotificationSound, useChatStorage, usePastMessages, mergePastMessages, useAudioSettings } from "../hooks"
 import { generateFullHelpMessages, getNextRotatingHint, getWelcomeMessage, HINT_INTERVAL_MS } from "../utils/commandHints"
 import { useEditorCommands } from "../hooks/useEditorCommands"
 import { useEditorStore } from "../stores/editorStore"
@@ -440,25 +440,11 @@ function SpaceLayoutContent({
   // 📌 오디오 설정 (VAD 감도)
   const { settings: audioSettings } = useAudioSettings()
 
-  // 🎙️ VAD 게이트: 마이크 켜져 있고 감도 설정이 0보다 클 때만 활성화
-  // 📌 기본 inputSensitivity=0 → VAD 비활성화 (말 중 뮤트 방지)
-  const { isBelowThreshold: isVoiceBelowThreshold } = useVoiceActivityGate({
-    audioTrack: localAudioTrack,
-    sensitivity: audioSettings.inputSensitivity,
-    enabled: mediaState.isMicrophoneEnabled && audioSettings.inputSensitivity > 0,
-    debounceMs: 300, // 📌 말 사이 짧은 침묵에 대응
-  })
-
-  // 📌 VAD 게이트 결과에 따라 마이크 뮤트/언뮤트
-  useEffect(() => {
-    // 마이크가 켜져 있고 VAD가 활성화된 경우에만
-    if (!mediaState.isMicrophoneEnabled || audioSettings.inputSensitivity === 0) {
-      return
-    }
-
-    // 임계값 미만이면 뮤트, 이상이면 언뮤트
-    setLocalMicrophoneMuted(isVoiceBelowThreshold)
-  }, [isVoiceBelowThreshold, mediaState.isMicrophoneEnabled, audioSettings.inputSensitivity, setLocalMicrophoneMuted])
+  // 🚫 VAD 기능 비활성화 (말 중 마이크 강제 뮤트 문제 발생)
+  // 잡음 제거는 LiveKit의 noiseSuppression으로 처리
+  // TODO: VAD 로직 재설계 후 재활성화 검토
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _vadDisabled = { audioSettings, localAudioTrack, setLocalMicrophoneMuted }
 
   // 🎨 에디터 상태 구독
   const isEditorActive = useEditorStore((state) => state.mode.isActive)
