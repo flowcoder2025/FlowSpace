@@ -74,6 +74,11 @@ export function useAudioGateProcessor({
   const destinationNodeRef = useRef<MediaStreamAudioDestinationNode | null>(null)
   const isCleaningUpRef = useRef(false)
 
+  // 📌 sensitivity를 ref로 추적 (0 ↔ non-zero 전환 감지용)
+  // sensitivity 자체는 파이프라인 재생성을 트리거하지 않음 (worklet에 메시지만 전송)
+  const prevSensitivityRef = useRef(sensitivity)
+  const isGateEnabledRef = useRef(sensitivity > 0) // 게이트 활성화 여부 (0이면 비활성화)
+
   // Cleanup 함수
   const cleanup = useCallback(() => {
     if (isCleaningUpRef.current) return
@@ -115,11 +120,24 @@ export function useAudioGateProcessor({
     isCleaningUpRef.current = false
   }, [])
 
+  // 📌 0 ↔ non-zero 전환 감지 (파이프라인 생성/정리 트리거)
+  // sensitivity 값 자체의 변경(예: 30→50)은 파이프라인을 재생성하지 않음
+  const shouldCreatePipeline = sensitivity > 0
+
+  // ref 업데이트
+  useEffect(() => {
+    prevSensitivityRef.current = sensitivity
+    isGateEnabledRef.current = sensitivity > 0
+  }, [sensitivity])
+
   // AudioWorklet 초기화 및 파이프라인 설정
+  // 📌 핵심 수정: sensitivity 자체는 의존성에서 제외
+  // - 0 → non-zero 전환 시에만 파이프라인 생성 (shouldCreatePipeline 사용)
+  // - non-zero → non-zero 변경은 두 번째 effect에서 메시지로 처리
   useEffect(() => {
     // 📌 sensitivity가 0이면 AudioWorklet 파이프라인을 생성하지 않음
     // 이 경우 원본 LiveKit 트랙이 그대로 사용됨 (성능 최적화 + 호환성)
-    if (sensitivity === 0) {
+    if (!shouldCreatePipeline) {
       cleanup()
       if (IS_DEV) {
         console.log("[useAudioGateProcessor] Sensitivity is 0, skipping AudioWorklet pipeline")
@@ -130,6 +148,15 @@ export function useAudioGateProcessor({
     // 입력 트랙이 없거나 유효하지 않으면 정리
     if (!inputTrack || inputTrack.readyState !== "live") {
       cleanup()
+      return
+    }
+
+    // 📌 이미 초기화된 파이프라인이 있고, 트랙이 같으면 재생성하지 않음
+    // (sensitivity 변경은 메시지로 처리)
+    if (isInitialized && workletNodeRef.current && sourceNodeRef.current) {
+      if (IS_DEV) {
+        console.log("[useAudioGateProcessor] Pipeline already initialized, skipping recreation")
+      }
       return
     }
 
@@ -201,15 +228,16 @@ export function useAudioGateProcessor({
         setProcessedTrack(processedAudioTrack)
         setIsInitialized(true)
 
-        // 초기 파라미터 설정
-        workletNode.port.postMessage({ type: "setThreshold", data: sensitivity })
-        workletNode.port.postMessage({ type: "setEnabled", data: enabled && sensitivity > 0 })
+        // 초기 파라미터 설정 (현재 sensitivity 값 사용)
+        const currentSensitivity = prevSensitivityRef.current
+        workletNode.port.postMessage({ type: "setThreshold", data: currentSensitivity })
+        workletNode.port.postMessage({ type: "setEnabled", data: enabled && currentSensitivity > 0 })
         workletNode.port.postMessage({ type: "setAttackTime", data: attackTime })
         workletNode.port.postMessage({ type: "setReleaseTime", data: releaseTime })
 
         if (IS_DEV) {
           console.log("[useAudioGateProcessor] Initialized successfully", {
-            sensitivity,
+            sensitivity: currentSensitivity,
             enabled,
             attackTime,
             releaseTime,
@@ -228,7 +256,7 @@ export function useAudioGateProcessor({
       isMounted = false
       cleanup()
     }
-  }, [inputTrack, sensitivity, cleanup, attackTime, releaseTime]) // 📌 sensitivity 추가: 0이면 파이프라인 생성 안함
+  }, [inputTrack, shouldCreatePipeline, cleanup, attackTime, releaseTime, enabled, isInitialized]) // 📌 sensitivity 제거, shouldCreatePipeline으로 대체
 
   // Sensitivity 변경 시 Worklet에 전달
   useEffect(() => {
