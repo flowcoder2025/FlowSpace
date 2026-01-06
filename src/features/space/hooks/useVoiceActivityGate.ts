@@ -38,27 +38,27 @@ interface UseVoiceActivityGateReturn {
 
 /**
  * sensitivity (0-100)를 실제 RMS 임계값 (0-1)로 변환
- * - sensitivity 0 = 가장 민감 (임계값 0.01)
- * - sensitivity 100 = 가장 둔감 (임계값 0.5)
+ * - sensitivity 0 = VAD 비활성화 (별도 처리)
+ * - sensitivity 1 = 가장 민감 (임계값 0.005)
+ * - sensitivity 100 = 가장 둔감 (임계값 0.10)
  *
- * 📌 감도가 낮을수록 작은 소리에도 반응해야 하므로
- * sensitivity 값이 낮으면 threshold도 낮아야 함
+ * 📌 일반 말소리 RMS = 0.05~0.2 범위이므로
+ * 임계값을 낮게 유지해야 말 중 뮤트 방지
  */
 function sensitivityToThreshold(sensitivity: number): number {
   // 0-100 → 0-1 범위로 정규화
   const normalized = Math.max(0, Math.min(100, sensitivity)) / 100
-  // 임계값 범위: 0.01 (매우 민감) ~ 0.5 (매우 둔감)
-  // normalized 0 → threshold 0.01
-  // normalized 1 → threshold 0.5
-  return 0.01 + normalized * 0.49
+  // 📌 임계값 범위 수정: 0.005 (매우 민감) ~ 0.10 (적당히 둔감)
+  // 기존 0.01~0.5는 너무 높아서 말소리도 차단됨
+  return 0.005 + normalized * 0.095
 }
 
 export function useVoiceActivityGate({
   audioTrack,
   sensitivity,
   enabled,
-  debounceMs = 150,
-  hysteresis = 0.02,
+  debounceMs = 300, // 📌 150→300ms: 말 사이 짧은 침묵에 대응
+  hysteresis = 0.015, // 📌 0.02→0.015: 낮은 threshold에 맞춤
 }: UseVoiceActivityGateOptions): UseVoiceActivityGateReturn {
   const [isBelowThreshold, setIsBelowThreshold] = useState(false)
   const [currentLevel, setCurrentLevel] = useState(0)

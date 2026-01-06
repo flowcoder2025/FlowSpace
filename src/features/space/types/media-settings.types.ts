@@ -59,7 +59,7 @@ export const DEFAULT_AUDIO_SETTINGS: AudioSettings = {
   // 볼륨 설정
   inputVolume: 100,
   outputVolume: 100,
-  inputSensitivity: 50, // 중간 감도
+  inputSensitivity: 0, // 📌 기본 0 = VAD 비활성화 (말 중 뮤트 방지)
 
   // 장치 선택 (null = 시스템 기본)
   selectedInputDeviceId: null,

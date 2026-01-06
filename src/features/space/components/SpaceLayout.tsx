@@ -441,11 +441,12 @@ function SpaceLayoutContent({
   const { settings: audioSettings } = useAudioSettings()
 
   // 🎙️ VAD 게이트: 마이크 켜져 있고 감도 설정이 0보다 클 때만 활성화
+  // 📌 기본 inputSensitivity=0 → VAD 비활성화 (말 중 뮤트 방지)
   const { isBelowThreshold: isVoiceBelowThreshold } = useVoiceActivityGate({
     audioTrack: localAudioTrack,
     sensitivity: audioSettings.inputSensitivity,
     enabled: mediaState.isMicrophoneEnabled && audioSettings.inputSensitivity > 0,
-    debounceMs: 150,
+    debounceMs: 300, // 📌 말 사이 짧은 침묵에 대응
   })
 
   // 📌 VAD 게이트 결과에 따라 마이크 뮤트/언뮤트
