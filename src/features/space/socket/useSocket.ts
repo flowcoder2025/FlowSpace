@@ -21,6 +21,9 @@ import type {
   MessageDeletedData,
   // 녹화 이벤트 타입 (법적 준수)
   RecordingStatusData,
+  // 리액션 이벤트 타입
+  ReactionData,
+  ReactionType,
 } from "./types"
 import { eventBridge, GameEvents } from "../game/events"
 
@@ -55,6 +58,8 @@ interface UseSocketOptions {
   onRecordingStarted?: (data: RecordingStatusData) => void  // 녹화 시작됨
   onRecordingStopped?: (data: RecordingStatusData) => void  // 녹화 중지됨
   onRecordingError?: (message: string) => void  // 녹화 에러
+  // 👍 리액션 이벤트 콜백
+  onReactionUpdated?: (data: ReactionData) => void  // 리액션 추가/제거
 }
 
 // 🔒 Socket 에러 타입 (세션 검증 실패 등)
@@ -93,6 +98,8 @@ interface UseSocketReturn {
   // 🔴 녹화 명령어 (법적 준수)
   startRecording: () => void  // 녹화 시작
   stopRecording: () => void   // 녹화 중지
+  // 👍 리액션 명령어
+  toggleReaction: (messageId: string, type: ReactionType) => void  // 리액션 토글
 }
 
 export function useSocket({
@@ -123,6 +130,8 @@ export function useSocket({
   onRecordingStarted,
   onRecordingStopped,
   onRecordingError,
+  // 👍 리액션 이벤트 콜백
+  onReactionUpdated,
 }: UseSocketOptions): UseSocketReturn {
   const socketRef = useRef<Socket<ServerToClientEvents, ClientToServerEvents> | null>(null)
   const [isConnected, setIsConnected] = useState(false)
@@ -163,6 +172,8 @@ export function useSocket({
   const onRecordingStartedRef = useRef(onRecordingStarted)
   const onRecordingStoppedRef = useRef(onRecordingStopped)
   const onRecordingErrorRef = useRef(onRecordingError)
+  // 👍 리액션 이벤트 콜백 ref
+  const onReactionUpdatedRef = useRef(onReactionUpdated)
 
   // 🔄 Store nickname and avatarColor/avatarConfig in refs to enable hot update without reconnection
   const nicknameRef = useRef(nickname)
@@ -192,6 +203,8 @@ export function useSocket({
     onRecordingStartedRef.current = onRecordingStarted
     onRecordingStoppedRef.current = onRecordingStopped
     onRecordingErrorRef.current = onRecordingError
+    // 👍 리액션 이벤트 콜백 ref 업데이트
+    onReactionUpdatedRef.current = onReactionUpdated
     // 🔄 Update profile refs (used for movement events)
     nicknameRef.current = nickname
     avatarColorRef.current = avatarColor
@@ -556,6 +569,16 @@ export function useSocket({
       onRecordingErrorRef.current?.(data.message)
     })
 
+    // ============================================
+    // 👍 리액션 이벤트 리스너
+    // ============================================
+    socket.on("reaction:updated", (data: ReactionData) => {
+      if (IS_DEV) {
+        console.log("[Socket] 👍 Reaction updated:", data.type, "on message", data.messageId, "by", data.userNickname)
+      }
+      onReactionUpdatedRef.current?.(data)
+    })
+
     // 🔄 Profile update events (다른 플레이어의 닉네임/아바타 변경)
     socket.on("player:profileUpdated", (data) => {
       if (IS_DEV) {
@@ -827,6 +850,20 @@ export function useSocket({
     }
   }, [isConnected])
 
+  // ============================================
+  // 👍 리액션 명령어
+  // ============================================
+
+  // 리액션 토글 (추가 또는 제거)
+  const toggleReaction = useCallback((messageId: string, type: ReactionType) => {
+    if (socketRef.current && isConnected && messageId && type) {
+      socketRef.current.emit("reaction:toggle", { messageId, type })
+      if (IS_DEV) {
+        console.log("[Socket] 👍 Toggle reaction:", type, "on message", messageId)
+      }
+    }
+  }, [isConnected])
+
   return {
     isConnected,
     players,
@@ -851,5 +888,7 @@ export function useSocket({
     recordingStatus, // 현재 녹화 상태
     startRecording, // 녹화 시작
     stopRecording, // 녹화 중지
+    // 👍 리액션 명령어
+    toggleReaction, // 리액션 토글
   }
 }

@@ -9,9 +9,13 @@
  * - 음성 처리 토글들
  * - 입력 감도 슬라이더
  * - 마이크 테스트
+ *
+ * 📌 음성 처리 옵션 변경 시 마이크 자동 재시작:
+ * - LiveKit은 트랙 캡처 시에만 옵션을 적용하므로 재시작 필요
+ * - noiseSuppression, echoCancellation, autoGainControl, voiceIsolation 변경 시 동작
  */
 
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useCallback } from "react"
 import { cn } from "@/lib/utils"
 import { Switch } from "@/components/ui/switch"
 import { Slider } from "@/components/ui/slider"
@@ -20,6 +24,7 @@ import { Separator } from "@/components/ui/separator"
 import { useMediaDevices } from "../../hooks/useMediaDevices"
 import { useAudioSettings } from "../../hooks/useAudioSettings"
 import { useVolumeMeter } from "../../hooks/useVolumeMeter"
+import { useLiveKitMedia } from "../../livekit"
 import { DeviceSelector } from "./DeviceSelector"
 import { VolumeMeter } from "./VolumeMeter"
 import { MicrophoneTest } from "./MicrophoneTest"
@@ -51,8 +56,10 @@ export function AudioSettingsTab({ className }: AudioSettingsTabProps) {
     setInputSensitivity,
     setInputDevice,
     setOutputDevice,
+    audioCaptureOptions,
   } = useAudioSettings()
 
+  const { restartMicrophoneWithOptions, mediaState } = useLiveKitMedia()
   const { volume, start, stop, error: volumeError } = useVolumeMeter()
 
   // 📌 start/stop 함수 참조를 ref로 유지 (의존성 문제 해결)
@@ -62,6 +69,71 @@ export function AudioSettingsTab({ className }: AudioSettingsTabProps) {
     startRef.current = start
     stopRef.current = stop
   }, [start, stop])
+
+  // 📌 이전 음성 처리 옵션 저장 (변경 감지용)
+  const prevAudioProcessingRef = useRef({
+    noiseSuppression: settings.noiseSuppression,
+    echoCancellation: settings.echoCancellation,
+    autoGainControl: settings.autoGainControl,
+    voiceIsolation: settings.voiceIsolation,
+  })
+
+  // 📌 마이크 재시작 디바운스용
+  const restartTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+
+  // 📌 음성 처리 옵션 변경 시 마이크 재시작 (디바운스 적용)
+  const handleAudioProcessingChange = useCallback(async () => {
+    // 마이크가 꺼져 있으면 재시작 불필요
+    if (!mediaState.isMicrophoneEnabled) return
+
+    // 이전 타임아웃 취소
+    if (restartTimeoutRef.current) {
+      clearTimeout(restartTimeoutRef.current)
+    }
+
+    // 500ms 디바운스 - 연속 변경 시 한 번만 재시작
+    restartTimeoutRef.current = setTimeout(async () => {
+      await restartMicrophoneWithOptions(audioCaptureOptions)
+    }, 500)
+  }, [mediaState.isMicrophoneEnabled, restartMicrophoneWithOptions, audioCaptureOptions])
+
+  // 📌 음성 처리 옵션 변경 감지 및 마이크 재시작
+  useEffect(() => {
+    const prev = prevAudioProcessingRef.current
+    const curr = {
+      noiseSuppression: settings.noiseSuppression,
+      echoCancellation: settings.echoCancellation,
+      autoGainControl: settings.autoGainControl,
+      voiceIsolation: settings.voiceIsolation,
+    }
+
+    // 변경 여부 확인
+    const hasChanged =
+      prev.noiseSuppression !== curr.noiseSuppression ||
+      prev.echoCancellation !== curr.echoCancellation ||
+      prev.autoGainControl !== curr.autoGainControl ||
+      prev.voiceIsolation !== curr.voiceIsolation
+
+    if (hasChanged) {
+      prevAudioProcessingRef.current = curr
+      handleAudioProcessingChange()
+    }
+  }, [
+    settings.noiseSuppression,
+    settings.echoCancellation,
+    settings.autoGainControl,
+    settings.voiceIsolation,
+    handleAudioProcessingChange,
+  ])
+
+  // 📌 cleanup
+  useEffect(() => {
+    return () => {
+      if (restartTimeoutRef.current) {
+        clearTimeout(restartTimeoutRef.current)
+      }
+    }
+  }, [])
 
   // 설정 탭 열릴 때 권한 요청
   useEffect(() => {

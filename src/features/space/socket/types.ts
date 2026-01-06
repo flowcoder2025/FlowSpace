@@ -236,6 +236,28 @@ export interface ReplyToData {
   content: string             // 원본 내용 미리보기 (최대 50자)
 }
 
+// ============================================
+// 리액션 관련 타입
+// ============================================
+
+// 리액션 타입
+export type ReactionType = "thumbsup" | "heart" | "check"
+
+// 리액션 추가 요청 (Client → Server)
+export interface ReactionAddRequest {
+  messageId: string
+  type: ReactionType
+}
+
+// 리액션 데이터 (Server → Client)
+export interface ReactionData {
+  messageId: string
+  type: ReactionType
+  userId: string
+  userNickname: string
+  action: "add" | "remove"  // 추가 또는 제거
+}
+
 // Chat message data
 export interface ChatMessageData {
   id: string
@@ -325,6 +347,11 @@ export interface ClientToServerEvents {
   "object:place": (data: ObjectPlaceRequest) => void
   "object:update": (data: ObjectUpdateRequest) => void
   "object:delete": (data: ObjectDeleteRequest) => void
+
+  // ============================================
+  // 리액션 이벤트 (Client → Server)
+  // ============================================
+  "reaction:toggle": (data: ReactionAddRequest) => void
 }
 
 // Server to Client events
@@ -395,6 +422,11 @@ export interface ServerToClientEvents {
   "object:deleted": (data: ObjectDeletedData) => void        // 오브젝트 삭제됨
   "objects:sync": (data: ObjectsSyncData) => void            // 전체 오브젝트 동기화 (입장 시)
   "object:error": (data: { message: string }) => void        // 오브젝트 에러 (권한 부족 등)
+
+  // ============================================
+  // 리액션 이벤트 (Server → Client)
+  // ============================================
+  "reaction:updated": (data: ReactionData) => void           // 리액션 추가/제거됨 (브로드캐스트)
 }
 
 // Inter-server events (not used in MVP)

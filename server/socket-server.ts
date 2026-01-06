@@ -40,6 +40,9 @@ import type {
   ObjectPlaceRequest,
   ObjectUpdateRequest,
   ObjectDeleteRequest,
+  // 리액션 이벤트 타입
+  ReactionAddRequest,
+  ReactionData,
 } from "../src/features/space/socket/types"
 
 const PORT = parseInt(process.env.PORT || process.env.SOCKET_PORT || "3001", 10)
@@ -755,6 +758,29 @@ io.on("connection", (socket) => {
         console.error("[Socket] Failed to save chat message:", error)
         // DB 저장 실패해도 메시지는 이미 전송됨 (삭제 불가)
       })
+    }
+  })
+
+  // 👍 Reaction (메시지 리액션) - 실시간 동기화
+  socket.on("reaction:toggle", ({ messageId, type }: ReactionAddRequest) => {
+    const { spaceId, playerId, nickname } = socket.data
+
+    if (!spaceId || !playerId || !messageId || !type) return
+
+    // 📢 공간 내 모든 사용자에게 리액션 업데이트 브로드캐스트
+    // 클라이언트에서 로컬 상태로 toggle 처리
+    const reactionData: ReactionData = {
+      messageId,
+      type,
+      userId: playerId,
+      userNickname: nickname || "Unknown",
+      action: "add", // 클라이언트에서 이미 있으면 remove로 처리
+    }
+
+    io.to(spaceId).emit("reaction:updated", reactionData)
+
+    if (IS_DEV) {
+      console.log(`[Socket] 👍 Reaction ${type} on message ${messageId.substring(0, 10)}... by ${nickname}`)
     }
   })
 

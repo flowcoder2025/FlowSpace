@@ -10,7 +10,12 @@
 // 새 아키텍처 (권장)
 export { LiveKitRoomProvider } from "./LiveKitRoomProvider"
 export { useLiveKitMedia } from "./LiveKitMediaContext"
-export type { MediaError, LiveKitMediaContextValue, ScreenShareOptions } from "./LiveKitMediaContext"
+export type {
+  MediaError,
+  LiveKitMediaContextValue,
+  ScreenShareOptions,
+  AudioCaptureOptionsInput,
+} from "./LiveKitMediaContext"
 
 /**
  * @deprecated useLiveKitMedia를 사용하세요. 이 훅은 다음 버전에서 제거됩니다.

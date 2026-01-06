@@ -41,6 +41,15 @@ export interface ScreenShareOptions {
   audio?: boolean
 }
 
+// Audio capture options type
+export interface AudioCaptureOptionsInput {
+  noiseSuppression?: boolean
+  echoCancellation?: boolean
+  autoGainControl?: boolean
+  voiceIsolation?: boolean
+  deviceId?: string
+}
+
 // Context value type
 export interface LiveKitMediaContextValue {
   participantTracks: Map<string, ParticipantTrack>
@@ -48,9 +57,14 @@ export interface LiveKitMediaContextValue {
   mediaError: MediaError | null
   isAvailable: boolean
   localParticipantId: string | null
+  localAudioTrack: MediaStreamTrack | null // VAD용 로컬 마이크 트랙
   toggleCamera: () => Promise<boolean>
   toggleMicrophone: () => Promise<boolean>
   toggleScreenShare: (options?: ScreenShareOptions) => Promise<boolean>
+  /** VAD 게이트용: 로컬 마이크 뮤트/언뮤트 (트랙 유지) */
+  setLocalMicrophoneMuted: (muted: boolean) => Promise<boolean>
+  /** 📌 오디오 옵션 변경 시 마이크 재시작 (동적 적용) */
+  restartMicrophoneWithOptions: (options: AudioCaptureOptionsInput) => Promise<boolean>
 }
 
 // Default value (when not in LiveKit context)
@@ -64,9 +78,12 @@ const defaultContextValue: LiveKitMediaContextValue = {
   mediaError: null,
   isAvailable: false,
   localParticipantId: null,
+  localAudioTrack: null,
   toggleCamera: async () => false,
   toggleMicrophone: async () => false,
   toggleScreenShare: async () => false,
+  setLocalMicrophoneMuted: async () => false,
+  restartMicrophoneWithOptions: async () => false,
 }
 
 // Create context
@@ -974,6 +991,99 @@ export function LiveKitMediaInternalProvider({ children }: { children: ReactNode
     }
   }, [localParticipant, room, parseMediaError, playAllAudioElements])
 
+  // 로컬 오디오 트랙 (VAD용)
+  const localAudioTrack = useMemo(() => {
+    if (!localParticipant || !isConnected) return null
+    const audioTrackRef = tracks.find(
+      (t) => t.participant === localParticipant && t.source === Track.Source.Microphone
+    )
+    return audioTrackRef?.publication?.track?.mediaStreamTrack ?? null
+  }, [localParticipant, tracks, isConnected])
+
+  // VAD 게이트용: 로컬 마이크 뮤트/언뮤트 (트랙 유지하면서 데이터만 뮤트)
+  const setLocalMicrophoneMuted = useCallback(async (muted: boolean): Promise<boolean> => {
+    if (!localParticipant) {
+      return false
+    }
+
+    try {
+      const publication = localParticipant.getTrackPublication(Track.Source.Microphone)
+      if (!publication) {
+        if (IS_DEV) {
+          console.log("[LiveKitMediaContext] No microphone publication found for VAD")
+        }
+        return false
+      }
+
+      if (muted) {
+        await publication.mute()
+      } else {
+        await publication.unmute()
+      }
+
+      if (IS_DEV) {
+        console.log("[LiveKitMediaContext] VAD: Microphone muted:", muted)
+      }
+      return true
+    } catch (error) {
+      console.error("[LiveKitMediaContext] setLocalMicrophoneMuted error:", error)
+      return false
+    }
+  }, [localParticipant])
+
+  // 📌 오디오 옵션 변경 시 마이크 재시작 (동적 적용)
+  // LiveKit은 트랙 캡처 시에만 옵션을 적용하므로, 설정 변경 시 마이크를 재시작해야 함
+  const restartMicrophoneWithOptions = useCallback(async (options: AudioCaptureOptionsInput): Promise<boolean> => {
+    if (!localParticipant) {
+      if (IS_DEV) {
+        console.log("[LiveKitMediaContext] restartMicrophoneWithOptions: No local participant")
+      }
+      return false
+    }
+
+    // 마이크가 비활성화 상태면 재시작 불필요
+    if (!localParticipant.isMicrophoneEnabled) {
+      if (IS_DEV) {
+        console.log("[LiveKitMediaContext] restartMicrophoneWithOptions: Microphone not enabled, skipping")
+      }
+      return true
+    }
+
+    try {
+      setMediaError(null)
+
+      if (IS_DEV) {
+        console.log("[LiveKitMediaContext] restartMicrophoneWithOptions: Restarting with options:", options)
+      }
+
+      // 마이크 끄기
+      await localParticipant.setMicrophoneEnabled(false)
+
+      // 짧은 지연 후 새 옵션으로 다시 켜기
+      await new Promise(resolve => setTimeout(resolve, 100))
+
+      // 새 옵션으로 마이크 활성화
+      await localParticipant.setMicrophoneEnabled(true, {
+        noiseSuppression: options.noiseSuppression,
+        echoCancellation: options.echoCancellation,
+        autoGainControl: options.autoGainControl,
+        // voiceIsolation은 일부 브라우저만 지원
+        ...(options.voiceIsolation !== undefined && { voiceIsolation: options.voiceIsolation }),
+        ...(options.deviceId && { deviceId: options.deviceId }),
+      })
+
+      if (IS_DEV) {
+        console.log("[LiveKitMediaContext] restartMicrophoneWithOptions: Successfully restarted")
+      }
+
+      return true
+    } catch (error) {
+      console.error("[LiveKitMediaContext] restartMicrophoneWithOptions error:", error)
+      setMediaError(parseMediaError(error))
+      return false
+    }
+  }, [localParticipant, parseMediaError])
+
   // Toggle screen share (with optional audio)
   const toggleScreenShare = useCallback(async (options?: ScreenShareOptions): Promise<boolean> => {
     if (!localParticipant) {
@@ -1035,9 +1145,12 @@ export function LiveKitMediaInternalProvider({ children }: { children: ReactNode
       mediaError,
       isAvailable: isConnected,
       localParticipantId: localParticipant?.identity ?? null,
+      localAudioTrack,
       toggleCamera,
       toggleMicrophone,
       toggleScreenShare,
+      setLocalMicrophoneMuted,
+      restartMicrophoneWithOptions,
     }),
     [
       participantTracks,
@@ -1045,9 +1158,12 @@ export function LiveKitMediaInternalProvider({ children }: { children: ReactNode
       mediaError,
       isConnected,
       localParticipant?.identity,
+      localAudioTrack,
       toggleCamera,
       toggleMicrophone,
       toggleScreenShare,
+      setLocalMicrophoneMuted,
+      restartMicrophoneWithOptions,
     ]
   )
 

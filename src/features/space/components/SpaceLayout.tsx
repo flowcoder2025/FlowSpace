@@ -17,13 +17,13 @@ import { EditorPanel, EditorModeIndicator } from "./editor"
 import { IOSAudioActivator } from "./IOSAudioActivator"
 import { useSocket } from "../socket"
 import { LiveKitRoomProvider, useLiveKitMedia } from "../livekit"
-import { useNotificationSound, useChatStorage, usePastMessages, mergePastMessages } from "../hooks"
+import { useNotificationSound, useChatStorage, usePastMessages, mergePastMessages, useVoiceActivityGate, useAudioSettings } from "../hooks"
 import { generateFullHelpMessages, getNextRotatingHint, getWelcomeMessage, HINT_INTERVAL_MS } from "../utils/commandHints"
 import { useEditorCommands } from "../hooks/useEditorCommands"
 import { useEditorStore } from "../stores/editorStore"
 import { eventBridge, GameEvents, type EditorCanvasClickPayload } from "../game/events"
 import type { ParsedEditorCommand, GridPosition } from "../types/editor.types"
-import type { ChatMessageData, AvatarColor, ReplyToData, AnnouncementData, MessageDeletedData, RecordingStatusData } from "../socket/types"
+import type { ChatMessageData, AvatarColor, ReplyToData, AnnouncementData, MessageDeletedData, RecordingStatusData, ReactionData } from "../socket/types"
 import { parseAvatarString, getLegacyAvatarColor, getSafeAvatarString } from "../avatar"
 import type { ChatMessage } from "../types/space.types"
 import type { SpaceRole } from "@prisma/client"
@@ -345,6 +345,39 @@ function SpaceLayoutContent({
     setMessages((prev) => addMessagesWithLimit(prev, errorMessage))
   }, [])
 
+  // 👍 리액션 업데이트 핸들러 (다른 사용자의 리액션 수신)
+  const handleReactionUpdated = useCallback((data: ReactionData) => {
+    setMessages((prev) =>
+      prev.map((msg) => {
+        if (msg.id !== data.messageId) return msg
+
+        const currentReactions = msg.reactions || []
+        // 이미 같은 사용자가 같은 타입으로 리액션했는지 확인
+        const existingIndex = currentReactions.findIndex(
+          (r) => r.userId === data.userId && r.type === data.type
+        )
+
+        let newReactions
+        if (existingIndex !== -1) {
+          // 토글 off: 기존 리액션 제거
+          newReactions = currentReactions.filter((_, i) => i !== existingIndex)
+        } else {
+          // 토글 on: 새 리액션 추가
+          newReactions = [
+            ...currentReactions,
+            {
+              type: data.type,
+              userId: data.userId,
+              userNickname: data.userNickname,
+            },
+          ]
+        }
+
+        return { ...msg, reactions: newReactions }
+      })
+    )
+  }, [])
+
   // 🔄 Parse current avatar for socket (memoized to avoid recreation)
   const currentAvatarConfig = useMemo(
     () => parseAvatarString(currentAvatar),
@@ -365,6 +398,8 @@ function SpaceLayoutContent({
     sendKickCommand,
     sendAnnounce,
     deleteMessage,
+    // 👍 리액션 토글
+    toggleReaction,
     // 🎬 녹화 상태 및 제어 (법적 준수)
     recordingStatus,
   } = useSocket({
@@ -386,6 +421,7 @@ function SpaceLayoutContent({
     onRecordingStarted: handleRecordingStarted,   // 🎬 녹화 시작
     onRecordingStopped: handleRecordingStopped,   // 🎬 녹화 중지
     onRecordingError: handleRecordingError,       // 🎬 녹화 에러
+    onReactionUpdated: handleReactionUpdated,     // 👍 리액션 업데이트
   })
 
   // LiveKit for audio/video (@livekit/components-react 공식 훅 기반)
@@ -397,7 +433,31 @@ function SpaceLayoutContent({
     toggleScreenShare,
     participantTracks,
     localParticipantId,
+    localAudioTrack,
+    setLocalMicrophoneMuted,
   } = useLiveKitMedia()
+
+  // 📌 오디오 설정 (VAD 감도)
+  const { settings: audioSettings } = useAudioSettings()
+
+  // 🎙️ VAD 게이트: 마이크 켜져 있고 감도 설정이 0보다 클 때만 활성화
+  const { isBelowThreshold: isVoiceBelowThreshold } = useVoiceActivityGate({
+    audioTrack: localAudioTrack,
+    sensitivity: audioSettings.inputSensitivity,
+    enabled: mediaState.isMicrophoneEnabled && audioSettings.inputSensitivity > 0,
+    debounceMs: 150,
+  })
+
+  // 📌 VAD 게이트 결과에 따라 마이크 뮤트/언뮤트
+  useEffect(() => {
+    // 마이크가 켜져 있고 VAD가 활성화된 경우에만
+    if (!mediaState.isMicrophoneEnabled || audioSettings.inputSensitivity === 0) {
+      return
+    }
+
+    // 임계값 미만이면 뮤트, 이상이면 언뮤트
+    setLocalMicrophoneMuted(isVoiceBelowThreshold)
+  }, [isVoiceBelowThreshold, mediaState.isMicrophoneEnabled, audioSettings.inputSensitivity, setLocalMicrophoneMuted])
 
   // 🎨 에디터 상태 구독
   const isEditorActive = useEditorStore((state) => state.mode.isActive)
@@ -1235,6 +1295,7 @@ function SpaceLayoutContent({
           onAdminCommand={handleAdminCommand}
           onEditorCommand={handleEditorCommand}
           onDeleteMessage={deleteMessage}
+          onReact={toggleReaction}
           currentUserId={resolvedUserId}
           userRole={userRole}
           isVisible={isChatOpen}

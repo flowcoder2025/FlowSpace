@@ -10,6 +10,7 @@ export { useMediaDevices, type MediaDeviceInfo } from "./useMediaDevices"
 export { useAudioSettings } from "./useAudioSettings"
 export { useVideoSettings } from "./useVideoSettings"
 export { useVolumeMeter } from "./useVolumeMeter"
+export { useVoiceActivityGate } from "./useVoiceActivityGate"
 export { useScreenRecorder, type RecordingState, type NotificationType } from "./useScreenRecorder"
 export { useScreenShareSupport } from "./useScreenShareSupport"
 

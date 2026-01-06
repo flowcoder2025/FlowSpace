@@ -36,9 +36,12 @@ interface UseLiveKitMediaReturn {
   mediaError: MediaError | null
   isAvailable: boolean
   localParticipantId: string | null // 토큰에서 파생된 로컬 참가자 ID (서버 결정)
+  localAudioTrack: MediaStreamTrack | null // 로컬 마이크 트랙 (VAD용)
   toggleCamera: () => Promise<boolean>
   toggleMicrophone: () => Promise<boolean>
   toggleScreenShare: () => Promise<boolean>
+  /** VAD 게이트용: 로컬 마이크 뮤트/언뮤트 (트랙 유지) */
+  setLocalMicrophoneMuted: (muted: boolean) => Promise<boolean>
 }
 
 export function useLiveKitMedia(): UseLiveKitMediaReturn {
@@ -313,14 +316,56 @@ export function useLiveKitMedia(): UseLiveKitMediaReturn {
   // 로컬 참가자 ID (토큰에서 파생, 서버 결정)
   const localParticipantId = localParticipant?.identity ?? null
 
+  // 로컬 오디오 트랙 (VAD용)
+  const localAudioTrack = useMemo(() => {
+    if (!localParticipant || !isInContext) return null
+    const audioTrackRef = audioTracks.find(
+      (t) => t.participant === localParticipant
+    )
+    return audioTrackRef?.publication?.track?.mediaStreamTrack ?? null
+  }, [localParticipant, audioTracks, isInContext])
+
+  // VAD 게이트용: 로컬 마이크 뮤트/언뮤트 (트랙 유지하면서 데이터만 뮤트)
+  const setLocalMicrophoneMuted = useCallback(async (muted: boolean): Promise<boolean> => {
+    if (!localParticipant) {
+      return false
+    }
+
+    try {
+      const publication = localParticipant.getTrackPublication(Track.Source.Microphone)
+      if (!publication) {
+        if (IS_DEV) {
+          console.log("[useLiveKitMedia] No microphone publication found")
+        }
+        return false
+      }
+
+      if (muted) {
+        await publication.mute()
+      } else {
+        await publication.unmute()
+      }
+
+      if (IS_DEV) {
+        console.log("[useLiveKitMedia] Microphone muted:", muted)
+      }
+      return true
+    } catch (error) {
+      console.error("[useLiveKitMedia] setLocalMicrophoneMuted error:", error)
+      return false
+    }
+  }, [localParticipant])
+
   return {
     participantTracks,
     mediaState,
     mediaError,
     isAvailable: isInContext && !!room,
     localParticipantId,
+    localAudioTrack,
     toggleCamera,
     toggleMicrophone,
     toggleScreenShare,
+    setLocalMicrophoneMuted,
   }
 }

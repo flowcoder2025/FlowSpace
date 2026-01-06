@@ -451,15 +451,17 @@ const ChatMessageItem = memo(function ChatMessageItem({
           isVisible={isHovered}
         />
       </span>
-      {/* 기존 리액션 표시 */}
+      {/* 기존 리액션 표시 (호버 시 사용자 목록 툴팁) */}
       {message.reactions && message.reactions.length > 0 && (
         <div className="pl-12 text-white/60" style={{ fontSize: `${Math.max(fontSize - 1, 9)}px` }}>
           {(Object.keys(REACTION_EMOJI) as ReactionType[]).map((type) => {
-            const count = message.reactions!.filter((r) => r.type === type).length
-            if (count === 0) return null
+            const typeReactions = message.reactions!.filter((r) => r.type === type)
+            if (typeReactions.length === 0) return null
+            // 👥 호버 시 표시할 사용자 닉네임 목록
+            const usernames = typeReactions.map((r) => r.userNickname || "Unknown").join(", ")
             return (
-              <span key={type} className="mr-1.5">
-                {REACTION_EMOJI[type]} {count}
+              <span key={type} className="mr-1.5 cursor-default" title={usernames}>
+                {REACTION_EMOJI[type]} {typeReactions.length}
               </span>
             )
           })}

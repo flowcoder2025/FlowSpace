@@ -32,9 +32,14 @@ export function MicrophoneTest({ deviceId, className }: MicrophoneTestProps) {
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const progressIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  // 📌 cleanup 중인지 추적 (onstop 콜백 경쟁 조건 방지)
+  const isCleaningUpRef = useRef(false)
 
   // 정리 함수
   const cleanup = useCallback(() => {
+    // 📌 cleanup 시작 플래그 설정 (onstop 콜백에서 체크)
+    isCleaningUpRef.current = true
+
     // 녹음 중지
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
       mediaRecorderRef.current.stop()
@@ -71,6 +76,8 @@ export function MicrophoneTest({ deviceId, className }: MicrophoneTestProps) {
   // 녹음 시작
   const startRecording = useCallback(async () => {
     cleanup()
+    // 📌 새 녹음 시작 시 cleanup 플래그 리셋
+    isCleaningUpRef.current = false
     setError(null)
 
     try {
@@ -98,6 +105,11 @@ export function MicrophoneTest({ deviceId, className }: MicrophoneTestProps) {
         if (streamRef.current) {
           streamRef.current.getTracks().forEach((track) => track.stop())
           streamRef.current = null
+        }
+
+        // 📌 cleanup 중이면 상태 변경 건너뛰기 (resetTest 경쟁 조건 방지)
+        if (isCleaningUpRef.current) {
+          return
         }
 
         // 녹음 완료 상태로 전환
