@@ -13,6 +13,7 @@ import { MediaSettingsModal, type MediaSettingsTab } from "./settings"
 import { MemberPanel } from "./MemberPanel"
 import { RecordingIndicator } from "./RecordingIndicator"
 import { EditorPanel, EditorModeIndicator } from "./editor"
+import { IOSAudioActivator } from "./IOSAudioActivator"
 import { useSocket } from "../socket"
 import { LiveKitRoomProvider, useLiveKitMedia } from "../livekit"
 import { useNotificationSound, useChatStorage, usePastMessages, mergePastMessages } from "../hooks"
@@ -1383,6 +1384,10 @@ function SpaceLayoutContent({
           allAudioTracks={allAudioTracks}
         />
       )}
+
+      {/* 🍎 iOS Safari 오디오 활성화 오버레이 */}
+      {/* iOS Safari에서 다른 사용자 음성을 듣기 위해 마이크 권한이 필요함 */}
+      <IOSAudioActivator />
     </div>
   )
 }

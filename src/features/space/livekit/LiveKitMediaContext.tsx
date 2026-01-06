@@ -427,11 +427,24 @@ export function LiveKitMediaInternalProvider({ children }: { children: ReactNode
 
   // 🔧 iOS Safari 오디오 unlock 상태 추적
   const audioUnlockedRef = useRef(false)
+  // 📌 iOS Safari 미디어 세션 활성화 상태 (getUserMedia 호출 필요)
+  const mediaSessionActivatedRef = useRef(false)
+
+  // 📌 iOS/iPadOS Safari 감지 (getUserMedia 필요한 환경)
+  const isIOSSafari = useMemo(() => {
+    if (typeof window === "undefined" || typeof navigator === "undefined") return false
+    const ua = navigator.userAgent
+    const isIOS = /iPad|iPhone|iPod/.test(ua) ||
+      (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)
+    // iOS의 모든 브라우저는 WebKit 기반이므로 Safari와 동일한 제한
+    return isIOS
+  }, [])
 
   // 연결 시 자동으로 오디오 시작 (브라우저 autoplay 정책 대응)
   // 📌 iOS Safari: 사용자 제스처 없이 오디오 재생 불가 → 첫 터치까지 반복 시도
   // 📌 핵심 개선: room.startAudio()만으로는 개별 <audio> 엘리먼트 재생이 안 됨
   //    → 모든 <audio> 엘리먼트의 play()를 직접 호출해야 함
+  // 📌 iOS Safari 특수 처리: getUserMedia 호출하여 미디어 세션 활성화 필요
   useEffect(() => {
     if (!room || !isConnected) return
 
@@ -450,9 +463,46 @@ export function LiveKitMediaInternalProvider({ children }: { children: ReactNode
       }
     }
 
+    // 📌 iOS Safari 전용: 미디어 세션 활성화 (getUserMedia 호출)
+    // iOS Safari에서는 getUserMedia를 호출해야 WebRTC 오디오 출력이 활성화됨
+    // 마이크를 짧게 켰다가 바로 끔 (silent activation)
+    const activateIOSMediaSession = async (): Promise<boolean> => {
+      if (mediaSessionActivatedRef.current) return true
+      if (!isIOSSafari) {
+        mediaSessionActivatedRef.current = true
+        return true
+      }
+
+      try {
+        if (IS_DEV) {
+          console.log("[LiveKitMediaContext] 🍎 iOS: Activating media session via getUserMedia...")
+        }
+
+        // 오디오만 요청 (카메라는 불필요)
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+
+        // 즉시 트랙 중지 (마이크 사용 안 함)
+        stream.getTracks().forEach((track) => {
+          track.stop()
+        })
+
+        mediaSessionActivatedRef.current = true
+        if (IS_DEV) {
+          console.log("[LiveKitMediaContext] 🍎 iOS: Media session activated successfully")
+        }
+        return true
+      } catch (error) {
+        // 권한 거부 시에도 계속 진행 (사용자가 마이크를 수동으로 켤 수 있음)
+        if (IS_DEV) {
+          console.warn("[LiveKitMediaContext] 🍎 iOS: Media session activation failed:", error)
+        }
+        return false
+      }
+    }
+
     // 🔧 오디오 unlock 시도 함수 (강화된 버전)
     const tryUnlockAudio = async () => {
-      if (audioUnlockedRef.current) return true
+      if (audioUnlockedRef.current && mediaSessionActivatedRef.current) return true
 
       try {
         // 1. LiveKit AudioContext resume
@@ -476,22 +526,25 @@ export function LiveKitMediaInternalProvider({ children }: { children: ReactNode
     tryUnlockAudio()
 
     // 🔧 사용자 인터랙션 시 오디오 unlock 시도 (성공할 때까지 반복)
-    // iOS Safari: getUserMedia 권한 요청이 지연되면 첫 터치 전까지 오디오 blocked
+    // 📌 iOS Safari: getUserMedia를 호출하여 미디어 세션 활성화
     const handleUserInteraction = async () => {
-      // 📌 이미 unlock 되었어도 새로운 <audio> 엘리먼트가 추가될 수 있으므로 항상 재생 시도
+      // 📌 iOS Safari: 미디어 세션 활성화 (첫 인터랙션에서만)
+      if (isIOSSafari && !mediaSessionActivatedRef.current) {
+        await activateIOSMediaSession()
+      }
+
+      // 오디오 unlock 시도
       await tryUnlockAudio()
 
       // 📌 추가 안전장치: unlock 후에도 한 번 더 모든 audio 재생 시도
-      if (audioUnlockedRef.current) {
-        playAllAudioElements()
-      }
+      playAllAudioElements()
     }
 
     // 📌 once: true 제거 - 성공할 때까지 계속 시도
     // 📌 passive: true 추가 - iOS에서 스크롤 성능 최적화
     document.addEventListener("click", handleUserInteraction)
     document.addEventListener("touchstart", handleUserInteraction, { passive: true })
-    document.addEventListener("touchend", handleUserInteraction, { passive: true }) // 📌 touchend도 추가
+    document.addEventListener("touchend", handleUserInteraction, { passive: true })
     document.addEventListener("keydown", handleUserInteraction)
 
     return () => {
@@ -500,7 +553,7 @@ export function LiveKitMediaInternalProvider({ children }: { children: ReactNode
       document.removeEventListener("touchend", handleUserInteraction)
       document.removeEventListener("keydown", handleUserInteraction)
     }
-  }, [room, isConnected])
+  }, [room, isConnected, isIOSSafari])
 
   // 🔑 핵심 개선: useTracks 결과에서 직접 subscribedTracksRef로 동기화
   // TrackSubscribed 이벤트를 놓치는 경우를 보완
