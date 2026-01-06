@@ -765,22 +765,33 @@ io.on("connection", (socket) => {
   socket.on("reaction:toggle", ({ messageId, type }: ReactionAddRequest) => {
     const { spaceId, playerId, nickname } = socket.data
 
-    if (!spaceId || !playerId || !messageId || !type) return
+    if (!spaceId || !playerId || !messageId || !type) {
+      if (IS_DEV) {
+        console.warn(`[Socket] 👍 Reaction rejected: missing data`, { spaceId: !!spaceId, playerId: !!playerId, messageId: !!messageId, type: !!type })
+      }
+      return
+    }
 
-    // 📢 공간 내 모든 사용자에게 리액션 업데이트 브로드캐스트
-    // 클라이언트에서 로컬 상태로 toggle 처리
+    // 닉네임이 없으면 경고 로그 (디버깅용)
+    if (!nickname) {
+      console.warn(`[Socket] 👍 Reaction by user without nickname: playerId=${playerId}`)
+    }
+
+    // 📢 리액션 데이터 구성
     const reactionData: ReactionData = {
       messageId,
       type,
       userId: playerId,
-      userNickname: nickname || "Unknown",
-      action: "add", // 클라이언트에서 이미 있으면 remove로 처리
+      userNickname: nickname || "익명",
+      action: "add", // 클라이언트에서 toggle 처리
     }
 
-    io.to(spaceId).emit("reaction:updated", reactionData)
+    // 📢 발신자 제외하고 다른 사용자들에게 브로드캐스트
+    // (발신자는 Optimistic Update로 이미 UI 반영함)
+    socket.to(spaceId).emit("reaction:updated", reactionData)
 
     if (IS_DEV) {
-      console.log(`[Socket] 👍 Reaction ${type} on message ${messageId.substring(0, 10)}... by ${nickname}`)
+      console.log(`[Socket] 👍 Reaction ${type} on message ${messageId.substring(0, 10)}... by ${nickname || playerId}`)
     }
   })
 

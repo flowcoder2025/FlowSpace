@@ -23,7 +23,7 @@ import { useEditorCommands } from "../hooks/useEditorCommands"
 import { useEditorStore } from "../stores/editorStore"
 import { eventBridge, GameEvents, type EditorCanvasClickPayload } from "../game/events"
 import type { ParsedEditorCommand, GridPosition } from "../types/editor.types"
-import type { ChatMessageData, AvatarColor, ReplyToData, AnnouncementData, MessageDeletedData, RecordingStatusData, ReactionData } from "../socket/types"
+import type { ChatMessageData, AvatarColor, ReplyToData, AnnouncementData, MessageDeletedData, RecordingStatusData, ReactionData, ReactionType } from "../socket/types"
 import { parseAvatarString, getLegacyAvatarColor, getSafeAvatarString } from "../avatar"
 import type { ChatMessage } from "../types/space.types"
 import type { SpaceRole } from "@prisma/client"
@@ -939,6 +939,48 @@ function SpaceLayoutContent({
   // Socket과 LiveKit 모두 서버에서 검증된 ID를 반환하므로 둘 중 하나를 사용
   const resolvedUserId = effectivePlayerId ?? localParticipantId ?? userId
 
+  // 👍 리액션 핸들러 (Optimistic Update + 서버 전송)
+  // - 로컬 상태를 즉시 업데이트하여 UI 반응성 개선
+  // - 서버에서 발신자 제외 브로드캐스트하므로 로컬에서 먼저 처리 필요
+  const handleReaction = useCallback(
+    (messageId: string, type: ReactionType) => {
+      // 📍 Optimistic Update: 로컬 상태 즉시 업데이트
+      setMessages((prev) =>
+        prev.map((msg) => {
+          if (msg.id !== messageId) return msg
+
+          const currentReactions = msg.reactions || []
+          // 이미 같은 사용자가 같은 타입으로 리액션했는지 확인
+          const existingIndex = currentReactions.findIndex(
+            (r) => r.userId === resolvedUserId && r.type === type
+          )
+
+          let newReactions
+          if (existingIndex !== -1) {
+            // 토글 off: 기존 리액션 제거
+            newReactions = currentReactions.filter((_, i) => i !== existingIndex)
+          } else {
+            // 토글 on: 새 리액션 추가
+            newReactions = [
+              ...currentReactions,
+              {
+                type,
+                userId: resolvedUserId,
+                userNickname: currentNickname,
+              },
+            ]
+          }
+
+          return { ...msg, reactions: newReactions }
+        })
+      )
+
+      // 📡 서버로 전송 (다른 사용자들에게 브로드캐스트)
+      toggleReaction(messageId, type)
+    },
+    [resolvedUserId, currentNickname, toggleReaction]
+  )
+
   // Dismiss media error state - track which error was dismissed
   // (using error reference comparison instead of boolean flag to avoid effect setState)
   const [dismissedErrorRef, setDismissedErrorRef] = useState<typeof mediaError>(null)
@@ -1328,7 +1370,7 @@ function SpaceLayoutContent({
           onAdminCommand={handleAdminCommand}
           onEditorCommand={handleEditorCommand}
           onDeleteMessage={deleteMessage}
-          onReact={toggleReaction}
+          onReact={handleReaction}
           currentUserId={resolvedUserId}
           userRole={userRole}
           isVisible={isChatOpen}
