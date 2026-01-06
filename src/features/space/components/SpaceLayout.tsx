@@ -3,7 +3,7 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from "react"
 
 import { SpaceHeader } from "./SpaceHeader"
-import { FloatingChatOverlay, type AdminCommandResult } from "./chat"
+import { FloatingChatOverlay, MobileChatOverlay, type AdminCommandResult } from "./chat"
 import { ParticipantPanel, type ParticipantViewMode } from "./video/ParticipantPanel"
 import { ScreenShareOverlay } from "./video/ScreenShare"
 import { ControlBar } from "./controls/ControlBar"
@@ -1312,7 +1312,7 @@ function SpaceLayoutContent({
   }, [stableScreenShare])
 
   return (
-    <div className="flex h-screen flex-col bg-background">
+    <div className="flex h-screen-mobile flex-col bg-background no-bounce">
       {/* Header */}
       <SpaceHeader
         spaceName={spaceName}
@@ -1365,26 +1365,46 @@ function SpaceLayoutContent({
           </div>
         )}
 
-        {/* 플로팅 채팅 오버레이 (좌측 하단) */}
-        <FloatingChatOverlay
-          messages={messages}
-          players={players}
-          onSendMessage={handleSendMessage}
-          onSendWhisper={handleSendWhisper}
-          onAdminCommand={handleAdminCommand}
-          onEditorCommand={handleEditorCommand}
-          onDeleteMessage={deleteMessage}
-          onReact={handleReaction}
-          currentUserId={resolvedUserId}
-          userRole={userRole}
-          isVisible={isChatOpen}
-          whisperHistory={whisperHistory}
-          spaceId={spaceId}
-          // 📜 Phase 4: 과거 메시지 페이지네이션
-          onLoadMore={handleLoadMore}
-          isLoadingMore={isLoadingMore}
-          hasMoreMessages={hasMoreMessages}
-        />
+        {/* 📱 채팅 오버레이 - 모바일/데스크톱 분기 */}
+        {isTouchDevice ? (
+          // 📱 모바일: 하단 고정 입력 바 + 전체화면 오버레이
+          <MobileChatOverlay
+            messages={messages}
+            players={players}
+            onSendMessage={handleSendMessage}
+            onSendWhisper={handleSendWhisper}
+            onAdminCommand={handleAdminCommand}
+            onEditorCommand={handleEditorCommand}
+            onDeleteMessage={deleteMessage}
+            onReact={handleReaction}
+            currentUserId={resolvedUserId}
+            userRole={userRole}
+            whisperHistory={whisperHistory}
+            onLoadMore={handleLoadMore}
+            isLoadingMore={isLoadingMore}
+            hasMoreMessages={hasMoreMessages}
+          />
+        ) : (
+          // 🖥️ 데스크톱: 플로팅 드래그 가능 채팅창
+          <FloatingChatOverlay
+            messages={messages}
+            players={players}
+            onSendMessage={handleSendMessage}
+            onSendWhisper={handleSendWhisper}
+            onAdminCommand={handleAdminCommand}
+            onEditorCommand={handleEditorCommand}
+            onDeleteMessage={deleteMessage}
+            onReact={handleReaction}
+            currentUserId={resolvedUserId}
+            userRole={userRole}
+            isVisible={isChatOpen}
+            whisperHistory={whisperHistory}
+            spaceId={spaceId}
+            onLoadMore={handleLoadMore}
+            isLoadingMore={isLoadingMore}
+            hasMoreMessages={hasMoreMessages}
+          />
+        )}
 
         {/* 플로팅 참가자 비디오 - 뷰 모드에 따라 다르게 렌더링 */}
         {/* 📱 반응형: 모바일에서 숨김 → sm에서 작게 → md에서 기본 크기 */}

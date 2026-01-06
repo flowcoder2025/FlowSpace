@@ -261,10 +261,14 @@ export function ParticipantPanel({
       <div className={cn("flex flex-col", className)}>
         {/* 최소화된 헤더 - 필터 + 멤버관리 + 초대 */}
         <div className="flex items-center gap-1 px-2 py-2 bg-black/40 backdrop-blur-sm rounded-lg border border-white/10">
-          {/* 참가자 수 (아이콘 + 숫자) */}
-          <span className="text-xs text-white/70 font-medium mr-1">
+          {/* 참가자 수 (아이콘 + 숫자) - 📱 탭하면 그리드 모드로 전환 */}
+          <button
+            onClick={() => handleViewModeChange("grid")}
+            className="text-xs text-white/70 font-medium mr-1 hover:text-white active:text-white/90 transition-colors flex items-center gap-1"
+            title="참가자 보기 (그리드)"
+          >
             👥 {sortedTracks.length}
-          </span>
+          </button>
 
           {/* 필터 버튼 (드롭다운) */}
           <DropdownMenu>

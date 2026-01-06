@@ -179,3 +179,42 @@
 .chat-scrollbar-hidden::-webkit-scrollbar {
   display: none;
 }
+
+/* ============================================
+   MOBILE VIEWPORT HEIGHT
+   모바일 브라우저 주소창 영역을 고려한 높이 설정
+   dvh (dynamic viewport height) 사용
+   ============================================ */
+.h-screen-mobile {
+  height: 100vh;
+  height: 100dvh; /* iOS Safari 15+, Android Chrome 108+ */
+}
+
+/* 최소 높이 버전 */
+.min-h-screen-mobile {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+/* 📱 iOS Safari 특수 처리: 주소창 숨김 시 부드러운 전환 */
+@supports (height: 100dvh) {
+  .h-screen-mobile {
+    height: 100dvh;
+  }
+  .min-h-screen-mobile {
+    min-height: 100dvh;
+  }
+}
+
+/* 📱 터치 디바이스에서 스크롤 바운스 방지 */
+.no-bounce {
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* 📱 모바일에서 텍스트 선택 방지 (게임 캔버스 등) */
+.no-select-mobile {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
