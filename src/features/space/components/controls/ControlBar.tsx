@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import {
   Button,
   DropdownMenu,
@@ -11,7 +12,7 @@ import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
 } from "@/components/ui"
-import { useMediaDevices } from "../../hooks"
+import { useMediaDevices, useScreenShareSupport } from "../../hooks"
 
 // ============================================
 // Icons
@@ -211,6 +212,12 @@ export function ControlBar({
     selectAudioOutput,
     selectVideoInput,
   } = useMediaDevices()
+
+  // 📌 화면공유 지원 여부 감지
+  const { isSupported: isScreenShareSupported, reason: screenShareUnsupportedReason } = useScreenShareSupport()
+
+  // 📌 화면공유 미지원 안내 메시지 상태
+  const [showScreenShareAlert, setShowScreenShareAlert] = useState(false)
 
   return (
     // 📱 반응형: 모바일에서 패딩/마진 축소, 하단 여백 줄임
@@ -412,82 +419,119 @@ export function ControlBar({
           </DropdownMenu>
         </div>
 
-        {/* Screen Share Toggle + Audio Option - 📱 모바일에서 숨김 */}
-        <div className="group hidden sm:flex items-center">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => {
-              // 화면공유 중이면 중지, 아니면 드롭다운에서 선택하도록 유도
-              if (isScreenSharing) {
-                onToggleScreenShare()
-              } else {
-                // 기본: 오디오 없이 화면공유
-                onToggleScreenShare({ audio: false })
-              }
-            }}
-            className="rounded-r-none border-r-0 border-white/30 text-white bg-transparent hover:bg-white/10 group-hover:border-primary focus-visible:ring-0 focus-visible:ring-offset-0"
-            aria-label={isScreenSharing ? "화면 공유 중지" : "화면 공유"}
-          >
-            <ScreenShareIcon active={isScreenSharing} />
-          </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="outline"
-                size="icon"
-                className="w-6 rounded-l-none border-l-0 px-1 border-white/30 text-white bg-transparent hover:bg-white/10 group-hover:border-primary focus-visible:ring-0 focus-visible:ring-offset-0"
-                aria-label="화면 공유 옵션"
-              >
-                <ChevronDownIcon />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="center"
-              side="top"
-              className="w-56"
-              onCloseAutoFocus={(e) => e.preventDefault()}
+        {/* Screen Share Toggle + Audio Option - 📱 모바일에서 숨김, 미지원 환경에서 안내 */}
+        {/* 화면공유 지원 환경에서만 표시 */}
+        {isScreenShareSupported ? (
+          <div className="group hidden sm:flex items-center">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => {
+                // 화면공유 중이면 중지, 아니면 드롭다운에서 선택하도록 유도
+                if (isScreenSharing) {
+                  onToggleScreenShare()
+                } else {
+                  // 기본: 오디오 없이 화면공유
+                  onToggleScreenShare({ audio: false })
+                }
+              }}
+              className="rounded-r-none border-r-0 border-white/30 text-white bg-transparent hover:bg-white/10 group-hover:border-primary focus-visible:ring-0 focus-visible:ring-offset-0"
+              aria-label={isScreenSharing ? "화면 공유 중지" : "화면 공유"}
             >
-              <DropdownMenuLabel className="flex items-center gap-2">
-                <ScreenSmallIcon />
-                화면 공유
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={() => onToggleScreenShare({ audio: false })}
-                disabled={isScreenSharing}
-                className="flex items-center gap-2"
+              <ScreenShareIcon active={isScreenSharing} />
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="w-6 rounded-l-none border-l-0 px-1 border-white/30 text-white bg-transparent hover:bg-white/10 group-hover:border-primary focus-visible:ring-0 focus-visible:ring-offset-0"
+                  aria-label="화면 공유 옵션"
+                >
+                  <ChevronDownIcon />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="center"
+                side="top"
+                className="w-56"
+                onCloseAutoFocus={(e) => e.preventDefault()}
               >
-                <ScreenSmallIcon />
-                <span>화면만 공유</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => onToggleScreenShare({ audio: true })}
-                disabled={isScreenSharing}
-                className="flex items-center gap-2"
-              >
-                <VolumeIcon />
-                <div className="flex flex-col">
-                  <span>화면 + 오디오 공유</span>
-                  <span className="text-xs text-muted-foreground">
-                    브라우저 탭 공유 시만 지원
-                  </span>
-                </div>
-              </DropdownMenuItem>
-              {isScreenSharing && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={() => onToggleScreenShare()}
-                    className="text-destructive focus:text-destructive"
+                <DropdownMenuLabel className="flex items-center gap-2">
+                  <ScreenSmallIcon />
+                  화면 공유
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={() => onToggleScreenShare({ audio: false })}
+                  disabled={isScreenSharing}
+                  className="flex items-center gap-2"
+                >
+                  <ScreenSmallIcon />
+                  <span>화면만 공유</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => onToggleScreenShare({ audio: true })}
+                  disabled={isScreenSharing}
+                  className="flex items-center gap-2"
+                >
+                  <VolumeIcon />
+                  <div className="flex flex-col">
+                    <span>화면 + 오디오 공유</span>
+                    <span className="text-xs text-muted-foreground">
+                      브라우저 탭 공유 시만 지원
+                    </span>
+                  </div>
+                </DropdownMenuItem>
+                {isScreenSharing && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={() => onToggleScreenShare()}
+                      className="text-destructive focus:text-destructive"
+                    >
+                      공유 중지
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        ) : (
+          /* 📌 화면공유 미지원 환경: 비활성 버튼 + 클릭 시 안내 */
+          <div className="group hidden sm:flex items-center relative">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setShowScreenShareAlert(true)}
+              className="border-white/30 text-white/50 bg-transparent hover:bg-white/10 focus-visible:ring-0 focus-visible:ring-offset-0 cursor-not-allowed"
+              aria-label="화면 공유 (미지원)"
+            >
+              <ScreenShareIcon active={false} />
+            </Button>
+            {/* 미지원 안내 팝업 */}
+            {showScreenShareAlert && (
+              <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 w-64 rounded-lg bg-muted px-4 py-3 text-sm shadow-lg border border-border">
+                <div className="flex items-start gap-2">
+                  <AlertIcon />
+                  <div className="flex-1">
+                    <p className="font-medium text-foreground">화면 공유 미지원</p>
+                    <p className="mt-1 text-muted-foreground text-xs">
+                      {screenShareUnsupportedReason || "이 기기에서는 화면 공유가 지원되지 않습니다."}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setShowScreenShareAlert(false)}
+                    className="shrink-0 rounded p-0.5 hover:bg-accent"
+                    aria-label="닫기"
                   >
-                    공유 중지
-                  </DropdownMenuItem>
-                </>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+                    <CloseIcon />
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="mx-0.5 sm:mx-1 h-5 w-px bg-white/20" />
 

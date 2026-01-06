@@ -11,6 +11,7 @@ export { useAudioSettings } from "./useAudioSettings"
 export { useVideoSettings } from "./useVideoSettings"
 export { useVolumeMeter } from "./useVolumeMeter"
 export { useScreenRecorder, type RecordingState, type NotificationType } from "./useScreenRecorder"
+export { useScreenShareSupport } from "./useScreenShareSupport"
 
 // Editor hooks
 export {
