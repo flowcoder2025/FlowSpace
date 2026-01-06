@@ -79,6 +79,10 @@ export function useAudioGateProcessor({
   const prevSensitivityRef = useRef(sensitivity)
   const isGateEnabledRef = useRef(sensitivity > 0) // 게이트 활성화 여부 (0이면 비활성화)
 
+  // 📌 초기화 상태를 ref로 추적 (의존성 배열에서 제외하기 위함)
+  // isInitialized가 의존성에 있으면 초기화 완료 시 cleanup이 호출되어 파이프라인이 파괴됨
+  const isInitializedRef = useRef(false)
+
   // Cleanup 함수
   const cleanup = useCallback(() => {
     if (isCleaningUpRef.current) return
@@ -117,6 +121,7 @@ export function useAudioGateProcessor({
     // Don't close AudioContext - reuse it
     setProcessedTrack(null)
     setIsInitialized(false)
+    isInitializedRef.current = false  // 📌 ref도 동기화
     isCleaningUpRef.current = false
   }, [])
 
@@ -151,9 +156,10 @@ export function useAudioGateProcessor({
       return
     }
 
-    // 📌 이미 초기화된 파이프라인이 있고, 트랙이 같으면 재생성하지 않음
+    // 📌 이미 초기화된 파이프라인이 있으면 재생성하지 않음
     // (sensitivity 변경은 메시지로 처리)
-    if (isInitialized && workletNodeRef.current && sourceNodeRef.current) {
+    // ref를 사용하여 의존성 배열에서 제외 (isInitialized가 의존성에 있으면 cleanup 호출됨)
+    if (isInitializedRef.current && workletNodeRef.current && sourceNodeRef.current) {
       if (IS_DEV) {
         console.log("[useAudioGateProcessor] Pipeline already initialized, skipping recreation")
       }
@@ -227,6 +233,7 @@ export function useAudioGateProcessor({
 
         setProcessedTrack(processedAudioTrack)
         setIsInitialized(true)
+        isInitializedRef.current = true  // 📌 ref도 동기화
 
         // 초기 파라미터 설정 (현재 sensitivity 값 사용)
         const currentSensitivity = prevSensitivityRef.current
@@ -256,7 +263,9 @@ export function useAudioGateProcessor({
       isMounted = false
       cleanup()
     }
-  }, [inputTrack, shouldCreatePipeline, cleanup, attackTime, releaseTime, enabled, isInitialized]) // 📌 sensitivity 제거, shouldCreatePipeline으로 대체
+    // 📌 isInitialized 제거! 의존성에 있으면 초기화 완료 시 cleanup이 호출됨
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inputTrack, shouldCreatePipeline, cleanup, attackTime, releaseTime, enabled])
 
   // Sensitivity 변경 시 Worklet에 전달
   useEffect(() => {
