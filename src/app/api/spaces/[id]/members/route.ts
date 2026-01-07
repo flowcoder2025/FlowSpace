@@ -14,12 +14,6 @@ import { SpaceRole } from "@prisma/client"
 import { isSuperAdmin } from "@/lib/space-auth"
 
 // ============================================
-// Configuration
-// ============================================
-const IS_DEV = process.env.NODE_ENV === "development"
-const DEV_TEST_USER_ID = "test-user-dev-001"
-
-// ============================================
 // Types
 // ============================================
 interface RouteParams {
@@ -45,17 +39,7 @@ interface RemoveMemberBody {
 // ============================================
 async function getUserId(): Promise<string | null> {
   const session = await auth()
-
-  if (session?.user?.id) {
-    return session.user.id
-  }
-
-  if (IS_DEV) {
-    console.warn("[Members API] Using dev test user - not for production!")
-    return DEV_TEST_USER_ID
-  }
-
-  return null
+  return session?.user?.id ?? null
 }
 
 async function canManageMembers(spaceId: string, userId: string): Promise<boolean> {
@@ -413,10 +397,6 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       },
     })
 
-    if (IS_DEV) {
-      console.log(`[Members API] ${targetRole} added:`, body.userId, "to space:", spaceId)
-    }
-
     return NextResponse.json({
       member: {
         id: member.id,
@@ -491,6 +471,14 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
+    // 📊 Phase 3.14: 자기 자신 역할 변경 방지 (SuperAdmin은 예외)
+    if (body.userId === userId && !userIsSuperAdmin) {
+      return NextResponse.json(
+        { error: "Cannot change your own role" },
+        { status: 400 }
+      )
+    }
+
     // 대상 멤버의 현재 역할 확인 (OWNER 강등 검증용)
     const currentMember = await prisma.spaceMember.findUnique({
       where: {
@@ -554,10 +542,6 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         },
       })
 
-      if (IS_DEV) {
-        console.log(`[Members API] Role changed: ${body.userId} -> ${body.newRole} in space:`, spaceId)
-      }
-
       return NextResponse.json({
         member: {
           id: updated.id,
@@ -591,10 +575,6 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         },
       },
     })
-
-    if (IS_DEV) {
-      console.log(`[Members API] New member with role ${body.newRole}:`, body.userId, "in space:", spaceId)
-    }
 
     return NextResponse.json({
       member: {
@@ -655,6 +635,15 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       )
     }
 
+    // 📊 Phase 3.14: 자기 자신 역할 제거 방지
+    const userIsSuperAdmin = await isSuperAdmin(userId)
+    if (body.userId === userId && !userIsSuperAdmin) {
+      return NextResponse.json(
+        { error: "Cannot remove your own role" },
+        { status: 400 }
+      )
+    }
+
     // 멤버 찾기
     const member = await prisma.spaceMember.findUnique({
       where: {
@@ -685,10 +674,6 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       where: { id: member.id },
       data: { role: SpaceRole.PARTICIPANT },
     })
-
-    if (IS_DEV) {
-      console.log("[Members API] Role removed:", body.userId, "from space:", spaceId)
-    }
 
     return NextResponse.json({ success: true })
   } catch (error) {

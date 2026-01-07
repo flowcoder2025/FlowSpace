@@ -41,6 +41,7 @@ interface UseSocketOptions {
   onSystemMessage?: (message: ChatMessageData) => void
   onChatError?: (error: string) => void  // 🔇 채팅 에러 (음소거 시 등)
   onMessageIdUpdate?: (tempId: string, realId: string) => void  // ⚡ Optimistic ID 업데이트
+  onMessageFailed?: (tempId: string, reason: string) => void  // ❌ DB 저장 실패 시 롤백
   onWhisperMessage?: (message: ChatMessageData) => void  // 📬 귓속말 수신 (송신 + 수신 모두)
   onWhisperError?: (error: string) => void  // 📬 귓속말 에러 (대상 못찾음 등)
   onPartyMessage?: (message: ChatMessageData) => void  // 🎉 파티/구역 메시지 수신
@@ -113,6 +114,7 @@ export function useSocket({
   onSystemMessage,
   onChatError,
   onMessageIdUpdate,
+  onMessageFailed,
   onWhisperMessage,
   onWhisperError,
   onPartyMessage,
@@ -155,6 +157,7 @@ export function useSocket({
   const onSystemMessageRef = useRef(onSystemMessage)
   const onChatErrorRef = useRef(onChatError)            // 🔇 채팅 에러 콜백
   const onMessageIdUpdateRef = useRef(onMessageIdUpdate)  // ⚡ Optimistic ID 업데이트 콜백
+  const onMessageFailedRef = useRef(onMessageFailed)  // ❌ DB 저장 실패 롤백 콜백
   const onWhisperMessageRef = useRef(onWhisperMessage)  // 📬 귓속말 콜백
   const onWhisperErrorRef = useRef(onWhisperError)      // 📬 귓속말 에러 콜백
   const onPartyMessageRef = useRef(onPartyMessage)      // 🎉 파티 메시지 콜백
@@ -186,6 +189,7 @@ export function useSocket({
     onSystemMessageRef.current = onSystemMessage
     onChatErrorRef.current = onChatError            // 🔇 채팅 에러 콜백
     onMessageIdUpdateRef.current = onMessageIdUpdate  // ⚡ Optimistic ID 업데이트 콜백
+    onMessageFailedRef.current = onMessageFailed  // ❌ DB 저장 실패 롤백 콜백
     onWhisperMessageRef.current = onWhisperMessage  // 📬 귓속말 콜백
     onWhisperErrorRef.current = onWhisperError      // 📬 귓속말 에러 콜백
     onPartyMessageRef.current = onPartyMessage      // 🎉 파티 메시지 콜백
@@ -218,11 +222,12 @@ export function useSocket({
     gameReadyRef.current = false
 
     // Create socket connection
-    // 🔧 연결 안정성 최적화: 무한 재연결 + 지수 백오프 + 빠른 재연결
+    // 🔧 연결 안정성 최적화: 제한된 재연결 + 지수 백오프 + 빠른 재연결
+    // 📊 Phase 4.3: 무한 재연결 → 30회로 제한 (배터리/리소스 보호)
     const socket: Socket<ServerToClientEvents, ClientToServerEvents> = io(SOCKET_URL, {
       transports: ["websocket", "polling"],
       reconnection: true,
-      reconnectionAttempts: Infinity,     // 무한 재연결 시도 (기존 5회 → 무한)
+      reconnectionAttempts: 30,           // 30회 재연결 시도 (약 2.5분간 시도)
       reconnectionDelay: 500,             // 첫 재연결 0.5초 후 (기존 1초 → 0.5초, 빠른 복구)
       reconnectionDelayMax: 5000,         // 최대 5초까지 지수 백오프 (기존 10초 → 5초)
       randomizationFactor: 0.5,           // 재연결 시간 랜덤화 (서버 부하 분산)
@@ -293,14 +298,20 @@ export function useSocket({
       if (IS_DEV) {
         console.log("[Socket] Game ready, syncing", pendingCount, "pending players")
       }
-      // Emit all pending players to game
-      pendingPlayersRef.current.forEach((player) => {
-        if (player.id !== playerId) {
-          if (IS_DEV) {
-            console.log("[Socket] Emitting REMOTE_PLAYER_JOIN for:", player.id, player.nickname)
+      // 📊 Phase 2.7: players Map에서 최신 위치 가져오기 (이동 이벤트 손실 방지)
+      // pendingPlayersRef는 입장 시점 스냅샷이므로, 게임 로드 중 이동한 경우 옛날 위치가 됨
+      setPlayers((currentPlayers) => {
+        pendingPlayersRef.current.forEach((player) => {
+          if (player.id !== playerId) {
+            // 📊 최신 위치 사용 (없으면 입장 시점 위치 사용)
+            const latestPlayer = currentPlayers.get(player.id) || player
+            if (IS_DEV) {
+              console.log("[Socket] Emitting REMOTE_PLAYER_JOIN for:", latestPlayer.id, latestPlayer.nickname, "at", latestPlayer.x, latestPlayer.y)
+            }
+            eventBridge.emit(GameEvents.REMOTE_PLAYER_JOIN, latestPlayer)
           }
-          eventBridge.emit(GameEvents.REMOTE_PLAYER_JOIN, player)
-        }
+        })
+        return currentPlayers // 상태 변경 없음
       })
       pendingPlayersRef.current = [] // Clear after sync
     }
@@ -383,10 +394,12 @@ export function useSocket({
         const next = new Map(prev)
         const existing = prev.get(position.id)
         // 🔄 Phase 2.3: 서버가 경량 payload를 보내므로 기존 avatar 정보 보존
+        // 📊 Phase 3.6: 명시적 undefined 체크 + 기본값 처리
         const mergedPosition: PlayerPosition = {
           ...position,
-          avatarColor: position.avatarColor ?? existing?.avatarColor,
-          avatarConfig: position.avatarConfig ?? existing?.avatarConfig,
+          // null/undefined 모두 처리하고 기본값 제공
+          avatarColor: position.avatarColor ?? existing?.avatarColor ?? "default",
+          avatarConfig: position.avatarConfig ?? existing?.avatarConfig ?? undefined,
         }
         next.set(position.id, mergedPosition)
         return next
@@ -443,6 +456,12 @@ export function useSocket({
       onMessageIdUpdateRef.current?.(data.tempId, data.realId)
     })
 
+    // ❌ Chat message failed (DB 저장 실패 시 롤백)
+    socket.on("chat:messageFailed", (data: { tempId: string; reason: string }) => {
+      console.warn("[Socket] Message failed:", data.tempId, data.reason)
+      onMessageFailedRef.current?.(data.tempId, data.reason)
+    })
+
     // 📬 Whisper events (귓속말)
     socket.on("whisper:receive", (message: ChatMessageData) => {
       if (IS_DEV) {
@@ -470,6 +489,13 @@ export function useSocket({
       }
       // 기존 onMessageIdUpdate 콜백 재사용 (동일한 ID 교체 로직)
       onMessageIdUpdateRef.current?.(data.tempId, data.realId)
+    })
+
+    // ❌ Whisper message failed (귓속말 DB 저장 실패 시 롤백)
+    socket.on("whisper:messageFailed", (data: { tempId: string; reason: string }) => {
+      console.warn("[Socket] Whisper failed:", data.tempId, data.reason)
+      // 기존 onMessageFailed 콜백 재사용 (동일한 롤백 로직)
+      onMessageFailedRef.current?.(data.tempId, data.reason)
     })
 
     // 🎉 Party events (파티/구역 채팅) - 단순히 메시지만 처리

@@ -374,12 +374,14 @@ export interface ServerToClientEvents {
   "chat:message": (message: ChatMessageData) => void
   "chat:system": (message: ChatMessageData) => void
   "chat:messageIdUpdate": (data: { tempId: string; realId: string }) => void  // Optimistic 브로드캐스팅용
+  "chat:messageFailed": (data: { tempId: string; reason: string }) => void    // DB 저장 실패 시 롤백
 
   // Whisper (귓속말)
   "whisper:receive": (message: ChatMessageData) => void
   "whisper:sent": (message: ChatMessageData) => void  // 송신 확인 (내가 보낸 귓속말)
   "whisper:error": (data: { message: string }) => void
   "whisper:messageIdUpdate": (data: { tempId: string; realId: string }) => void  // 📝 귓속말 ID 업데이트 (DB 저장 후)
+  "whisper:messageFailed": (data: { tempId: string; reason: string }) => void   // ❌ 귓속말 DB 저장 실패 시 롤백
 
   // Chat error (음소거 등)
   "chat:error": (data: { message: string }) => void

@@ -316,6 +316,14 @@ function SpaceLayoutContent({
     )
   }, [])
 
+  // ❌ 메시지 실패 핸들러 (DB 저장 실패 시 롤백)
+  // Optimistic UI에서 전송한 메시지가 DB 저장에 실패하면 목록에서 제거
+  const handleMessageFailed = useCallback((tempId: string, reason: string) => {
+    console.warn("[SpaceLayout] Message failed, removing:", tempId, reason)
+    setMessages((prev) => prev.filter((msg) => msg.id !== tempId))
+    // TODO: 사용자에게 토스트 알림 표시 (향후 추가)
+  }, [])
+
   // 🎬 녹화 시작 핸들러 (법적 고지 시스템 메시지)
   const handleRecordingStarted = useCallback((data: RecordingStatusData) => {
     const recordingMessage: ChatMessage = {
@@ -426,6 +434,7 @@ function SpaceLayoutContent({
     onAnnouncement: handleAnnouncement,      // 📢 공지 수신
     onMessageDeleted: handleMessageDeleted,  // 🗑️ 메시지 삭제
     onMessageIdUpdate: handleMessageIdUpdate, // ⚡ Optimistic ID 업데이트
+    onMessageFailed: handleMessageFailed,    // ❌ DB 저장 실패 시 롤백
     onAdminError: handleAdminError,          // 🛡️ 관리 에러
     onChatError: handleChatError,            // 🔇 채팅 에러 (음소거 등)
     onRecordingStarted: handleRecordingStarted,   // 🎬 녹화 시작

@@ -38,6 +38,8 @@ export async function GET(
     const now = new Date()
     const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
     const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000)
+    // 📊 동접 계산용 확장 범위 (장기 체류 사용자 포함)
+    const oneMonthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
 
     // ⚡ 병렬 쿼리 실행: 게스트 + 인증 사용자 분리 조회
     const [
@@ -49,7 +51,8 @@ export async function GET(
       lastWeekGuestVisitors,
       lastWeekAuthVisitors,
       totalEvents,
-      recentEnters,
+      enterEventsForPeak,
+      exitEventsForPeak,
     ] = await Promise.all([
       // 총 멤버 수
       prisma.spaceMember.count({
@@ -114,15 +117,26 @@ export async function GET(
         where: { spaceId },
       }),
 
-      // 최근 입장 이벤트 (일별 집계용)
-      prisma.spaceEventLog.groupBy({
-        by: ["createdAt"],
+      // 피크 동접 계산용: ENTER 이벤트 (📊 1개월 범위 - 장기 체류자 포함)
+      prisma.spaceEventLog.findMany({
         where: {
           spaceId,
           eventType: "ENTER",
+          createdAt: { gte: oneMonthAgo },
+        },
+        select: { createdAt: true, guestSessionId: true, userId: true },
+        orderBy: { createdAt: "asc" },
+      }),
+
+      // 피크 동접 계산용: EXIT 이벤트
+      prisma.spaceEventLog.findMany({
+        where: {
+          spaceId,
+          eventType: "EXIT",
           createdAt: { gte: oneWeekAgo },
         },
-        _count: true,
+        select: { createdAt: true, guestSessionId: true, userId: true },
+        orderBy: { createdAt: "asc" },
       }),
     ])
 
@@ -139,13 +153,50 @@ export async function GET(
           ? 100
           : 0
 
-    // 일별 최대 동시접속 추정
-    const dailyEnters = new Map<string, number>()
-    recentEnters.forEach((e) => {
-      const dateKey = e.createdAt.toISOString().split("T")[0]
-      dailyEnters.set(dateKey, (dailyEnters.get(dateKey) || 0) + e._count)
+    // 📊 피크 동접 계산: ENTER/EXIT 이벤트로 실제 동시접속자 추적
+    interface ConcurrencyEvent {
+      time: Date
+      delta: number // +1 for ENTER, -1 for EXIT
+      participantKey: string
+    }
+
+    const concurrencyEvents: ConcurrencyEvent[] = []
+
+    // ENTER 이벤트 추가
+    enterEventsForPeak.forEach((e) => {
+      const key = e.guestSessionId || e.userId || ""
+      if (key) {
+        concurrencyEvents.push({ time: e.createdAt, delta: 1, participantKey: key })
+      }
     })
-    const peakConcurrent = Math.max(...Array.from(dailyEnters.values()), 0)
+
+    // EXIT 이벤트 추가
+    exitEventsForPeak.forEach((e) => {
+      const key = e.guestSessionId || e.userId || ""
+      if (key) {
+        concurrencyEvents.push({ time: e.createdAt, delta: -1, participantKey: key })
+      }
+    })
+
+    // 시간순 정렬 (동일 시각일 경우 EXIT 우선 처리)
+    concurrencyEvents.sort((a, b) => {
+      const timeDiff = a.time.getTime() - b.time.getTime()
+      if (timeDiff !== 0) return timeDiff
+      return a.delta - b.delta // EXIT (-1) 먼저
+    })
+
+    // 피크 동접 계산 (참가자 Set으로 중복 제거)
+    const activeParticipants = new Set<string>()
+    let peakConcurrent = 0
+
+    concurrencyEvents.forEach((event) => {
+      if (event.delta > 0) {
+        activeParticipants.add(event.participantKey)
+      } else {
+        activeParticipants.delete(event.participantKey)
+      }
+      peakConcurrent = Math.max(peakConcurrent, activeParticipants.size)
+    })
 
     return NextResponse.json({
       totalMembers,

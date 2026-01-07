@@ -7,6 +7,7 @@
  */
 
 import { createServer } from "http"
+import { createHash } from "crypto"
 import { Server } from "socket.io"
 import { PrismaClient, type MapObject } from "@prisma/client"
 import type {
@@ -216,50 +217,58 @@ interface RateLimitState {
   duplicateCount: number     // 동일 메시지 연속 횟수
 }
 
-// socketId → RateLimitState
+// 📊 Phase 3.11: playerId → RateLimitState (socketId 대신 playerId 기반)
+// 이렇게 하면 여러 탭/소켓으로 Rate Limit 우회 불가
 const rateLimitMap = new Map<string, RateLimitState>()
 
 /**
- * 간단한 해시 함수 (중복 메시지 비교용)
+ * 📊 Phase 4.6: SHA256 기반 해시 함수 (중복 메시지 비교용)
+ * 기존 32bit 해시 → SHA256으로 변경 (충돌 가능성 제거)
+ * 성능: 짧은 채팅 메시지에 대해 무시할 수준 (~0.01ms)
  */
-function simpleHash(str: string): string {
-  let hash = 0
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i)
-    hash = ((hash << 5) - hash) + char
-    hash = hash & hash // 32bit 정수로 변환
-  }
-  return hash.toString(16)
+function messageHash(str: string): string {
+  return createHash("sha256").update(str).digest("hex").slice(0, 16)
 }
 
 /**
  * Rate Limit 체크 및 업데이트
+ * 📊 Phase 3.11: playerId 기반으로 변경 (socketId → playerId)
  * @returns { allowed: boolean, reason?: string }
  */
 function checkRateLimit(
-  socketId: string,
+  playerId: string,
   content: string
 ): { allowed: boolean; reason?: string } {
   const now = Date.now()
-  const contentHash = simpleHash(content.trim().toLowerCase())
+  // 📊 Phase 4.5: trim을 먼저 적용하여 길이 체크와 해시 계산 일관성 유지
+  const trimmedContent = content.trim()
+  const contentHash = messageHash(trimmedContent.toLowerCase())
 
-  // 1. 메시지 길이 체크
-  if (content.length > RATE_LIMIT.MAX_MESSAGE_LENGTH) {
+  // 1. 메시지 길이 체크 (trim된 길이 기준)
+  if (trimmedContent.length > RATE_LIMIT.MAX_MESSAGE_LENGTH) {
     return {
       allowed: false,
       reason: `메시지가 너무 깁니다. (최대 ${RATE_LIMIT.MAX_MESSAGE_LENGTH}자)`,
     }
   }
 
-  // 2. Rate Limit 상태 가져오기 또는 생성
-  let state = rateLimitMap.get(socketId)
+  // 빈 메시지 체크
+  if (trimmedContent.length === 0) {
+    return {
+      allowed: false,
+      reason: "메시지 내용이 없습니다.",
+    }
+  }
+
+  // 2. Rate Limit 상태 가져오기 또는 생성 (playerId 기반)
+  let state = rateLimitMap.get(playerId)
   if (!state) {
     state = {
       timestamps: [],
       lastMessageHash: "",
       duplicateCount: 0,
     }
-    rateLimitMap.set(socketId, state)
+    rateLimitMap.set(playerId, state)
   }
 
   // 3. 시간 윈도우 밖의 오래된 타임스탬프 제거
@@ -299,9 +308,23 @@ function checkRateLimit(
 
 /**
  * 연결 해제 시 Rate Limit 상태 정리
+ * 📊 Phase 3.11: playerId 기반으로 변경
+ * 주의: playerId 기반이므로 같은 사용자가 다른 탭에서 접속 중일 수 있음
+ * 따라서 해당 spaceId에 같은 playerId가 없을 때만 정리
  */
-function cleanupRateLimitState(socketId: string): void {
-  rateLimitMap.delete(socketId)
+function cleanupRateLimitState(playerId: string, spaceId: string): void {
+  // 같은 playerId로 다른 소켓이 아직 접속 중인지 확인
+  const socketsInRoom = io.sockets.adapter.rooms.get(spaceId)
+  if (socketsInRoom) {
+    for (const socketId of socketsInRoom) {
+      const s = io.sockets.sockets.get(socketId)
+      if (s && s.data.playerId === playerId) {
+        // 아직 같은 playerId로 접속 중인 소켓이 있으면 정리하지 않음
+        return
+      }
+    }
+  }
+  rateLimitMap.delete(playerId)
 }
 
 // Create HTTP server for health checks (Railway requirement)
@@ -536,11 +559,25 @@ io.on("connection", (socket) => {
     // Get or create room state
     const room = getOrCreateRoom(spaceId)
 
-    // 🔒 중복 접속 체크: 같은 playerId가 이미 있으면 기존 세션 제거
+    // 📊 Phase 3.10: 중복 접속 시 기존 소켓 강제 종료 (같은 playerId로 재연결 허용)
     const existingEntry = Array.from(room.entries()).find(([, p]) => p.id === verifiedPlayerId)
     if (existingEntry) {
-      console.log(`[Socket] Duplicate session detected for ${verifiedPlayerId}, updating position`)
-      // 기존 위치 정보 유지 (재연결 시 위치 보존)
+      console.log(`[Socket] Duplicate session detected for ${verifiedPlayerId}, disconnecting old socket`)
+
+      // 기존 소켓 찾아서 종료
+      const socketsInRoom = io.sockets.adapter.rooms.get(spaceId)
+      if (socketsInRoom) {
+        for (const oldSocketId of socketsInRoom) {
+          if (oldSocketId === socket.id) continue // 현재 소켓은 제외
+          const oldSocket = io.sockets.sockets.get(oldSocketId)
+          if (oldSocket && oldSocket.data.playerId === verifiedPlayerId) {
+            console.log(`[Socket] 🔄 Disconnecting old socket ${oldSocketId} for ${verifiedPlayerId}`)
+            oldSocket.emit("error", { message: "다른 기기에서 접속하여 연결이 종료되었습니다." })
+            oldSocket.disconnect(true)
+            break // 첫 번째만 종료 (일반적으로 1개만 있음)
+          }
+        }
+      }
     }
 
     // Create initial player position
@@ -712,8 +749,8 @@ io.on("connection", (socket) => {
       return
     }
 
-    // 🚦 Rate Limit 체크
-    const rateCheck = checkRateLimit(socket.id, content)
+    // 🚦 Rate Limit 체크 (📊 Phase 3.11: playerId 기반)
+    const rateCheck = checkRateLimit(playerId, content)
     if (!rateCheck.allowed) {
       socket.emit("chat:error", { message: rateCheck.reason || "메시지 전송이 제한되었습니다." })
       return
@@ -756,7 +793,11 @@ io.on("connection", (socket) => {
         })
       }).catch((error) => {
         console.error("[Socket] Failed to save chat message:", error)
-        // DB 저장 실패해도 메시지는 이미 전송됨 (삭제 불가)
+        // ❌ DB 저장 실패 시 클라이언트에 롤백 이벤트 전송
+        io.to(spaceId).emit("chat:messageFailed", {
+          tempId,
+          reason: "메시지 저장에 실패했습니다. 다시 시도해주세요.",
+        })
       })
     }
   })
@@ -801,8 +842,8 @@ io.on("connection", (socket) => {
 
     if (!spaceId || !playerId || !content.trim()) return
 
-    // 🚦 Rate Limit 체크
-    const rateCheck = checkRateLimit(socket.id, content)
+    // 🚦 Rate Limit 체크 (📊 Phase 3.11: playerId 기반)
+    const rateCheck = checkRateLimit(playerId, content)
     if (!rateCheck.allowed) {
       socket.emit("whisper:error", { message: rateCheck.reason || "메시지 전송이 제한되었습니다." })
       return
@@ -821,6 +862,14 @@ io.on("connection", (socket) => {
     // 대상 사용자가 없으면 에러 반환
     if (targetSockets.length === 0) {
       socket.emit("whisper:error", { message: `"${targetNickname}" 님을 찾을 수 없습니다.` })
+      return
+    }
+
+    // 🔒 Phase 2.8: 닉네임 스푸핑 방지 - 동일 닉네임이 다른 playerId를 가지면 에러
+    const uniquePlayerIds = new Set(targetSockets.map(s => s.data.playerId))
+    if (uniquePlayerIds.size > 1) {
+      console.warn(`[Socket] Nickname spoofing detected: "${targetNickname}" has ${uniquePlayerIds.size} different playerIds`)
+      socket.emit("whisper:error", { message: `"${targetNickname}" 닉네임이 중복되어 귓속말을 보낼 수 없습니다. 상대방에게 닉네임 변경을 요청하세요.` })
       return
     }
 
@@ -885,7 +934,12 @@ io.on("connection", (socket) => {
       }
     }).catch((error) => {
       console.error("[Socket] Failed to save whisper message:", error)
-      // DB 저장 실패해도 메시지는 이미 전송됨 (localStorage 저장 불가)
+      // ❌ DB 저장 실패 시 발신자와 수신자 모두에게 롤백 이벤트 전송
+      const failedData = { tempId, reason: "귓속말 저장에 실패했습니다." }
+      socket.emit("whisper:messageFailed", failedData)
+      for (const targetSocket of targetSockets) {
+        targetSocket.emit("whisper:messageFailed", failedData)
+      }
     })
   })
 
@@ -951,9 +1005,9 @@ io.on("connection", (socket) => {
     }
   })
 
-  // 🎉 Party message (파티/구역 채팅)
+  // 🎉 Party message (파티/구역 채팅) - 📊 Phase 3.5: DB 저장 추가
   socket.on("party:message", ({ content }) => {
-    const { spaceId, playerId, nickname, partyId, partyName } = socket.data
+    const { spaceId, playerId, nickname, partyId, partyName, sessionToken } = socket.data
 
     if (!spaceId || !playerId || !partyId || !content.trim()) {
       if (!partyId) {
@@ -962,22 +1016,24 @@ io.on("connection", (socket) => {
       return
     }
 
-    // 🚦 Rate Limit 체크
-    const rateCheck = checkRateLimit(socket.id, content)
+    // 🚦 Rate Limit 체크 (📊 Phase 3.11: playerId 기반)
+    const rateCheck = checkRateLimit(playerId, content)
     if (!rateCheck.allowed) {
       socket.emit("party:error", { message: rateCheck.reason || "메시지 전송이 제한되었습니다." })
       return
     }
 
     const partyRoomId = getPartyRoomId(spaceId, partyId)
+    const now = Date.now()
+    const tempId = `party-${now}-${playerId}`
 
     // 파티 메시지 생성
     const partyMessage: ChatMessageData = {
-      id: `party-${Date.now()}-${playerId}`,
+      id: tempId,
       senderId: playerId,
       senderNickname: nickname || "Unknown",
       content: content.trim(),
-      timestamp: Date.now(),
+      timestamp: now,
       type: "party",
       partyId,
       partyName,
@@ -985,6 +1041,31 @@ io.on("connection", (socket) => {
 
     // 파티 룸에 있는 모든 멤버에게 전송 (송신자 포함)
     io.to(partyRoomId).emit("party:message", partyMessage)
+
+    // 📊 Phase 3.5: 백그라운드 DB 저장 (비동기, 블로킹 없음)
+    const senderType = sessionToken?.startsWith("auth-") ? "USER" : "GUEST"
+    const senderId = sessionToken?.replace("auth-", "").replace("guest-", "") || playerId
+
+    prisma.chatMessage.create({
+      data: {
+        spaceId,
+        senderId,
+        senderType,
+        senderName: nickname || "Unknown",
+        content: content.trim(),
+        type: "PARTY",
+        targetId: partyId, // 파티 ID를 targetId로 저장
+      },
+    }).then((savedMessage) => {
+      // ID 업데이트 (삭제 기능용) - 파티 룸에만 전송
+      io.to(partyRoomId).emit("chat:messageIdUpdate", {
+        tempId,
+        realId: savedMessage.id,
+      })
+    }).catch((error) => {
+      console.error("[Socket] Failed to save party message:", error)
+      // 파티 메시지는 롤백하지 않음 (이미 전송됨, 저장 실패는 로깅만)
+    })
 
     if (IS_DEV) {
       console.log(`[Socket] Party message in ${partyName}: ${nickname}: ${content.trim().substring(0, 30)}...`)
@@ -1920,8 +2001,10 @@ io.on("connection", (socket) => {
   socket.on("disconnect", (reason) => {
     const { spaceId, playerId, nickname, sessionToken, partyId, partyName } = socket.data
 
-    // 🚦 Rate Limit 상태 정리
-    cleanupRateLimitState(socket.id)
+    // 🚦 Rate Limit 상태 정리 (📊 Phase 3.11: playerId 기반)
+    if (playerId && spaceId) {
+      cleanupRateLimitState(playerId, spaceId)
+    }
 
     if (spaceId && playerId) {
       removePlayerFromRoom(spaceId, playerId)

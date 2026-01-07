@@ -70,28 +70,25 @@ export async function POST(request: NextRequest) {
       },
     })
 
+    // 📊 Phase 3.17: 일관된 에러 응답 (정보 누수 방지)
+    // 모든 세션 검증 실패는 동일한 에러 메시지로 반환하여 공격자가
+    // 세션 존재 여부, 공간 일치 여부, 만료 여부를 추론할 수 없도록 함
+    const genericError = { error: "Invalid session", valid: false }
+    const genericStatus = 401
+
     // 4. 세션 유효성 검증
     if (!guestSession) {
-      return NextResponse.json(
-        { error: "Session not found", valid: false },
-        { status: 404 }
-      )
+      return NextResponse.json(genericError, { status: genericStatus })
     }
 
     // 5. spaceId 일치 확인
     if (guestSession.spaceId !== body.spaceId) {
-      return NextResponse.json(
-        { error: "Session does not match space", valid: false },
-        { status: 403 }
-      )
+      return NextResponse.json(genericError, { status: genericStatus })
     }
 
     // 6. 만료 여부 확인
     if (new Date() > guestSession.expiresAt) {
-      return NextResponse.json(
-        { error: "Session has expired", valid: false },
-        { status: 401 }
-      )
+      return NextResponse.json(genericError, { status: genericStatus })
     }
 
     // 7. 서버에서 발급한 participantId 생성 (세션 ID 기반)

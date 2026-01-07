@@ -5,8 +5,20 @@
  */
 
 import { NextRequest, NextResponse } from "next/server"
+import { randomBytes } from "crypto"
 import { prisma } from "@/lib/prisma"
 import { SpaceAccessType, SpaceEventType } from "@prisma/client"
+
+// 📊 Phase 2.9: 강력한 랜덤 suffix 생성 (6자리 영숫자, 약 22억 경우의 수)
+function generateSecureRandomSuffix(): string {
+  const chars = "0123456789ABCDEFGHJKLMNPQRSTUVWXYZ" // 혼동 문자 제외 (I, O)
+  const bytes = randomBytes(6)
+  let result = ""
+  for (const byte of bytes) {
+    result += chars[byte % chars.length]
+  }
+  return result
+}
 
 // ============================================
 // Types
@@ -87,35 +99,49 @@ export async function POST(request: NextRequest) {
 
     let finalNickname = trimmedNickname
     if (existingSession) {
-      // 닉네임에 랜덤 숫자 suffix 추가
-      const suffix = Math.floor(Math.random() * 9000) + 1000
+      // 📊 Phase 2.9: 강력한 랜덤 suffix 추가 (crypto 기반)
+      const suffix = generateSecureRandomSuffix()
       finalNickname = `${trimmedNickname}#${suffix}`
     }
 
-    // 현재 접속자 수 체크
-    const currentUsers = await prisma.guestSession.count({
-      where: {
-        spaceId: body.spaceId,
-        expiresAt: { gt: new Date() },
-      },
+    // 📊 Phase 3.16: 트랜잭션으로 원자적 처리 (race condition 방지)
+    // 접속자 수 체크와 세션 생성을 하나의 트랜잭션으로 묶음
+    const guestSession = await prisma.$transaction(async (tx) => {
+      // 현재 접속자 수 체크
+      const currentUsers = await tx.guestSession.count({
+        where: {
+          spaceId: body.spaceId,
+          expiresAt: { gt: new Date() },
+        },
+      })
+
+      if (currentUsers >= space.maxUsers) {
+        throw new Error("SPACE_FULL")
+      }
+
+      // 게스트 세션 생성
+      return await tx.guestSession.create({
+        data: {
+          spaceId: body.spaceId,
+          nickname: finalNickname,
+          avatar: body.avatar ?? "default",
+          expiresAt: new Date(Date.now() + SESSION_DURATION_MS),
+        },
+      })
+    }).catch((error) => {
+      if (error.message === "SPACE_FULL") {
+        return null // 공간 가득 참 표시
+      }
+      throw error // 다른 에러는 재발생
     })
 
-    if (currentUsers >= space.maxUsers) {
+    // 공간 가득 참 처리
+    if (!guestSession) {
       return NextResponse.json(
         { error: "Space is full" },
         { status: 403 }
       )
     }
-
-    // 게스트 세션 생성
-    const guestSession = await prisma.guestSession.create({
-      data: {
-        spaceId: body.spaceId,
-        nickname: finalNickname,
-        avatar: body.avatar ?? "default",
-        expiresAt: new Date(Date.now() + SESSION_DURATION_MS),
-      },
-    })
 
     // 입장 이벤트 로그 기록
     await prisma.spaceEventLog.create({

@@ -154,19 +154,56 @@ export async function POST(request: NextRequest) {
     // 5. 세션 검증 (인증된 사용자 또는 게스트 세션)
     // 🔒 보안: participantId는 서버에서 파생하여 클라이언트 입력을 덮어씀
     const session = await auth()
-    let serverParticipantId: string
+    let serverParticipantId: string | undefined = undefined
     let serverParticipantName: string = participantName
 
     // 인증된 사용자인 경우
     if (session?.user?.id) {
-      // 인증된 사용자의 participantId는 서버에서 생성
-      serverParticipantId = `user-${session.user.id}`
-      // 🔄 클라이언트가 보낸 닉네임 우선 사용 (Socket.io와 동기화)
-      serverParticipantName = participantName || session.user.name || "Unknown"
-      if (IS_DEV) {
-        console.log("[LiveKit Token] Authenticated user:", session.user.id, "→ participantId:", serverParticipantId)
+      // 🔒 Phase 2.10: 공간 멤버십 검증 추가
+      // roomName에서 spaceId 추출 (space-{uuid} 형식)
+      const spaceIdFromRoom = roomName.replace("space-", "")
+
+      // SpaceMember 또는 Space OWNER인지 확인
+      const [spaceMember, space] = await Promise.all([
+        prisma.spaceMember.findFirst({
+          where: {
+            spaceId: spaceIdFromRoom,
+            userId: session.user.id,
+          },
+          select: { id: true },
+        }),
+        prisma.space.findFirst({
+          where: {
+            id: spaceIdFromRoom,
+            ownerId: session.user.id,
+          },
+          select: { id: true },
+        }),
+      ])
+
+      // 멤버도 아니고 소유자도 아닌 경우, 게스트 세션 필요
+      if (!spaceMember && !space) {
+        // 인증된 사용자도 게스트 세션이 있으면 허용 (아래 sessionToken 블록에서 처리)
+        if (!sessionToken) {
+          return NextResponse.json(
+            { error: "You are not a member of this space. Please join as a guest first." },
+            { status: 403 }
+          )
+        }
+        // sessionToken이 있으면 게스트 세션으로 진행
+      } else {
+        // 인증된 사용자의 participantId는 서버에서 생성
+        serverParticipantId = `user-${session.user.id}`
+        // 🔄 클라이언트가 보낸 닉네임 우선 사용 (Socket.io와 동기화)
+        serverParticipantName = participantName || session.user.name || "Unknown"
+        if (IS_DEV) {
+          console.log("[LiveKit Token] Authenticated user (member):", session.user.id, "→ participantId:", serverParticipantId)
+        }
       }
-    } else if (sessionToken) {
+    }
+
+    // serverParticipantId가 아직 설정되지 않은 경우 (게스트 또는 비멤버)
+    if (!serverParticipantId && sessionToken) {
       // 개발 모드: dev- 접두사로 시작하는 세션 토큰은 테스트용
       const isDevSessionToken = IS_DEV && sessionToken.startsWith("dev-")
 
@@ -218,16 +255,21 @@ export async function POST(request: NextRequest) {
           console.log("[LiveKit Token] Guest session validated:", guestSession.id, "→ participantId:", serverParticipantId)
         }
       }
-    } else if (IS_DEV) {
-      // 개발환경에서 세션 없이 접근 시 임시 ID 생성
-      serverParticipantId = `dev-anon-${Date.now()}`
-      console.log("[LiveKit Token] Dev mode without session → participantId:", serverParticipantId)
-    } else {
-      // 운영환경에서는 세션 필수
-      return NextResponse.json(
-        { error: "Authentication required" },
-        { status: 401 }
-      )
+    }
+
+    // serverParticipantId가 아직 없으면 개발 모드 또는 에러
+    if (!serverParticipantId) {
+      if (IS_DEV) {
+        // 개발환경에서 세션 없이 접근 시 임시 ID 생성
+        serverParticipantId = `dev-anon-${Date.now()}`
+        console.log("[LiveKit Token] Dev mode without session → participantId:", serverParticipantId)
+      } else {
+        // 운영환경에서는 세션 필수
+        return NextResponse.json(
+          { error: "Authentication required" },
+          { status: 401 }
+        )
+      }
     }
 
     // 6. 🧹 중복 참가자 정리 (세션 전환 시 기존 게스트 세션 제거)

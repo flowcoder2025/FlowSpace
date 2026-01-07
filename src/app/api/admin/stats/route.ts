@@ -38,7 +38,7 @@ export async function GET() {
     })
     const spaceIds = spaces.map((s) => s.id)
 
-    // If no spaces, return zeros
+    // 📊 Phase 3.4: 공간 없을 때 전체 필드 명시적 반환
     if (spaceIds.length === 0) {
       return NextResponse.json({
         totalVisitors: 0,
@@ -49,6 +49,14 @@ export async function GET() {
           visitors: 0,
           duration: 0,
           returnRate: 0,
+        },
+        // 📊 데이터 품질 지표도 포함
+        dataQuality: {
+          incompleteEnterSessions: 0,
+          incompleteExitSessions: 0,
+          completedSessions: 0,
+          outlierSessions: 0,
+          outlierAvgDuration: 0,
         },
       })
     }
@@ -74,6 +82,11 @@ export async function GET() {
       authExitLogs,
       guestReturnRateData,
       authReturnRateData,
+      // 📊 Phase 3.1: 지난주 체류시간용
+      lastWeekGuestEnterLogs,
+      lastWeekGuestExitLogs,
+      lastWeekAuthEnterLogs,
+      lastWeekAuthExitLogs,
     ] = await Promise.all([
       // 1. Total guest visitors (unique guest sessions)
       prisma.guestSession.count({
@@ -199,22 +212,76 @@ export async function GET() {
         orderBy: { createdAt: "asc" },
       }),
 
-      // 7. Guest 재방문율 계산: DB 집계 사용
-      prisma.guestSession.groupBy({
-        by: ["spaceId", "nickname"],
-        where: { spaceId: { in: spaceIds } },
+      // 7. Guest 재방문율 계산: guestSessionId 기준 (동일 세션 = 동일 사용자)
+      // 각 세션의 ENTER 이벤트 횟수로 재방문 여부 판단
+      prisma.spaceEventLog.groupBy({
+        by: ["guestSessionId"],
+        where: {
+          spaceId: { in: spaceIds },
+          eventType: "ENTER",
+          guestSessionId: { not: null },
+        },
         _count: true,
       }),
 
-      // 7b. Auth 재방문율 계산: userId로 그룹화
+      // 7b. Auth 재방문율 계산: userId만 기준 (공간 무관하게 동일 사용자)
       prisma.spaceEventLog.groupBy({
-        by: ["userId", "spaceId"],
+        by: ["userId"],
         where: {
           spaceId: { in: spaceIds },
           eventType: "ENTER",
           userId: { not: null },
         },
         _count: true,
+      }),
+
+      // 📊 Phase 3.1: 지난주 체류시간 계산용 데이터
+      // 8. 지난주 Guest ENTER logs
+      prisma.spaceEventLog.findMany({
+        where: {
+          spaceId: { in: spaceIds },
+          eventType: "ENTER",
+          guestSessionId: { not: null },
+          createdAt: { gte: twoWeeksAgo, lt: oneWeekAgo },
+        },
+        select: { guestSessionId: true, createdAt: true },
+        orderBy: { createdAt: "asc" },
+      }),
+
+      // 9. 지난주 Guest EXIT logs
+      prisma.spaceEventLog.findMany({
+        where: {
+          spaceId: { in: spaceIds },
+          eventType: "EXIT",
+          guestSessionId: { not: null },
+          createdAt: { gte: twoWeeksAgo, lt: oneWeekAgo },
+        },
+        select: { guestSessionId: true, createdAt: true },
+        orderBy: { createdAt: "asc" },
+      }),
+
+      // 10. 지난주 Auth ENTER logs
+      prisma.spaceEventLog.findMany({
+        where: {
+          spaceId: { in: spaceIds },
+          eventType: "ENTER",
+          userId: { not: null },
+          createdAt: { gte: twoWeeksAgo, lt: oneWeekAgo },
+        },
+        select: { userId: true, createdAt: true },
+        orderBy: { createdAt: "asc" },
+      }),
+
+      // 11. 지난주 Auth EXIT logs
+      prisma.spaceEventLog.findMany({
+        where: {
+          spaceId: { in: spaceIds },
+          eventType: "EXIT",
+          userId: { not: null },
+          createdAt: { gte: twoWeeksAgo, lt: oneWeekAgo },
+        },
+        select: { userId: true, createdAt: true },
+        orderBy: { createdAt: "asc" },
       }),
     ])
 
@@ -240,22 +307,35 @@ export async function GET() {
     }
 
     const concurrencyEvents: ConcurrencyEvent[] = []
+    // 📊 Phase 3.3: null 이벤트 카운트 (데이터 품질 모니터링)
+    let nullIdentifierEvents = 0
 
     // ENTER 이벤트 추가
     enterEventsForPeak.forEach((e) => {
-      const key = e.guestSessionId || e.userId || ""
-      if (key) {
-        concurrencyEvents.push({ time: e.createdAt, delta: 1, participantKey: key })
+      // 📊 Phase 3.3: null 처리 명시화 - guestSessionId와 userId 둘 다 없는 경우 로깅
+      if (!e.guestSessionId && !e.userId) {
+        nullIdentifierEvents++
+        return // 스킵
       }
+      const key = e.guestSessionId || e.userId!
+      concurrencyEvents.push({ time: e.createdAt, delta: 1, participantKey: key })
     })
 
     // EXIT 이벤트 추가
     exitEventsForPeak.forEach((e) => {
-      const key = e.guestSessionId || e.userId || ""
-      if (key) {
-        concurrencyEvents.push({ time: e.createdAt, delta: -1, participantKey: key })
+      // 📊 Phase 3.3: null 처리 명시화
+      if (!e.guestSessionId && !e.userId) {
+        nullIdentifierEvents++
+        return // 스킵
       }
+      const key = e.guestSessionId || e.userId!
+      concurrencyEvents.push({ time: e.createdAt, delta: -1, participantKey: key })
     })
+
+    // 📊 Phase 3.3: null 이벤트 로깅 (데이터 품질 문제 감지용)
+    if (nullIdentifierEvents > 0) {
+      console.warn(`[Admin Stats] ⚠️ ${nullIdentifierEvents} events have null guestSessionId AND null userId`)
+    }
 
     // 시간순 정렬
     concurrencyEvents.sort((a, b) => a.time.getTime() - b.time.getTime())
@@ -273,47 +353,103 @@ export async function GET() {
       peakConcurrent = Math.max(peakConcurrent, activeParticipants.size)
     })
 
-    // Calculate durations from ENTER/EXIT pairs (게스트)
-    const durations: number[] = []
-    const guestExitMap = new Map<string, Date>()
+    // Calculate durations from ENTER/EXIT pairs (개선된 알고리즘)
+    // 각 세션/사용자별로 ENTER-EXIT 쌍을 시간순으로 매칭
+    const durations: number[] = []           // 정상 체류시간 (24시간 미만)
+    const outlierDurations: number[] = []    // 📊 이상치 체류시간 (24시간 이상)
+    const MAX_DURATION_MS = 24 * 60 * 60 * 1000 // 24시간
+
+    // 게스트: guestSessionId별로 이벤트 그룹화
+    const guestEventsBySession = new Map<string, { enters: Date[]; exits: Date[] }>()
+
+    guestEnterLogs.forEach((log) => {
+      if (log.guestSessionId) {
+        if (!guestEventsBySession.has(log.guestSessionId)) {
+          guestEventsBySession.set(log.guestSessionId, { enters: [], exits: [] })
+        }
+        guestEventsBySession.get(log.guestSessionId)!.enters.push(log.createdAt)
+      }
+    })
+
     guestExitLogs.forEach((log) => {
       if (log.guestSessionId) {
-        guestExitMap.set(log.guestSessionId, log.createdAt)
-      }
-    })
-
-    guestEnterLogs.forEach((enter) => {
-      if (enter.guestSessionId) {
-        const exitTime = guestExitMap.get(enter.guestSessionId)
-        if (exitTime) {
-          const durationMs = exitTime.getTime() - enter.createdAt.getTime()
-          if (durationMs > 0 && durationMs < 24 * 60 * 60 * 1000) {
-            // Less than 24h
-            durations.push(durationMs)
-          }
+        if (!guestEventsBySession.has(log.guestSessionId)) {
+          guestEventsBySession.set(log.guestSessionId, { enters: [], exits: [] })
         }
+        guestEventsBySession.get(log.guestSessionId)!.exits.push(log.createdAt)
       }
     })
 
-    // Calculate durations from ENTER/EXIT pairs (인증 사용자)
-    const authExitMap = new Map<string, Date>()
+    // 각 세션별로 ENTER-EXIT 쌍 매칭 (시간순)
+    guestEventsBySession.forEach((events) => {
+      const enters = events.enters.sort((a, b) => a.getTime() - b.getTime())
+      const exits = events.exits.sort((a, b) => a.getTime() - b.getTime())
+
+      let exitIdx = 0
+      enters.forEach((enterTime) => {
+        // 해당 ENTER 이후의 첫 번째 EXIT 찾기
+        while (exitIdx < exits.length && exits[exitIdx].getTime() <= enterTime.getTime()) {
+          exitIdx++
+        }
+        if (exitIdx < exits.length) {
+          const durationMs = exits[exitIdx].getTime() - enterTime.getTime()
+          if (durationMs > 0) {
+            if (durationMs < MAX_DURATION_MS) {
+              durations.push(durationMs)
+            } else {
+              // 📊 24시간 이상은 이상치로 별도 집계
+              outlierDurations.push(durationMs)
+            }
+          }
+          exitIdx++ // 이 EXIT는 사용됨
+        }
+      })
+    })
+
+    // 인증 사용자: userId별로 이벤트 그룹화
+    const authEventsByUser = new Map<string, { enters: Date[]; exits: Date[] }>()
+
+    authEnterLogs.forEach((log) => {
+      if (log.userId) {
+        if (!authEventsByUser.has(log.userId)) {
+          authEventsByUser.set(log.userId, { enters: [], exits: [] })
+        }
+        authEventsByUser.get(log.userId)!.enters.push(log.createdAt)
+      }
+    })
+
     authExitLogs.forEach((log) => {
       if (log.userId) {
-        authExitMap.set(log.userId, log.createdAt)
+        if (!authEventsByUser.has(log.userId)) {
+          authEventsByUser.set(log.userId, { enters: [], exits: [] })
+        }
+        authEventsByUser.get(log.userId)!.exits.push(log.createdAt)
       }
     })
 
-    authEnterLogs.forEach((enter) => {
-      if (enter.userId) {
-        const exitTime = authExitMap.get(enter.userId)
-        if (exitTime) {
-          const durationMs = exitTime.getTime() - enter.createdAt.getTime()
-          if (durationMs > 0 && durationMs < 24 * 60 * 60 * 1000) {
-            // Less than 24h
-            durations.push(durationMs)
-          }
+    // 각 사용자별로 ENTER-EXIT 쌍 매칭 (시간순)
+    authEventsByUser.forEach((events) => {
+      const enters = events.enters.sort((a, b) => a.getTime() - b.getTime())
+      const exits = events.exits.sort((a, b) => a.getTime() - b.getTime())
+
+      let exitIdx = 0
+      enters.forEach((enterTime) => {
+        while (exitIdx < exits.length && exits[exitIdx].getTime() <= enterTime.getTime()) {
+          exitIdx++
         }
-      }
+        if (exitIdx < exits.length) {
+          const durationMs = exits[exitIdx].getTime() - enterTime.getTime()
+          if (durationMs > 0) {
+            if (durationMs < MAX_DURATION_MS) {
+              durations.push(durationMs)
+            } else {
+              // 📊 24시간 이상은 이상치로 별도 집계
+              outlierDurations.push(durationMs)
+            }
+          }
+          exitIdx++
+        }
+      })
     })
 
     // Average in minutes
@@ -322,12 +458,130 @@ export async function GET() {
         ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length / 60000)
         : 0
 
+    // 📊 Phase 3.1: 지난주 체류시간 계산 (동일 알고리즘)
+    const lastWeekDurations: number[] = []
+
+    // 지난주 게스트 체류시간
+    const lastWeekGuestEventsBySession = new Map<string, { enters: Date[]; exits: Date[] }>()
+
+    lastWeekGuestEnterLogs.forEach((log) => {
+      if (log.guestSessionId) {
+        if (!lastWeekGuestEventsBySession.has(log.guestSessionId)) {
+          lastWeekGuestEventsBySession.set(log.guestSessionId, { enters: [], exits: [] })
+        }
+        lastWeekGuestEventsBySession.get(log.guestSessionId)!.enters.push(log.createdAt)
+      }
+    })
+
+    lastWeekGuestExitLogs.forEach((log) => {
+      if (log.guestSessionId) {
+        if (!lastWeekGuestEventsBySession.has(log.guestSessionId)) {
+          lastWeekGuestEventsBySession.set(log.guestSessionId, { enters: [], exits: [] })
+        }
+        lastWeekGuestEventsBySession.get(log.guestSessionId)!.exits.push(log.createdAt)
+      }
+    })
+
+    lastWeekGuestEventsBySession.forEach((events) => {
+      const enters = events.enters.sort((a, b) => a.getTime() - b.getTime())
+      const exits = events.exits.sort((a, b) => a.getTime() - b.getTime())
+      let exitIdx = 0
+      enters.forEach((enterTime) => {
+        while (exitIdx < exits.length && exits[exitIdx].getTime() <= enterTime.getTime()) {
+          exitIdx++
+        }
+        if (exitIdx < exits.length) {
+          const durationMs = exits[exitIdx].getTime() - enterTime.getTime()
+          if (durationMs > 0 && durationMs < MAX_DURATION_MS) {
+            lastWeekDurations.push(durationMs)
+          }
+          exitIdx++
+        }
+      })
+    })
+
+    // 지난주 인증 사용자 체류시간
+    const lastWeekAuthEventsByUser = new Map<string, { enters: Date[]; exits: Date[] }>()
+
+    lastWeekAuthEnterLogs.forEach((log) => {
+      if (log.userId) {
+        if (!lastWeekAuthEventsByUser.has(log.userId)) {
+          lastWeekAuthEventsByUser.set(log.userId, { enters: [], exits: [] })
+        }
+        lastWeekAuthEventsByUser.get(log.userId)!.enters.push(log.createdAt)
+      }
+    })
+
+    lastWeekAuthExitLogs.forEach((log) => {
+      if (log.userId) {
+        if (!lastWeekAuthEventsByUser.has(log.userId)) {
+          lastWeekAuthEventsByUser.set(log.userId, { enters: [], exits: [] })
+        }
+        lastWeekAuthEventsByUser.get(log.userId)!.exits.push(log.createdAt)
+      }
+    })
+
+    lastWeekAuthEventsByUser.forEach((events) => {
+      const enters = events.enters.sort((a, b) => a.getTime() - b.getTime())
+      const exits = events.exits.sort((a, b) => a.getTime() - b.getTime())
+      let exitIdx = 0
+      enters.forEach((enterTime) => {
+        while (exitIdx < exits.length && exits[exitIdx].getTime() <= enterTime.getTime()) {
+          exitIdx++
+        }
+        if (exitIdx < exits.length) {
+          const durationMs = exits[exitIdx].getTime() - enterTime.getTime()
+          if (durationMs > 0 && durationMs < MAX_DURATION_MS) {
+            lastWeekDurations.push(durationMs)
+          }
+          exitIdx++
+        }
+      })
+    })
+
+    // 지난주 평균 체류시간 (분)
+    const lastWeekAvgDuration =
+      lastWeekDurations.length > 0
+        ? Math.round(lastWeekDurations.reduce((a, b) => a + b, 0) / lastWeekDurations.length / 60000)
+        : 0
+
+    // 📊 주간 체류시간 변화율 계산
+    const durationChange =
+      lastWeekAvgDuration > 0
+        ? Math.round(((avgDuration - lastWeekAvgDuration) / lastWeekAvgDuration) * 100)
+        : avgDuration > 0
+          ? 100
+          : 0
+
+    // 📊 불완전 세션 통계 (데이터 품질 모니터링용)
+    // ENTER 없이 EXIT만 있거나, EXIT 없이 ENTER만 있는 세션 카운트
+    let incompleteEnterSessions = 0 // EXIT만 있는 세션 (ENTER 누락)
+    let incompleteExitSessions = 0  // ENTER만 있는 세션 (EXIT 누락 - 진행 중이거나 비정상 종료)
+
+    guestEventsBySession.forEach((events) => {
+      if (events.enters.length === 0 && events.exits.length > 0) {
+        incompleteEnterSessions += events.exits.length
+      }
+      if (events.enters.length > events.exits.length) {
+        incompleteExitSessions += events.enters.length - events.exits.length
+      }
+    })
+
+    authEventsByUser.forEach((events) => {
+      if (events.enters.length === 0 && events.exits.length > 0) {
+        incompleteEnterSessions += events.exits.length
+      }
+      if (events.enters.length > events.exits.length) {
+        incompleteExitSessions += events.enters.length - events.exits.length
+      }
+    })
+
     // ⚡ 재방문율 계산 (DB 집계 결과 사용)
-    // 게스트: spaceId + nickname 조합
+    // 게스트: guestSessionId 기준 (동일 세션 = 동일 사용자, 2회 이상 ENTER = 재방문)
     const guestUniqueVisitors = guestReturnRateData.length
     const guestReturning = guestReturnRateData.filter((r) => r._count > 1).length
 
-    // 인증 사용자: userId + spaceId 조합
+    // 인증 사용자: userId 기준 (공간 무관하게 동일 사용자, 2회 이상 ENTER = 재방문)
     const authUniqueVisitors = authReturnRateData.length
     const authReturning = authReturnRateData.filter((r) => r._count > 1).length
 
@@ -345,8 +599,18 @@ export async function GET() {
       returnRate,
       weeklyChange: {
         visitors: visitorChange,
-        duration: 0, // Would need historical data
-        returnRate: 0, // Would need historical data
+        duration: durationChange, // 📊 Phase 3.1: 지난주 대비 체류시간 변화율
+        returnRate: 0, // 재방문율 변화율은 복잡하여 향후 구현
+      },
+      // 📊 데이터 품질 지표 (불완전 세션 모니터링)
+      dataQuality: {
+        incompleteEnterSessions, // EXIT만 있음 (ENTER 누락)
+        incompleteExitSessions,  // ENTER만 있음 (진행 중 또는 비정상 종료)
+        completedSessions: durations.length, // 정상 완료된 세션 수
+        outlierSessions: outlierDurations.length, // 24시간 이상 체류 세션
+        outlierAvgDuration: outlierDurations.length > 0
+          ? Math.round(outlierDurations.reduce((a, b) => a + b, 0) / outlierDurations.length / 60000)
+          : 0, // 이상치 평균 체류시간 (분)
       },
     })
   } catch (error) {
