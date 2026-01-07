@@ -66,7 +66,8 @@ export async function GET() {
       thisWeekAuthVisitors,
       lastWeekGuestVisitors,
       lastWeekAuthVisitors,
-      enterEvents,
+      enterEventsForPeak,
+      exitEventsForPeak,
       guestEnterLogs,
       guestExitLogs,
       authEnterLogs,
@@ -127,15 +128,27 @@ export async function GET() {
         },
       }),
 
-      // 4. Peak concurrent (ENTER events grouped by date)
-      prisma.spaceEventLog.groupBy({
-        by: ["createdAt"],
+      // 4. Peak concurrent: ENTER/EXIT 이벤트로 실제 동시접속자 계산
+      // 이번 주 ENTER 이벤트
+      prisma.spaceEventLog.findMany({
         where: {
           spaceId: { in: spaceIds },
           eventType: "ENTER",
           createdAt: { gte: oneWeekAgo },
         },
-        _count: true,
+        select: { createdAt: true, guestSessionId: true, userId: true },
+        orderBy: { createdAt: "asc" },
+      }),
+
+      // 4b. Peak concurrent: EXIT 이벤트
+      prisma.spaceEventLog.findMany({
+        where: {
+          spaceId: { in: spaceIds },
+          eventType: "EXIT",
+          createdAt: { gte: oneWeekAgo },
+        },
+        select: { createdAt: true, guestSessionId: true, userId: true },
+        orderBy: { createdAt: "asc" },
       }),
 
       // 5. Guest enter logs for duration calculation
@@ -218,13 +231,47 @@ export async function GET() {
           ? 100
           : 0
 
-    // Group by date and find max for peak concurrent
-    const dailyEnters = new Map<string, number>()
-    enterEvents.forEach((e) => {
-      const dateKey = e.createdAt.toISOString().split("T")[0]
-      dailyEnters.set(dateKey, (dailyEnters.get(dateKey) || 0) + e._count)
+    // 📊 피크 동접 계산: ENTER/EXIT 이벤트로 실제 동시접속자 추적
+    // 1. 모든 이벤트를 시간순으로 정렬 (ENTER: +1, EXIT: -1)
+    interface ConcurrencyEvent {
+      time: Date
+      delta: number  // +1 for ENTER, -1 for EXIT
+      participantKey: string  // guestSessionId 또는 userId
+    }
+
+    const concurrencyEvents: ConcurrencyEvent[] = []
+
+    // ENTER 이벤트 추가
+    enterEventsForPeak.forEach((e) => {
+      const key = e.guestSessionId || e.userId || ""
+      if (key) {
+        concurrencyEvents.push({ time: e.createdAt, delta: 1, participantKey: key })
+      }
     })
-    const peakConcurrent = Math.max(...Array.from(dailyEnters.values()), 0)
+
+    // EXIT 이벤트 추가
+    exitEventsForPeak.forEach((e) => {
+      const key = e.guestSessionId || e.userId || ""
+      if (key) {
+        concurrencyEvents.push({ time: e.createdAt, delta: -1, participantKey: key })
+      }
+    })
+
+    // 시간순 정렬
+    concurrencyEvents.sort((a, b) => a.time.getTime() - b.time.getTime())
+
+    // 2. 피크 동접 계산 (참가자 Set으로 중복 제거)
+    const activeParticipants = new Set<string>()
+    let peakConcurrent = 0
+
+    concurrencyEvents.forEach((event) => {
+      if (event.delta > 0) {
+        activeParticipants.add(event.participantKey)
+      } else {
+        activeParticipants.delete(event.participantKey)
+      }
+      peakConcurrent = Math.max(peakConcurrent, activeParticipants.size)
+    })
 
     // Calculate durations from ENTER/EXIT pairs (게스트)
     const durations: number[] = []
