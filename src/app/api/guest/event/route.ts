@@ -11,6 +11,9 @@ import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { SpaceEventType } from "@prisma/client"
 
+// 중복 EXIT 방지: 같은 세션이 N초 내에 다시 퇴장 시 무시
+const DUPLICATE_EXIT_THRESHOLD_SECONDS = 10
+
 // ============================================
 // Types
 // ============================================
@@ -82,7 +85,31 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // 7. 이벤트 로그 생성
+    // 7. EXIT 이벤트 중복 방지 (N초 내 동일 세션)
+    if (body.eventType === "EXIT") {
+      const recentExit = await prisma.spaceEventLog.findFirst({
+        where: {
+          spaceId: body.spaceId,
+          guestSessionId: guestSession.id,
+          eventType: SpaceEventType.EXIT,
+          createdAt: {
+            gte: new Date(Date.now() - DUPLICATE_EXIT_THRESHOLD_SECONDS * 1000),
+          },
+        },
+        orderBy: { createdAt: "desc" },
+      })
+
+      if (recentExit) {
+        console.log(`[Guest Event] Duplicate EXIT skipped for session ${guestSession.id}`)
+        return NextResponse.json({
+          logged: false,
+          skipped: true,
+          message: "Recent exit already recorded",
+        })
+      }
+    }
+
+    // 8. 이벤트 로그 생성
     const eventLog = await prisma.spaceEventLog.create({
       data: {
         spaceId: body.spaceId,

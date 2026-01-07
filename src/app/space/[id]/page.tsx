@@ -613,10 +613,37 @@ export default function SpacePage() {
     router.push("/")
   }, [session, router, isAuthUser])
 
-  // 📊 인증 사용자 EXIT 로깅
-  // ⚠️ SSOT: Socket disconnect에서 처리하므로 클라이언트에서 별도 전송 안함
-  // Socket 연결 종료 시 서버에서 자동으로 EXIT 이벤트 기록됨
-  // (beforeunload + Socket disconnect 중복 방지)
+  // 📊 브라우저 종료 시 EXIT 이벤트 로깅 (sendBeacon 사용)
+  // ⚠️ Socket.io disconnect만으로는 브라우저 종료 시 서버에 도달하지 않을 수 있음
+  // sendBeacon은 브라우저 종료 시에도 백그라운드에서 전송을 완료함
+  useEffect(() => {
+    if (!session || !spaceId || devMode) return
+
+    const handleBeforeUnload = () => {
+      // sendBeacon으로 EXIT 이벤트 전송 (브라우저 종료 시에도 신뢰성 있게 전송)
+      if (isAuthUser && authSession?.user?.id) {
+        // 인증 사용자: visit API (_method=DELETE 쿼리 파라미터로 POST 사용)
+        const url = `/api/spaces/${spaceId}/visit?_method=DELETE`
+        navigator.sendBeacon(url, JSON.stringify({ userId: authSession.user.id }))
+      } else if (session.sessionToken && !session.sessionToken.startsWith("dev-")) {
+        // 게스트 사용자: guest/event API
+        const url = "/api/guest/event"
+        const blob = new Blob([JSON.stringify({
+          sessionToken: session.sessionToken,
+          spaceId,
+          eventType: "EXIT",
+          payload: { reason: "beforeunload" },
+        })], { type: "application/json" })
+        navigator.sendBeacon(url, blob)
+      }
+    }
+
+    window.addEventListener("beforeunload", handleBeforeUnload)
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload)
+    }
+  }, [session, spaceId, devMode, isAuthUser, authSession])
 
   // 🎫 참가자명 입력 모달 (로그인 사용자 첫 입장)
   if (showParticipantModal && authSession?.user) {
