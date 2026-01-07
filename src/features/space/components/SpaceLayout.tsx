@@ -136,10 +136,20 @@ function SpaceLayoutContent({
   const [isChatOpen, setIsChatOpen] = useState(true)
   const [isMemberPanelOpen, setIsMemberPanelOpen] = useState(false)
 
-  // 🎮 모바일(터치) 디바이스 감지
+  // 🎮 모바일 디바이스 감지 (터치스크린 PC 제외)
+  // - pointer: coarse = 터치가 주 입력 방식
+  // - hover: none = 호버 불가 (진짜 모바일)
+  // - 화면 너비 < 768px = 좁은 화면
   const isTouchDevice = useMemo(() => {
     if (typeof window === "undefined") return false
-    return "ontouchstart" in window || navigator.maxTouchPoints > 0
+
+    // 미디어 쿼리로 정확한 감지
+    const hasCoarsePointer = window.matchMedia("(pointer: coarse)").matches
+    const hasNoHover = window.matchMedia("(hover: none)").matches
+    const isNarrowScreen = window.innerWidth < 768
+
+    // 터치가 주 입력이면서 (호버 불가 OR 좁은 화면) = 진짜 모바일
+    return hasCoarsePointer && (hasNoHover || isNarrowScreen)
   }, [])
 
   // 🎬 참가자 패널 뷰 모드 (sidebar | grid | hidden)
