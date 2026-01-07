@@ -1,6 +1,6 @@
 # FlowSpace 개발 로드맵
 
-> **최종 업데이트**: 2025-12-29
+> **최종 업데이트**: 2026-01-08
 > **PRD 참조**: `/docs/prd.md`
 > **상위 문서**: `/CLAUDE.md` (루트 헌법)
 
@@ -12,12 +12,13 @@
 
 | 영역 | 완성도 | 상태 |
 |-----|--------|------|
-| **API 라우트** | 31개 중 31개 | ✅ 완료 |
+| **API 라우트** | 32개 중 32개 | ✅ 완료 |
 | **핵심 기능** | 18개 모듈 | ✅ 완료 |
 | **게임 엔진** | 12개 모듈 | ✅ 완료 |
 | **채팅 시스템** | 최적화 완료 | ✅ (2025-12-19) |
 | **권한 시스템** | 구독 기반 | ✅ (2025-12-28) |
-| **전체 MVP** | ~85% | ⚠️ 진행중 |
+| **보안 허점 수정** | 27/38개 (71%) | ✅ (2026-01-08) |
+| **전체 MVP** | ~70% | ⚠️ 에셋/인프라 의존 |
 
 ### 1.2 완료된 핵심 기능
 
@@ -178,10 +179,35 @@ src/features/space/game/scenes/MainScene.ts
 
 ## 5. 보안 점검
 
-- [x] Rate Limiting 적용 (채팅 5msg/5초)
+### 5.1 완료된 보안 강화 (TASK.md 결과, 2026-01-08)
+
+**총 38개 허점 중 27개 수정 완료 (71%)**
+
+| Phase | 심각도 | 완료 | 주요 내용 |
+|-------|--------|:----:|----------|
+| Phase 1 | Critical | 4/4 | 재방문율 계산, 피크 동접, 체류시간 버그, 개발 백도어 제거 |
+| Phase 2 | High | 10/10 | ENTER/EXIT 매칭, Rate Limit, 귓속말 롤백, LiveKit 권한 |
+| Phase 3 | Medium | 10/17 | 파티 DB 저장, 자기 강퇴 방지, 에러 정보 누수 |
+| Phase 4 | Low | 3/7 | 재연결 제한, 해시 충돌, 중복 메시지 |
+
+### 5.2 보류된 이슈 (11개) - 인프라 의존
+
+- [ ] DB 인덱스 최적화 (스키마 변경)
+- [ ] Presence API TTL (메커니즘 필요)
+- [ ] 게스트 세션 정리 (cron job)
+- [ ] 파티 권한 검증 (기능 확장 시)
+- [ ] 음소거 영속화 (관리자 기능)
+- [ ] 쿼리 중복 최적화 (리팩토링)
+
+### 5.3 기존 체크리스트
+
+- [x] Rate Limiting 적용 (playerId 기반으로 강화됨)
 - [x] 권한 미들웨어 (`space-auth.ts`)
 - [x] 환경 변수 분리
 - [x] 구독 기반 공간 생성 권한
+- [x] 메시지 실패 롤백 (chat:messageFailed, whisper:messageFailed)
+- [x] 닉네임 스푸핑 완화
+- [x] 게스트 토큰 엔트로피 강화 (crypto.randomBytes)
 - [ ] CSRF 토큰 검증 강화
 - [ ] API 응답 데이터 최소화
 - [ ] 파일 업로드 검증 (향후)
@@ -201,9 +227,17 @@ src/features/space/game/scenes/MainScene.ts
 
 | 날짜 | 작업 | 관련 파일 |
 |-----|------|----------|
+| 2026-01-08 | **보안 허점 수정 27/38개 (71%)** | `/TASK.md` 참조 - 통계/채팅/인증 강화 |
+| 2026-01-07 | 브라우저 종료 시 EXIT 이벤트 누락 수정 | `socket-server.ts`, `SpaceLayout.tsx` |
+| 2026-01-07 | 피크 동접/체류시간 계산 로직 수정 | `admin/stats/route.ts`, `dashboard/stats/route.ts` |
+| 2026-01-06 | 모바일 전용 채팅 UI + 뷰포트 개선 | `SpaceLayout.tsx`, `MobileChatOverlay.tsx` |
+| 2026-01-06 | 화면공유 딜레이/멈춤 문제 해결 | `LiveKitRoomProvider.tsx` |
+| 2026-01-05 | AudioWorklet 노이즈 게이트 구현 | `worklets/noise-gate-processor.ts` |
+| 2026-01-04 | 디스코드 스타일 미디어 설정 시스템 | `MediaSettingsModal.tsx`, `AudioSettingsTab.tsx` |
+| 2025-12-31 | 원격 플레이어 걷기 애니메이션 수정 | `CharacterSprite.ts`, `MainScene.ts` |
 | 2025-12-29 | 반응형 디자인 (ROADMAP 9순위) | `SpaceLayout.tsx`, `ControlBar.tsx`, `useChatDrag.ts` |
 | 2025-12-29 | 에러 바운더리 강화 (ROADMAP 10순위) | `lib/errors/index.ts`, `space/[id]/error.tsx`, `ErrorBoundary.tsx` |
-| 2025-12-29 | 캐릭터 커스터마이징 Phase 0-2 (ROADMAP 5순위) | `avatar/avatar.schema.ts`, `socket/types.ts`, `socket-server.ts`, `useSocket.ts` + PlayerMoveData 경량화 |
+| 2025-12-29 | 캐릭터 커스터마이징 Phase 0-2 (ROADMAP 5순위) | `avatar/avatar.schema.ts`, `socket/types.ts`, `socket-server.ts`, `useSocket.ts` |
 | 2025-12-29 | 빌드 경고 정리 (ROADMAP 4순위) | 17개 파일 수정 (미사용 import/변수 제거) |
 | 2025-12-29 | AvatarColor 8개 통일 (ROADMAP 3순위) | `socket/types.ts`, `page.tsx`, `GameCanvas.tsx`, `PhaserGame.tsx` |
 | 2025-12-29 | CSV 내보내기 구현 (ROADMAP 2순위) | `/lib/utils/csv-export.ts`, `/api/dashboard/spaces/[id]/export/route.ts` |
@@ -218,6 +252,7 @@ src/features/space/game/scenes/MainScene.ts
 
 | 날짜 | 버전 | 변경 |
 |-----|------|------|
+| 2026-01-08 | 2.0.0 | TASK.md 결과 통합 - 보안 허점 27/38개 수정, Git 커밋 이력 반영 |
 | 2025-12-29 | 1.3.0 | ROADMAP 9순위 완료 - 반응형 디자인 (SpaceLayout, ControlBar, useChatDrag) |
 | 2025-12-29 | 1.2.0 | ROADMAP 10순위 완료 - 에러 바운더리 강화 (AppError, ErrorBoundary) |
 | 2025-12-29 | 1.1.0 | ROADMAP 5순위 완료 - 캐릭터 커스터마이징 Phase 1-2 (DB/소켓) |

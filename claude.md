@@ -20,10 +20,13 @@
 /CLAUDE.md (루트 헌법 - 전역 원칙, 항상 자동 적용)
 │
 ├── /TASK.md                        ← 🎯 현재 진행 중인 태스크 (Phase별 계획)
+├── /OCI.md                         ← 🔧 Oracle Cloud 인프라 배포 계획
+├── /DOCS-UPDATE-PLAN.md            ← 📝 문서 현행화 계획
 │
 ├── /docs/ROADMAP.md                ← 📋 통합 개발 로드맵 (우선순위/상태)
 │   ├── /docs/roadmap/CHARACTER.md  ← 캐릭터 커스터마이징 설계
-│   └── /docs/roadmap/ASSETS.md     ← 에셋 분석 및 가공 계획
+│   ├── /docs/roadmap/ASSETS.md     ← 에셋 분석 및 가공 계획
+│   └── /docs/roadmap/ASSET-PIPELINE.md ← 에셋 변환 파이프라인
 │
 ├── /src/components/claude.md       ← UI 컴포넌트 작업 시 필수
 ├── /src/features/claude.md         ← 기능 모듈 개발 시 필수
@@ -547,3 +550,4 @@ git add . && git commit -m "feat: 작업 내용" && git push
 | 2025-12-11 | 3.3.0 | TASK.md 계층 추가: Phase별 태스크 관리 체계, 사용법 가이드 (0.5절) |
 | 2025-12-15 | 3.4.0 | 디렉토리 구조 전면 업데이트: /my-spaces, /dashboard, /components/space, space-auth.ts 반영 |
 | 2025-12-29 | 3.5.0 | ROADMAP 계층 추가: /docs/ROADMAP.md 통합 로드맵 + roadmap/CHARACTER.md, ASSETS.md |
+| 2026-01-08 | 3.6.0 | 계층 구조 확장: OCI.md, DOCS-UPDATE-PLAN.md, ASSET-PIPELINE.md 추가 |

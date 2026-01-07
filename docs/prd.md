@@ -286,25 +286,43 @@
 - [x] 화면 공유 (ScreenShare)
 - [x] 화면 공유 크롭 문제 해결 (VideoTile `object-contain` 적용)
 
-### Phase 5: 통합 및 Polish 🔄 진행중
+### Phase 5: 통합 및 Polish ✅ 완료 (2026-01-07)
 - [x] 전체 플로우 통합
 - [x] 에러 처리 및 로딩 상태
 - [x] **플로팅 채팅 오버레이** (드래그 가능, Enter 토글)
 - [x] **귓속말/파티 채팅** 시스템
 - [x] **VideoTile 아바타 색상** (CSS hue-rotate)
 - [x] **아바타 색상 검증** (Missing Texture 버그 수정)
-- [ ] 반응형 디자인 최적화
-- [ ] PoC 데모 패키징
-- [ ] 템플릿 실제 맵 에셋 (3종)
-- [ ] 오브젝트 상호작용 기능 (링크/공지/설문)
-- [ ] CSV 내보내기
+- [x] 반응형 디자인 기초 (SpaceLayout, ControlBar, useChatDrag)
+- [x] 에러 바운더리 강화 (AppError, ErrorBoundary)
+- [x] CSV 내보내기 (dashboard/export API)
+- [x] 모바일 전용 채팅 UI + 뷰포트 개선
+- [x] 화면공유 딜레이/멈춤 문제 해결
+- [x] **AudioWorklet 기반 노이즈 게이트 구현**
+- [x] **디스코드 스타일 미디어 설정 시스템**
+- [ ] PoC 데모 패키징 (대기)
+- [ ] 템플릿 실제 맵 에셋 3종 (에셋 의존)
+- [ ] 오브젝트 상호작용 기능 (에셋 의존)
 
-### Phase 6: 권한 및 구독 시스템 📋 계획
-- [ ] 권한 체계 (SUPER_ADMIN → SPACE_OWNER → STAFF → PARTICIPANT)
-- [ ] 구독 플랜 관리 (FREE/PRO/PREMIUM)
-- [ ] 채팅 관리 (삭제/음소거/강퇴)
-- [ ] 관리자 대시보드 확장
-- [ ] 가격 페이지
+### Phase 6: 권한 및 보안 시스템 ✅ 완료 (2026-01-08)
+- [x] 권한 체계 (SUPER_ADMIN → SPACE_OWNER → STAFF → PARTICIPANT)
+- [x] 구독 플랜 관리 (FREE/PRO/PREMIUM)
+- [x] 공간 생성 권한 제한 (SuperAdmin/유료 구독자 전용)
+- [x] 채팅 관리 (삭제/음소거/강퇴)
+- [x] 관리자 대시보드 확장
+- [x] 가격 페이지 (/pricing)
+- [x] **보안 허점 수정 27/38개 (71%)** - 통계/채팅/인증 강화
+
+### Phase 7: 인프라 최적화 📋 계획
+- [ ] Oracle Cloud 통합 배포 (OCI.md 참조)
+- [ ] LiveKit Cloud → Self-hosted 전환 (프리티어 한도 초과)
+- [ ] Railway Socket.io → Oracle 마이그레이션
+- [ ] 보류된 보안 이슈 11개 (인프라 의존)
+
+### Phase 8: 에셋 완성 📋 대기
+- [ ] 48×64 캐릭터 스프라이트 제작 (외부 의존)
+- [ ] 3종 템플릿 맵 완성 (OFFICE 90%, CLASSROOM 85%, LOUNGE 70%)
+- [ ] 오브젝트 상호작용 연결
 
 ---
 
@@ -375,4 +393,5 @@
 - v0.3 (2025-12-08): Phase 1-4 완료 상태 반영, Phase 5 진행중 업데이트
 - v0.4 (2025-12-11): Phase 5 진행 상황 업데이트 (채팅 시스템, 아바타 색상), Phase 6 추가
 - v0.5 (2025-12-16): Phase 4 비디오 이슈 해결 (화면 공유 크롭 문제)
+- v0.6 (2026-01-08): Phase 5-6 완료, Phase 7-8 추가 (인프라/에셋), 보안 허점 수정 71% 반영
 
