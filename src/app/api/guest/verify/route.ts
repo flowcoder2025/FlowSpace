@@ -6,6 +6,15 @@
 
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { SpaceEventType } from "@prisma/client"
+
+// ============================================
+// Configuration
+// ============================================
+const IS_DEV = process.env.NODE_ENV === "development"
+
+// 중복 ENTER 방지: 같은 세션이 N분 내에 다시 입장 시 무시
+const DUPLICATE_ENTER_THRESHOLD_MINUTES = 5
 
 // ============================================
 // Types
@@ -89,6 +98,50 @@ export async function POST(request: NextRequest) {
     // 이 ID는 클라이언트가 조작할 수 없는 서버 발급 ID
     const participantId = `guest-${guestSession.id}`
 
+    // 8. ENTER 이벤트 기록 (재입장 시에도 기록, 5분 중복 방지)
+    // 게스트 세션 생성 시 ENTER가 기록되지만, 세션 재사용 시에도 입장 기록 필요
+    let enterLogged = false
+    try {
+      const recentEnter = await prisma.spaceEventLog.findFirst({
+        where: {
+          spaceId: guestSession.spaceId,
+          guestSessionId: guestSession.id,
+          eventType: SpaceEventType.ENTER,
+          createdAt: {
+            gte: new Date(Date.now() - DUPLICATE_ENTER_THRESHOLD_MINUTES * 60 * 1000),
+          },
+        },
+        orderBy: { createdAt: "desc" },
+      })
+
+      if (!recentEnter) {
+        await prisma.spaceEventLog.create({
+          data: {
+            spaceId: guestSession.spaceId,
+            guestSessionId: guestSession.id,
+            eventType: SpaceEventType.ENTER,
+            payload: {
+              nickname: guestSession.nickname,
+              avatar: guestSession.avatar,
+              source: "verify", // 세션 재검증을 통한 입장
+            },
+          },
+        })
+        enterLogged = true
+
+        if (IS_DEV) {
+          console.log(`[Guest Verify] ENTER recorded: session=${guestSession.id}, space=${guestSession.spaceId}`)
+        }
+      } else {
+        if (IS_DEV) {
+          console.log(`[Guest Verify] Duplicate ENTER skipped: session=${guestSession.id}`)
+        }
+      }
+    } catch (logError) {
+      // 이벤트 로깅 실패해도 세션 검증은 성공으로 처리
+      console.error("[Guest Verify] Failed to log ENTER event:", logError)
+    }
+
     const response: VerifyResponse = {
       valid: true,
       sessionId: guestSession.id,
@@ -99,7 +152,7 @@ export async function POST(request: NextRequest) {
       expiresAt: guestSession.expiresAt,
     }
 
-    return NextResponse.json(response)
+    return NextResponse.json({ ...response, enterLogged })
   } catch (error) {
     console.error("Failed to verify guest session:", error)
     return NextResponse.json(
