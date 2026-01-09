@@ -66,27 +66,19 @@ export async function GET() {
     const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
     const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000)
 
-    // ⚡ 병렬 실행: 독립적인 쿼리들을 Promise.all()로 동시 실행
+    // ⚡ 3.2 최적화: 18개 쿼리 → 10개로 통합 (2026-01-09)
+    // ENTER/EXIT 이벤트는 2주간 전체를 한 번에 조회 후 메모리에서 필터링
     const [
       guestVisitors,
       authVisitors,
       thisWeekGuestVisitors,
-      thisWeekAuthVisitors,
       lastWeekGuestVisitors,
-      lastWeekAuthVisitors,
-      enterEventsForPeak,
-      exitEventsForPeak,
-      guestEnterLogs,
-      guestExitLogs,
-      authEnterLogs,
-      authExitLogs,
+      // 통합 쿼리: 2주간 모든 ENTER/EXIT 이벤트
+      allEnterEvents,
+      allExitEvents,
+      // groupBy 쿼리 (인덱스 최적화됨)
       guestReturnRateData,
       authReturnRateData,
-      // 📊 Phase 3.1: 지난주 체류시간용
-      lastWeekGuestEnterLogs,
-      lastWeekGuestExitLogs,
-      lastWeekAuthEnterLogs,
-      lastWeekAuthExitLogs,
     ] = await Promise.all([
       // 1. Total guest visitors (unique guest sessions)
       prisma.guestSession.count({
@@ -111,17 +103,6 @@ export async function GET() {
         },
       }),
 
-      // 2b. This week's auth visitors
-      prisma.spaceEventLog.groupBy({
-        by: ["userId"],
-        where: {
-          spaceId: { in: spaceIds },
-          eventType: "ENTER",
-          userId: { not: null },
-          createdAt: { gte: oneWeekAgo },
-        },
-      }),
-
       // 3. Last week's guest visitors
       prisma.guestSession.count({
         where: {
@@ -130,90 +111,29 @@ export async function GET() {
         },
       }),
 
-      // 3b. Last week's auth visitors
-      prisma.spaceEventLog.groupBy({
-        by: ["userId"],
-        where: {
-          spaceId: { in: spaceIds },
-          eventType: "ENTER",
-          userId: { not: null },
-          createdAt: { gte: twoWeeksAgo, lt: oneWeekAgo },
-        },
-      }),
-
-      // 4. Peak concurrent: ENTER/EXIT 이벤트로 실제 동시접속자 계산
-      // 이번 주 ENTER 이벤트
+      // ⚡ 통합: 2주간 모든 ENTER 이벤트 (기존 8개 쿼리 → 1개)
       prisma.spaceEventLog.findMany({
         where: {
           spaceId: { in: spaceIds },
           eventType: "ENTER",
-          createdAt: { gte: oneWeekAgo },
+          createdAt: { gte: twoWeeksAgo },
         },
         select: { createdAt: true, guestSessionId: true, userId: true },
         orderBy: { createdAt: "asc" },
       }),
 
-      // 4b. Peak concurrent: EXIT 이벤트
+      // ⚡ 통합: 2주간 모든 EXIT 이벤트 (기존 8개 쿼리 → 1개)
       prisma.spaceEventLog.findMany({
         where: {
           spaceId: { in: spaceIds },
           eventType: "EXIT",
-          createdAt: { gte: oneWeekAgo },
+          createdAt: { gte: twoWeeksAgo },
         },
         select: { createdAt: true, guestSessionId: true, userId: true },
         orderBy: { createdAt: "asc" },
       }),
 
-      // 5. Guest enter logs for duration calculation
-      prisma.spaceEventLog.findMany({
-        where: {
-          spaceId: { in: spaceIds },
-          eventType: "ENTER",
-          guestSessionId: { not: null },
-          createdAt: { gte: oneWeekAgo },
-        },
-        select: { guestSessionId: true, createdAt: true },
-        orderBy: { createdAt: "asc" },
-      }),
-
-      // 6. Guest exit logs for duration calculation
-      prisma.spaceEventLog.findMany({
-        where: {
-          spaceId: { in: spaceIds },
-          eventType: "EXIT",
-          guestSessionId: { not: null },
-          createdAt: { gte: oneWeekAgo },
-        },
-        select: { guestSessionId: true, createdAt: true },
-        orderBy: { createdAt: "asc" },
-      }),
-
-      // 5b. Auth enter logs for duration calculation
-      prisma.spaceEventLog.findMany({
-        where: {
-          spaceId: { in: spaceIds },
-          eventType: "ENTER",
-          userId: { not: null },
-          createdAt: { gte: oneWeekAgo },
-        },
-        select: { userId: true, createdAt: true },
-        orderBy: { createdAt: "asc" },
-      }),
-
-      // 6b. Auth exit logs for duration calculation
-      prisma.spaceEventLog.findMany({
-        where: {
-          spaceId: { in: spaceIds },
-          eventType: "EXIT",
-          userId: { not: null },
-          createdAt: { gte: oneWeekAgo },
-        },
-        select: { userId: true, createdAt: true },
-        orderBy: { createdAt: "asc" },
-      }),
-
-      // 7. Guest 재방문율 계산: guestSessionId 기준 (동일 세션 = 동일 사용자)
-      // 각 세션의 ENTER 이벤트 횟수로 재방문 여부 판단
+      // 7. Guest 재방문율 계산 (인덱스: spaceId, eventType, guestSessionId)
       prisma.spaceEventLog.groupBy({
         by: ["guestSessionId"],
         where: {
@@ -224,7 +144,7 @@ export async function GET() {
         _count: true,
       }),
 
-      // 7b. Auth 재방문율 계산: userId만 기준 (공간 무관하게 동일 사용자)
+      // 7b. Auth 재방문율 계산 (인덱스: spaceId, eventType, userId)
       prisma.spaceEventLog.groupBy({
         by: ["userId"],
         where: {
@@ -234,56 +154,50 @@ export async function GET() {
         },
         _count: true,
       }),
-
-      // 📊 Phase 3.1: 지난주 체류시간 계산용 데이터
-      // 8. 지난주 Guest ENTER logs
-      prisma.spaceEventLog.findMany({
-        where: {
-          spaceId: { in: spaceIds },
-          eventType: "ENTER",
-          guestSessionId: { not: null },
-          createdAt: { gte: twoWeeksAgo, lt: oneWeekAgo },
-        },
-        select: { guestSessionId: true, createdAt: true },
-        orderBy: { createdAt: "asc" },
-      }),
-
-      // 9. 지난주 Guest EXIT logs
-      prisma.spaceEventLog.findMany({
-        where: {
-          spaceId: { in: spaceIds },
-          eventType: "EXIT",
-          guestSessionId: { not: null },
-          createdAt: { gte: twoWeeksAgo, lt: oneWeekAgo },
-        },
-        select: { guestSessionId: true, createdAt: true },
-        orderBy: { createdAt: "asc" },
-      }),
-
-      // 10. 지난주 Auth ENTER logs
-      prisma.spaceEventLog.findMany({
-        where: {
-          spaceId: { in: spaceIds },
-          eventType: "ENTER",
-          userId: { not: null },
-          createdAt: { gte: twoWeeksAgo, lt: oneWeekAgo },
-        },
-        select: { userId: true, createdAt: true },
-        orderBy: { createdAt: "asc" },
-      }),
-
-      // 11. 지난주 Auth EXIT logs
-      prisma.spaceEventLog.findMany({
-        where: {
-          spaceId: { in: spaceIds },
-          eventType: "EXIT",
-          userId: { not: null },
-          createdAt: { gte: twoWeeksAgo, lt: oneWeekAgo },
-        },
-        select: { userId: true, createdAt: true },
-        orderBy: { createdAt: "asc" },
-      }),
     ])
+
+    // ⚡ 메모리 필터링: 통합된 이벤트를 날짜/사용자유형별로 분류
+    const oneWeekAgoTime = oneWeekAgo.getTime()
+
+    // 이번 주 이벤트 필터
+    const enterEventsForPeak = allEnterEvents.filter(
+      (e) => e.createdAt.getTime() >= oneWeekAgoTime
+    )
+    const exitEventsForPeak = allExitEvents.filter(
+      (e) => e.createdAt.getTime() >= oneWeekAgoTime
+    )
+
+    // 이번 주 체류시간용 (게스트/인증 분리)
+    const guestEnterLogs = enterEventsForPeak.filter((e) => e.guestSessionId)
+    const guestExitLogs = exitEventsForPeak.filter((e) => e.guestSessionId)
+    const authEnterLogs = enterEventsForPeak.filter((e) => e.userId)
+    const authExitLogs = exitEventsForPeak.filter((e) => e.userId)
+
+    // 지난 주 체류시간용
+    const lastWeekGuestEnterLogs = allEnterEvents.filter(
+      (e) => e.guestSessionId && e.createdAt.getTime() < oneWeekAgoTime
+    )
+    const lastWeekGuestExitLogs = allExitEvents.filter(
+      (e) => e.guestSessionId && e.createdAt.getTime() < oneWeekAgoTime
+    )
+    const lastWeekAuthEnterLogs = allEnterEvents.filter(
+      (e) => e.userId && e.createdAt.getTime() < oneWeekAgoTime
+    )
+    const lastWeekAuthExitLogs = allExitEvents.filter(
+      (e) => e.userId && e.createdAt.getTime() < oneWeekAgoTime
+    )
+
+    // 이번 주/지난 주 인증 사용자 수 계산 (메모리에서)
+    const thisWeekAuthUserIds = new Set(
+      enterEventsForPeak.filter((e) => e.userId).map((e) => e.userId)
+    )
+    const lastWeekAuthUserIds = new Set(
+      allEnterEvents
+        .filter((e) => e.userId && e.createdAt.getTime() < oneWeekAgoTime)
+        .map((e) => e.userId)
+    )
+    const thisWeekAuthVisitors = { length: thisWeekAuthUserIds.size }
+    const lastWeekAuthVisitors = { length: lastWeekAuthUserIds.size }
 
     // 📊 합산: 게스트 + 인증 사용자
     const totalVisitors = guestVisitors + authVisitors.length
