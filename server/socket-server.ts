@@ -1621,18 +1621,23 @@ io.on("connection", (socket) => {
     action: string
   ): Promise<{ valid: boolean; error?: string; userId?: string; role?: SpaceRole }> {
     try {
+      console.log(`[Socket] verifyAdminPermission called: action=${action}, sessionToken=${sessionToken?.substring(0, 15)}...`)
+
       // auth- 세션에서 userId 추출
       if (!sessionToken?.startsWith("auth-")) {
+        console.warn(`[Socket] verifyAdminPermission: sessionToken does not start with 'auth-'`)
         return { valid: false, error: "Authentication required for admin actions" }
       }
 
       const userId = sessionToken.replace("auth-", "")
+      console.log(`[Socket] verifyAdminPermission: extracted userId=${userId}`)
 
       // 🌟 SuperAdmin 체크 (모든 공간에서 관리 권한)
       const user = await prisma.user.findUnique({
         where: { id: userId },
         select: { isSuperAdmin: true },
       })
+      console.log(`[Socket] verifyAdminPermission: user found=${!!user}, isSuperAdmin=${user?.isSuperAdmin}`)
 
       if (user?.isSuperAdmin) {
         console.log(`[Socket] SuperAdmin ${userId} granted ${action} permission`)
