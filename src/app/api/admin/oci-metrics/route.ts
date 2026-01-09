@@ -21,12 +21,18 @@ import {
   bytesToGB,
 } from "@/lib/utils/oci-cost"
 
-// OCI 서버 URL (환경변수 또는 기본값)
+// OCI 서버 URL (클라이언트용)
 const SOCKET_SERVER_URL =
   process.env.NEXT_PUBLIC_SOCKET_URL || "https://space-socket.flow-coder.com"
 const LIVEKIT_SERVER_URL =
   process.env.NEXT_PUBLIC_LIVEKIT_URL?.replace("wss://", "https://") ||
   "https://space-livekit.flow-coder.com"
+
+// OCI 서버 내부 URL (서버 사이드 전용 - Cloudflare 우회)
+// Vercel 서버리스 함수에서 직접 접근
+const OCI_INTERNAL_IP = process.env.OCI_INTERNAL_IP || "144.24.72.143"
+const SOCKET_INTERNAL_URL = `http://${OCI_INTERNAL_IP}:3001`
+const LIVEKIT_INTERNAL_URL = `http://${OCI_INTERNAL_IP}:7880`
 
 // 타입 정의
 interface SocketMetrics {
@@ -225,16 +231,13 @@ export async function GET() {
 }
 
 /**
- * Socket.io 서버 메트릭 조회
+ * Socket.io 서버 메트릭 조회 (직접 IP로 접근)
  */
 async function fetchSocketMetrics(): Promise<SocketMetrics | null> {
   try {
-    const response = await fetch(`${SOCKET_SERVER_URL}/metrics`, {
+    const response = await fetch(`${SOCKET_INTERNAL_URL}/metrics`, {
       cache: "no-store",
       signal: AbortSignal.timeout(5000),
-      headers: {
-        "User-Agent": "node-fetch", // Cloudflare 규칙 매칭용
-      },
     })
 
     if (!response.ok) {
@@ -250,16 +253,13 @@ async function fetchSocketMetrics(): Promise<SocketMetrics | null> {
 }
 
 /**
- * LiveKit 서버 상태 조회
+ * LiveKit 서버 상태 조회 (직접 IP로 접근)
  */
 async function fetchLiveKitHealth(): Promise<LiveKitHealth | null> {
   try {
-    const response = await fetch(LIVEKIT_SERVER_URL, {
+    const response = await fetch(LIVEKIT_INTERNAL_URL, {
       cache: "no-store",
       signal: AbortSignal.timeout(5000),
-      headers: {
-        "User-Agent": "node-fetch", // Cloudflare 규칙 매칭용
-      },
     })
 
     // LiveKit은 404를 반환해도 서버가 동작 중인 것
