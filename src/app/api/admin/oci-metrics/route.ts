@@ -232,6 +232,9 @@ async function fetchSocketMetrics(): Promise<SocketMetrics | null> {
     const response = await fetch(`${SOCKET_SERVER_URL}/metrics`, {
       cache: "no-store",
       signal: AbortSignal.timeout(5000),
+      headers: {
+        "User-Agent": "node-fetch", // Cloudflare 규칙 매칭용
+      },
     })
 
     if (!response.ok) {
@@ -251,10 +254,12 @@ async function fetchSocketMetrics(): Promise<SocketMetrics | null> {
  */
 async function fetchLiveKitHealth(): Promise<LiveKitHealth | null> {
   try {
-    // LiveKit 서버는 기본적으로 / 경로에 응답
     const response = await fetch(LIVEKIT_SERVER_URL, {
       cache: "no-store",
       signal: AbortSignal.timeout(5000),
+      headers: {
+        "User-Agent": "node-fetch", // Cloudflare 규칙 매칭용
+      },
     })
 
     // LiveKit은 404를 반환해도 서버가 동작 중인 것
