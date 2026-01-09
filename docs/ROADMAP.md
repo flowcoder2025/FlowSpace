@@ -231,7 +231,15 @@ src/features/space/game/scenes/MainScene.ts
 
 | 날짜 | 작업 | 관련 파일 |
 |-----|------|----------|
+| 2026-01-10 | **@근접 명령어 에러 핸들러 연결** - 에러 메시지 채팅창 표시 | `SpaceLayout.tsx`, `commandHints.ts` |
+| 2026-01-10 | **오디오 볼륨 제어 안정성 개선** - effect 분리로 MediaStream 재생성 방지 | `VideoTile.tsx` |
+| 2026-01-10 | **파티 존 고급 기능 (Phase 2.5)** - 존 생성 UI, 존 목록 표시 | `usePartyZone.ts` |
+| 2026-01-10 | **근접 통신 관리자 명령어** - @proximity on/off, @근접 켜기/끄기 | `chatParser.ts`, `socket-server.ts` |
 | 2026-01-10 | **공간 기반 커뮤니케이션 구현 완료** - 근접 통신 (Phase 1), 파티 존 (Phase 2), 스포트라이트 (Phase 3) | `useProximitySubscription.ts`, `usePartyZone.ts`, `zones/route.ts`, 채팅 컴포넌트 |
+| 2026-01-10 | **Discord Webhook 통합** - Socket 서버 에러 알림 | `socket-server.ts` |
+| 2026-01-09 | **사용량 측정 시스템** - 리소스-사용량 상관관계 분석 | `admin/usage/route.ts` |
+| 2026-01-09 | **OCI 모니터링 대시보드** - Block Volume API, 스토리지 메트릭, 트래픽 계산 수정 | `admin/spaces/oci/route.ts`, `socket-server.ts /metrics` |
+| 2026-01-09 | **Socket 서버 로깅 강화** - JSON 구조화 로깅 + 에러 코드 체계 | `socket-server.ts` |
 | 2026-01-09 | **공간 기반 커뮤니케이션 설계** - 근접 통신, 파티 존, 스포트라이트 시스템 설계 문서 작성 | `docs/roadmap/SPATIAL-COMMUNICATION.md` |
 | 2026-01-09 | **보안 36/38 (95%)** - 3.12, 3.13, 4.2 문제없음 확인, 3.7/3.8 재정의 | `TASK.md` |
 | 2026-01-09 | **쿼리+인덱스 최적화** - 3.2 쿼리 통합 (18→10), 4.1 groupBy 인덱스 | `admin/stats/route.ts`, `schema.prisma` |

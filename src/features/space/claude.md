@@ -81,6 +81,13 @@
 │   ├── useAudioSettings.ts # 📌 오디오 설정 관리 (NEW - 2026-01)
 │   ├── useVideoSettings.ts # 📌 비디오 설정 관리 (NEW - 2026-01)
 │   ├── useVolumeMeter.ts  # 📌 실시간 볼륨 측정 (NEW - 2026-01)
+│   ├── useProximitySubscription.ts # 📌 근접 통신 구독 (NEW - 2026-01-10)
+│   ├── usePartyZone.ts    # 📌 파티 존 감지/관리 (NEW - 2026-01-10)
+│   └── index.ts
+│
+├── /utils                 # 📌 유틸리티 함수
+│   ├── chatParser.ts      # 채팅 명령어 파싱 (@mute, @kick, @proximity 등)
+│   ├── commandHints.ts    # 📌 명령어 도움말 시스템 (NEW - 2026-01-10)
 │   └── index.ts
 │
 └── /types
@@ -500,6 +507,57 @@ const {
 - requestAnimationFrame 기반 60fps 업데이트
 - 외부 MediaStream 또는 deviceId로 시작 가능
 
+### 4.13 useProximitySubscription (NEW - 2026-01-10)
+
+**역할**: 7×7 그리드 기반 근접 통신 구독 관리
+
+```tsx
+const {
+  nearbyUsers,         // Set<participantId> - 근접한 사용자들
+  isProximityEnabled,  // 근접 모드 활성화 여부
+} = useProximitySubscription({
+  localPosition,       // 로컬 플레이어 위치 (픽셀)
+  remotePositions,     // Map<participantId, Position>
+  tileSize: 32,        // 타일 크기 (기본 32px)
+  proximityRange: 7,   // 근접 범위 (기본 7×7 그리드)
+  isEnabled,           // 근접 모드 활성화 여부
+})
+```
+
+**동작 원리**:
+- 픽셀 좌표를 그리드 좌표로 변환
+- 체비쇼프 거리(Chebyshev distance)로 7×7 범위 계산
+- 근접 사용자만 음성/영상 구독 (대역폭 최적화)
+
+### 4.14 usePartyZone (NEW - 2026-01-10)
+
+**역할**: 파티 존 감지 및 관리
+
+```tsx
+const {
+  currentZone,      // PartyZone | null - 현재 존
+  partyZoneUsers,   // Set<participantId> - 같은 존 사용자들
+  zones,            // PartyZone[] - 전체 존 목록
+  isLoading,
+  error,
+  refetchZones,     // 존 목록 새로고침
+} = usePartyZone({
+  spaceId,
+  localPosition,
+  remotePositions,
+  tileSize: 32,
+  onJoinParty,      // Socket.io joinParty 콜백
+  onLeaveParty,     // Socket.io leaveParty 콜백
+  debounceMs: 300,  // 존 변경 디바운스
+})
+```
+
+**기능**:
+- 공간의 파티 존 목록 페칭 (`/api/spaces/[id]/zones`)
+- 로컬 플레이어 위치 기반 존 입장/퇴장 감지
+- 같은 존에 있는 다른 플레이어 Set 계산
+- Phaser 이벤트 브릿지로 존 정보 전달 (음영 오버레이)
+
 ---
 
 ## 5. 게임 엔진 (Phaser 3)
@@ -570,7 +628,41 @@ className={cn(
 - `VideoTile.tsx` - 화면 공유 렌더링 스타일 변경
 - 본인 화면 공유는 VideoTile에서, 타인 화면 공유는 ScreenShareOverlay에서 렌더링
 
-### 7.2 아바타 색상 검증 (✅ 해결됨 - 2025-12-09)
+### 7.2 오디오 볼륨 제어 문제 (✅ 해결됨 - 2026-01-10)
+
+**문제**:
+- 다른 사용자 오디오 볼륨 조절/음소거가 작동하지 않음
+- 볼륨 변경 시 새로운 MediaStream 생성으로 오디오 끊김
+
+**근본 원인**:
+```tsx
+// ❌ 문제 코드 - volume, isMuted가 의존성에 있어 매번 새 스트림 생성
+useEffect(() => {
+  // audio track attachment
+}, [track.audioTrack, volume, isMuted, globalOutputVolume])
+```
+
+**해결책 (VideoTile.tsx)**:
+```tsx
+// ✅ 해결 - 트랙 연결과 볼륨 제어 effect 분리
+// Effect 1: 트랙 연결 (audioTrack 변경 시만)
+useEffect(() => {
+  // audio track attachment only
+}, [track.audioTrack])
+
+// Effect 2: 볼륨 적용 (볼륨 변경 시)
+useEffect(() => {
+  if (audioRef.current) {
+    audioRef.current.volume = effectiveVolume
+    audioRef.current.muted = isMuted
+  }
+}, [effectiveVolume, isMuted])
+```
+
+**영향 범위**:
+- `VideoTile.tsx` - 오디오 트랙 연결 로직 분리
+
+### 7.3 아바타 색상 검증 (✅ 해결됨 - 2025-12-09)
 
 **문제**:
 - Google 로그인 사용자의 `avatarColor`가 프로필 이미지 URL로 설정됨
@@ -652,6 +744,11 @@ DEBUG=socket.io* npm run socket:dev
 
 | 날짜 | 변경 |
 |-----|------|
+| 2026-01-10 | 📌 공간 기반 커뮤니케이션 시스템 추가 |
+| 2026-01-10 | - useProximitySubscription: 7×7 근접 통신 구독 |
+| 2026-01-10 | - usePartyZone: 파티 존 감지/관리 |
+| 2026-01-10 | - chatParser/commandHints: @proximity/@근접 명령어 시스템 |
+| 2026-01-10 | - VideoTile.tsx: 오디오 볼륨 제어 effect 분리 (7.2 이슈 해결) |
 | 2025-12-08 | 초기 생성 - 현재 구현 상태 반영 |
 | 2025-12-09 | 아바타 색상 검증 이슈 해결 문서화 (7.2절 추가) |
 | 2025-12-10 | 플로팅 채팅 시스템 추가 (FloatingChatOverlay, useChatMode, useChatDrag, useFullscreen) |

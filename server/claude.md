@@ -70,6 +70,9 @@ npm run dev:all
 | `party:decline` | `{ partyId }` | 파티 초대 거절 |
 | `party:leave` | `{ partyId }` | 파티 탈퇴 |
 | `party:message` | `{ partyId, content }` | 파티 채팅 전송 |
+| `proximity:set` | `{ enabled: boolean }` | 📌 근접 통신 모드 설정 (OWNER/STAFF만) |
+| `joinParty` | `{ partyId, partyName }` | 📌 파티 존 입장 |
+| `leaveParty` | - | 📌 파티 존 퇴장 |
 
 ### 4.2 서버 → 클라이언트
 
@@ -87,6 +90,8 @@ npm run dev:all
 | `party:joined` | `{ partyId, members }` | 파티 입장 완료 |
 | `party:message` | `{ partyId, senderId, senderName, content }` | 파티 채팅 수신 |
 | `party:member_left` | `{ partyId, memberId }` | 파티원 퇴장 |
+| `proximity:changed` | `{ spaceId, enabled }` | 📌 근접 모드 변경 알림 (전체 브로드캐스트) |
+| `proximity:error` | `{ message }` | 📌 근접 설정 에러 (권한 없음 등) |
 | `error` | `{ message }` | 에러 알림 |
 
 ---
@@ -303,10 +308,86 @@ fetchSocketMetrics() → http://[OCI_IP]:3001/metrics
 
 ---
 
+## 12. 📌 Discord Webhook 통합 (NEW - 2026-01-10)
+
+### 12.1 개요
+
+```typescript
+// 환경 변수로 Webhook URL 설정
+DISCORD_ERROR_WEBHOOK_URL=https://discord.com/api/webhooks/xxx/yyy
+```
+
+### 12.2 알림 대상
+
+| 이벤트 | 알림 | 설명 |
+|-------|:----:|------|
+| 서버 에러 (심각) | ✅ | 복구 불가능한 오류 |
+| 연결 에러 | ✅ | Socket 연결 실패 |
+| 인증 실패 | ⚠️ | 다수 발생 시만 |
+
+### 12.3 메시지 형식
+
+```json
+{
+  "embeds": [{
+    "title": "🚨 Socket Server Error",
+    "description": "에러 메시지",
+    "color": 15158332,
+    "fields": [
+      { "name": "Error Code", "value": "E1001" },
+      { "name": "Timestamp", "value": "2026-01-10T00:00:00Z" }
+    ]
+  }]
+}
+```
+
+---
+
+## 13. 📌 JSON 구조화 로깅 (NEW - 2026-01-10)
+
+### 13.1 로그 형식
+
+```json
+{
+  "timestamp": "2026-01-10T00:00:00.000Z",
+  "level": "error",
+  "code": "E1001",
+  "message": "Authentication failed",
+  "context": {
+    "socketId": "xxx",
+    "spaceId": "yyy",
+    "playerId": "zzz"
+  }
+}
+```
+
+### 13.2 에러 코드 체계
+
+| 코드 | 분류 | 설명 |
+|-----|------|------|
+| E1xxx | 인증 | 세션 검증 실패, 권한 없음 |
+| E2xxx | 연결 | Socket 연결 에러 |
+| E3xxx | 이벤트 | 이벤트 처리 실패 |
+| E4xxx | 외부 API | API 호출 실패 |
+
+### 13.3 로그 레벨
+
+| 레벨 | 용도 |
+|-----|------|
+| `error` | 에러 (Discord 알림 포함) |
+| `warn` | 경고 (잠재적 문제) |
+| `info` | 정보 (입장/퇴장 등) |
+| `debug` | 디버그 (개발 모드만) |
+
+---
+
 ## 변경 이력
 
 | 날짜 | 변경 |
 |-----|------|
+| 2026-01-10 | 📌 근접 통신 이벤트 추가 (proximity:set/changed/error, joinParty/leaveParty) |
+| 2026-01-10 | 📌 Discord Webhook 통합 - 서버 에러 알림 |
+| 2026-01-10 | 📌 JSON 구조화 로깅 + 에러 코드 체계 |
 | 2026-01-09 | /metrics 엔드포인트 v2.0.0 - storage 필드 추가 |
 | 2025-12-15 | 인증 사용자 EXIT 로깅 추가 - auth-* 세션도 Visit API로 로깅 |
 | 2025-12-11 | whisper/party 이벤트 추가 - 귓속말 및 파티 채팅 시스템 지원 |
