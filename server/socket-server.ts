@@ -54,6 +54,9 @@ const NEXT_API_URL = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_
 // staging, test, 미설정 환경에서 인증 우회 방지
 const IS_DEV = process.env.NODE_ENV === "development"
 
+// 📢 Discord 웹훅 URL (에러 알림용)
+const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL || ""
+
 // CORS 허용 origin 설정 (환경 변수 또는 기본값)
 const CORS_ORIGINS = (() => {
   const origins: string[] = ["http://localhost:3000", "http://127.0.0.1:3000"]
@@ -156,13 +159,64 @@ function createLogEntry(level: LogLevel, code: ErrorCode | string, msg: string, 
   })
 }
 
+// 📢 Discord 웹훅 알림 함수
+async function sendDiscordAlert(
+  code: string,
+  msg: string,
+  ctx?: LogContext,
+  level: "error" | "warn" | "info" = "error"
+): Promise<void> {
+  if (!DISCORD_WEBHOOK_URL) return
+
+  try {
+    const hostname = process.env.HOSTNAME || "socket-server"
+    const timestamp = new Date().toISOString()
+
+    // 레벨별 색상 (Discord Embed color)
+    const colors = {
+      error: 16711680,   // 빨강
+      warn: 16776960,    // 노랑
+      info: 3447003,     // 파랑
+    }
+
+    // 컨텍스트 포맷팅
+    const contextStr = ctx
+      ? Object.entries(ctx)
+          .filter(([, v]) => v !== undefined)
+          .map(([k, v]) => `**${k}**: ${v}`)
+          .join("\n")
+      : ""
+
+    const payload = {
+      embeds: [{
+        title: `[${code}] ${msg}`,
+        description: contextStr || "No additional context",
+        color: colors[level],
+        footer: { text: `${hostname} | Socket.io Server` },
+        timestamp,
+      }],
+    }
+
+    await fetch(DISCORD_WEBHOOK_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    })
+  } catch {
+    // Discord 알림 실패는 무시 (무한 루프 방지)
+  }
+}
+
 const logger = {
   info: (code: ErrorCode | string, msg: string, ctx?: LogContext) =>
     console.log(createLogEntry("info", code, msg, ctx)),
   warn: (code: ErrorCode | string, msg: string, ctx?: LogContext) =>
     console.warn(createLogEntry("warn", code, msg, ctx)),
-  error: (code: ErrorCode | string, msg: string, ctx?: LogContext) =>
-    console.error(createLogEntry("error", code, msg, ctx)),
+  error: (code: ErrorCode | string, msg: string, ctx?: LogContext) => {
+    console.error(createLogEntry("error", code, msg, ctx))
+    // 🔔 에러 발생 시 Discord 알림
+    sendDiscordAlert(code, msg, ctx, "error")
+  },
 }
 
 // ============================================
