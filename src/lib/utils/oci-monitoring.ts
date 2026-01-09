@@ -314,6 +314,87 @@ export async function getMonthlyNetworkTraffic(): Promise<{
 }
 
 /**
+ * Boot Volume 정보 조회 (할당된 스토리지 크기)
+ *
+ * OCI Core API를 사용하여 인스턴스의 Boot Volume 정보를 조회합니다.
+ * Boot Volume은 인스턴스의 루트 디스크입니다.
+ */
+export interface BootVolumeInfo {
+  volumeId: string
+  displayName: string
+  sizeInGBs: number
+  availabilityDomain: string
+}
+
+export async function getBootVolumeInfo(): Promise<BootVolumeInfo | OCIMonitoringError> {
+  const provider = createOCIProvider()
+
+  if (!provider) {
+    return {
+      error: true,
+      message: "OCI credentials not configured",
+    }
+  }
+
+  if (!OCI_CONFIG.compartmentId || !OCI_CONFIG.instanceId) {
+    return {
+      error: true,
+      message: "OCI_COMPARTMENT_ID and OCI_INSTANCE_ID are required",
+    }
+  }
+
+  try {
+    // Core Client로 Boot Volume Attachment 조회
+    const coreClient = new oci.core.ComputeClient({
+      authenticationDetailsProvider: provider,
+    })
+
+    // 인스턴스의 Boot Volume Attachment 조회
+    const attachmentsResponse = await coreClient.listBootVolumeAttachments({
+      availabilityDomain: "", // 모든 AD
+      compartmentId: OCI_CONFIG.compartmentId,
+      instanceId: OCI_CONFIG.instanceId,
+    })
+
+    if (!attachmentsResponse.items || attachmentsResponse.items.length === 0) {
+      return {
+        error: true,
+        message: "No boot volume attachments found for instance",
+      }
+    }
+
+    const attachment = attachmentsResponse.items[0]
+    const bootVolumeId = attachment.bootVolumeId
+
+    // Boot Volume 상세 정보 조회
+    const blockStorageClient = new oci.core.BlockstorageClient({
+      authenticationDetailsProvider: provider,
+    })
+
+    const volumeResponse = await blockStorageClient.getBootVolume({
+      bootVolumeId,
+    })
+
+    const volume = volumeResponse.bootVolume
+
+    return {
+      volumeId: volume.id,
+      displayName: volume.displayName || "Boot Volume",
+      sizeInGBs: volume.sizeInGBs || 0,
+      availabilityDomain: volume.availabilityDomain || "",
+    }
+  } catch (error) {
+    const err = error as Error
+    console.error("[OCI Monitoring] Error fetching boot volume:", err)
+    return {
+      error: true,
+      message: err.message || "Failed to fetch boot volume info",
+      code: (err as { code?: string }).code,
+    }
+  }
+}
+
+/**
  * OCI 설정 상태 확인
  */
 export function isOCIConfigured(): boolean {

@@ -24,6 +24,7 @@ import {
 import {
   getOCIInstanceMetrics,
   getMonthlyNetworkTraffic,
+  getBootVolumeInfo,
   isOCIConfigured,
   getOCIConfigStatus,
 } from "@/lib/utils/oci-monitoring"
@@ -96,11 +97,12 @@ export async function GET() {
     }
 
     // 3. 데이터 수집 (병렬 실행)
-    const [socketMetrics, livekitStatus, ociMetrics, monthlyTraffic] = await Promise.all([
+    const [socketMetrics, livekitStatus, ociMetrics, monthlyTraffic, bootVolumeInfo] = await Promise.all([
       fetchSocketMetrics(),
       fetchLiveKitHealth(),
       isOCIConfigured() ? getOCIInstanceMetrics() : Promise.resolve(null),
       isOCIConfigured() ? getMonthlyNetworkTraffic() : Promise.resolve(null),
+      isOCIConfigured() ? getBootVolumeInfo() : Promise.resolve(null),
     ])
 
     // 4. 현재 날짜 정보
@@ -211,13 +213,28 @@ export async function GET() {
           source: hasOCIMetrics ? "oci-api" : "unavailable",
         },
         storage: {
+          // Boot Volume 할당량 (OCI Block Volume API)
+          allocatedGB: bootVolumeInfo && !("error" in bootVolumeInfo)
+            ? bootVolumeInfo.sizeInGBs
+            : socketMetrics?.storage?.totalGB ?? 0,
+          // 실제 사용량 (서버 df 명령어)
           usedGB: socketMetrics?.storage?.usedGB ?? 0,
-          totalGB: socketMetrics?.storage?.totalGB ?? OCI_ALWAYS_FREE_LIMITS.storageGB,
-          limit: OCI_ALWAYS_FREE_LIMITS.storageGB,
-          percent: socketMetrics?.storage?.usedPercent ?? 0,
           availableGB: socketMetrics?.storage?.availableGB ?? 0,
+          percent: socketMetrics?.storage?.usedPercent ?? 0,
+          // Always Free 한도
+          limit: OCI_ALWAYS_FREE_LIMITS.storageGB,
           unit: "GB",
-          source: socketMetrics?.storage ? "socket-server" : "unavailable",
+          // 소스 정보
+          sources: {
+            allocation: bootVolumeInfo && !("error" in bootVolumeInfo) ? "block-volume-api" : "unavailable",
+            usage: socketMetrics?.storage ? "socket-server-df" : "unavailable",
+          },
+          // Boot Volume 상세 정보
+          bootVolume: bootVolumeInfo && !("error" in bootVolumeInfo) ? {
+            id: bootVolumeInfo.volumeId,
+            name: bootVolumeInfo.displayName,
+            sizeGB: bootVolumeInfo.sizeInGBs,
+          } : null,
           mountPoint: socketMetrics?.storage?.mountPoint ?? null,
         },
         traffic: {
