@@ -1023,11 +1023,12 @@ export function useSocket({
 
   // 근접 통신 설정 변경
   const setProximity = useCallback((enabled: boolean) => {
+    console.log("[Socket] 📡 setProximity called:", enabled, "isConnected:", isConnected, "socket:", !!socketRef.current)
     if (socketRef.current && isConnected) {
+      console.log("[Socket] 📡 Emitting proximity:set event:", { enabled })
       socketRef.current.emit("proximity:set", { enabled })
-      if (IS_DEV) {
-        console.log("[Socket] Setting proximity:", enabled ? "enabled" : "disabled")
-      }
+    } else {
+      console.warn("[Socket] 📡 Cannot emit proximity:set - socket not connected")
     }
   }, [isConnected])
 

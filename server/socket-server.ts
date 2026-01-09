@@ -2397,19 +2397,26 @@ io.on("connection", (socket) => {
   socket.on("proximity:set", async (data: { enabled: boolean }) => {
     const { spaceId, playerId, nickname, sessionToken } = socket.data
 
+    console.log(`[Socket] 📡 proximity:set received:`, { enabled: data.enabled, spaceId, playerId, nickname, sessionToken: sessionToken?.substring(0, 10) + '...' })
+
     if (!spaceId || !playerId) {
+      console.warn(`[Socket] 📡 proximity:set failed: not in space`)
       socket.emit("proximity:error", { message: "공간에 먼저 입장해야 합니다." })
       return
     }
 
     // 🔒 권한 검증 (STAFF 이상만 허용)
     if (sessionToken) {
+      console.log(`[Socket] 📡 Verifying admin permission for proximity...`)
       const verification = await verifyAdminPermission(spaceId, sessionToken, "proximity")
+      console.log(`[Socket] 📡 Verification result:`, verification)
       if (!verification.valid) {
+        console.warn(`[Socket] 📡 proximity:set denied:`, verification.error)
         socket.emit("proximity:error", { message: verification.error || "근접 통신 설정 권한이 없습니다. STAFF 이상만 가능합니다." })
         return
       }
     } else if (!IS_DEV) {
+      console.warn(`[Socket] 📡 proximity:set denied: no sessionToken in production`)
       socket.emit("proximity:error", { message: "권한이 없습니다." })
       return
     }

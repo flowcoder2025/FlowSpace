@@ -1374,8 +1374,12 @@ function SpaceLayoutContent({
       }
       case "proximity":
         // 📡 근접 통신 ON/OFF
+        console.log("[SpaceLayout] 📡 Proximity command received:", result.enabled)
         if (result.enabled !== undefined) {
+          console.log("[SpaceLayout] 📡 Calling setProximity:", result.enabled)
           setProximity(result.enabled)
+        } else {
+          console.warn("[SpaceLayout] 📡 result.enabled is undefined!")
         }
         break
     }
