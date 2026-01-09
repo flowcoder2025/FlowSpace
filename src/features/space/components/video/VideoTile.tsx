@@ -198,27 +198,18 @@ export function VideoTile({
   // 화면공유 모드일 때는 screenTrack, 아니면 videoTrack 사용
   const activeVideoTrack = isScreenShare ? track.screenTrack : track.videoTrack
 
-  // 오디오 재생 시도 함수 (볼륨도 함께 적용)
-  // 📌 전역 출력 볼륨(globalOutputVolume)과 개별 볼륨을 곱함
+  // 오디오 재생 시도 함수 (브라우저 autoplay 정책 차단 시 사용)
+  // 📌 볼륨은 별도 effect에서 적용됨
   const tryPlayAudio = useCallback(async () => {
-    if (!audioRef.current || !track.audioTrack || isLocal) return
-
-    // 개별 볼륨 * 전역 볼륨 (둘 다 0-1 범위로 변환)
-    const effectiveVolume = (volume * globalOutputVolume) / 100
-
-    // 🔧 재생 전에 볼륨 먼저 설정 (브라우저에 따라 srcObject 후 즉시 적용 필요)
-    audioRef.current.volume = isMuted ? 0 : effectiveVolume
+    const audio = audioRef.current
+    if (!audio || !track.audioTrack || isLocal) return
 
     try {
-      await audioRef.current.play()
+      await audio.play()
       setAudioBlocked(false)
-      // 🔧 재생 성공 후에도 볼륨 다시 확인 적용 (일부 브라우저 이슈 대응)
-      audioRef.current.volume = isMuted ? 0 : effectiveVolume
       if (IS_DEV) {
         console.log("[VideoTile] Audio playback started for:", track.participantName, {
-          volume: audioRef.current.volume,
-          isMuted,
-          globalOutputVolume,
+          currentVolume: audio.volume,
         })
       }
     } catch (error) {
@@ -230,7 +221,7 @@ export function VideoTile({
         console.error("[VideoTile] Audio playback error:", error)
       }
     }
-  }, [track.audioTrack, track.participantName, isLocal, volume, isMuted, globalOutputVolume])
+  }, [track.audioTrack, track.participantName, isLocal])
 
   // 🔧 비디오 엘리먼트 클리어 헬퍼 (브라우저 버퍼 완전 해제)
   const clearVideoElement = useCallback((video: HTMLVideoElement) => {
@@ -319,7 +310,7 @@ export function VideoTile({
   }, [activeVideoTrack, shouldShowVideo, isTrackMuted, track.participantName, track.participantId, track.revision, isScreenShare, isTrackActuallyLive, clearVideoElement, isLocal])
 
   // Attach audio track to audio element (for remote participants only)
-  // 📌 전역 출력 볼륨(globalOutputVolume)과 개별 볼륨을 곱함
+  // 📌 트랙 변경 시에만 srcObject 재설정 (볼륨 변경과 분리)
   useEffect(() => {
     const audio = audioRef.current
     if (!audio || isLocal) return
@@ -328,29 +319,34 @@ export function VideoTile({
       const stream = new MediaStream([track.audioTrack])
       audio.srcObject = stream
 
-      // 개별 볼륨 * 전역 볼륨 (둘 다 0-1 범위로 변환)
-      const effectiveVolume = (volume * globalOutputVolume) / 100
-
-      // 🔧 스트림 연결 직후 저장된 볼륨 즉시 적용
-      audio.volume = isMuted ? 0 : effectiveVolume
-
       if (IS_DEV) {
         console.log("[VideoTile] Audio track attached for:", track.participantName, {
           trackId: track.audioTrack.id,
           enabled: track.audioTrack.enabled,
           readyState: track.audioTrack.readyState,
-          appliedVolume: audio.volume,
-          globalOutputVolume,
         })
       }
 
       // 오디오 재생 시도 - defer to avoid synchronous setState in effect
-      void Promise.resolve().then(() => {
-        tryPlayAudio()
-      })
+      const playAudio = async () => {
+        try {
+          await audio.play()
+          setAudioBlocked(false)
+          if (IS_DEV) {
+            console.log("[VideoTile] Audio playback started for:", track.participantName)
+          }
+        } catch (error) {
+          if ((error as Error).name === "NotAllowedError") {
+            console.warn("[VideoTile] Audio playback blocked by browser policy. Click anywhere to enable.")
+            setAudioBlocked(true)
+          } else {
+            console.error("[VideoTile] Audio playback error:", error)
+          }
+        }
+      }
+      void Promise.resolve().then(playAudio)
     } else {
       audio.srcObject = null
-      // Defer setState to avoid synchronous setState in effect
       void Promise.resolve().then(() => {
         setAudioBlocked(false)
       })
@@ -359,7 +355,7 @@ export function VideoTile({
     return () => {
       audio.srcObject = null
     }
-  }, [track.audioTrack, track.participantName, isLocal, tryPlayAudio, volume, isMuted, globalOutputVolume])
+  }, [track.audioTrack, track.participantName, isLocal])
 
   // 🔧 개선된 오디오 재생 시도 - once:true 제거, 지속적 재시도
   useEffect(() => {
@@ -431,14 +427,34 @@ export function VideoTile({
 
   // 🔊 볼륨/음소거 상태를 오디오 요소에 적용
   // 📌 전역 출력 볼륨(globalOutputVolume)과 개별 볼륨을 곱함
+  // 📌 track.audioTrack dependency 추가: 트랙 변경 후에도 볼륨이 즉시 적용되도록 함
   useEffect(() => {
     const audio = audioRef.current
     if (!audio || isLocal) return
 
+    // srcObject가 없으면 볼륨 설정이 무의미
+    if (!audio.srcObject) {
+      if (IS_DEV) {
+        console.log("[VideoTile] Volume effect skipped - no srcObject for:", track.participantName)
+      }
+      return
+    }
+
     // 개별 볼륨 * 전역 볼륨 (둘 다 0-1 범위로 변환)
     const effectiveVolume = (volume * globalOutputVolume) / 100
-    audio.volume = isMuted ? 0 : effectiveVolume
-  }, [volume, isMuted, isLocal, globalOutputVolume])
+    const newVolume = isMuted ? 0 : effectiveVolume
+    audio.volume = newVolume
+
+    if (IS_DEV) {
+      console.log("[VideoTile] Volume applied for:", track.participantName, {
+        volume,
+        globalOutputVolume,
+        isMuted,
+        effectiveVolume,
+        appliedVolume: newVolume,
+      })
+    }
+  }, [volume, isMuted, isLocal, globalOutputVolume, track.participantName, track.audioTrack])
 
   // Fullscreen change detection
   useEffect(() => {
