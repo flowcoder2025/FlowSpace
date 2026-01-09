@@ -23,6 +23,9 @@ export interface PairConfig {
   linkProperty: string
 }
 
+/** 배치 타입: point(단일 위치) 또는 area(영역 드래그) */
+export type PlacementType = "point" | "area"
+
 export interface AssetMetadata {
   /** 고유 식별자 */
   id: string
@@ -44,13 +47,15 @@ export interface AssetMetadata {
   pairConfig?: PairConfig
 
   // 배치 옵션
+  /** 배치 타입 (기본: point) */
+  placementType?: PlacementType
   /** 회전 가능 여부 */
   rotatable: boolean
   /** 그리드 스냅 여부 */
   snapToGrid: boolean
   /** 충돌 활성화 여부 */
   collisionEnabled: boolean
-  /** 크기 (타일 단위) */
+  /** 크기 (타일 단위) - point 타입용, area는 드래그로 결정 */
   size: { width: number; height: number }
 
   /** 설명 */
@@ -69,6 +74,20 @@ export interface AssetMetadata {
  */
 export const ASSET_REGISTRY: AssetMetadata[] = [
   // ========== Interactive (상호작용) ==========
+  {
+    id: "party-zone",
+    name: "파티 존",
+    aliases: ["파티존", "파티", "party", "zone", "영역", "회의실", "그룹"],
+    categoryId: "interactive",
+    thumbnail: "/assets/game/objects/party_zone_thumb.png",
+    requiresPair: false,
+    placementType: "area", // 🆕 영역 드래그 배치
+    rotatable: false,
+    snapToGrid: true,
+    collisionEnabled: false,
+    size: { width: 1, height: 1 }, // area 타입이므로 드래그로 결정됨
+    description: "같은 영역 내 사용자끼리만 음성/채팅이 연결되는 파티 존",
+  },
   {
     id: "portal",
     name: "이동 포털",
@@ -316,6 +335,14 @@ export function searchAssets(keyword: string): AssetMetadata[] {
 export function isPairObject(assetId: string): boolean {
   const asset = getAssetById(assetId)
   return asset?.requiresPair ?? false
+}
+
+/**
+ * 영역 배치 타입 여부 확인
+ */
+export function isAreaPlacement(assetId: string): boolean {
+  const asset = getAssetById(assetId)
+  return asset?.placementType === "area"
 }
 
 /**

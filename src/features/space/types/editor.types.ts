@@ -22,6 +22,21 @@ export type EditorTool = "select" | "place" | "move" | "delete" | "rotate"
 export type PairPlacementPhase = "idle" | "placing_first" | "placing_second" | "complete"
 
 /**
+ * 🆕 영역 배치 상태 (파티 존 등)
+ */
+export type AreaPlacementPhase = "idle" | "placing_start" | "placing_end" | "complete"
+
+/**
+ * 🆕 영역 범위 (그리드 좌표)
+ */
+export interface AreaBounds {
+  x1: number  // 좌상단 X
+  y1: number  // 좌상단 Y
+  x2: number  // 우하단 X
+  y2: number  // 우하단 Y
+}
+
+/**
  * 에디터 모드 상태
  */
 export interface EditorModeState {
@@ -35,6 +50,12 @@ export interface EditorModeState {
   pairPhase: PairPlacementPhase
   /** 페어 배치 중 첫 번째 위치 */
   pairFirstPosition: GridPosition | null
+  /** 🆕 영역 배치 상태 */
+  areaPhase: AreaPlacementPhase
+  /** 🆕 영역 배치 시작점 */
+  areaStartPosition: GridPosition | null
+  /** 🆕 영역 배치 현재 끝점 (드래그 중 프리뷰) */
+  areaEndPosition: GridPosition | null
 }
 
 /**
@@ -74,12 +95,14 @@ export interface PlacedObject {
   id: string
   /** 에셋 ID */
   assetId: string
-  /** 그리드 위치 */
+  /** 그리드 위치 (point 타입 또는 area의 좌상단) */
   position: GridPosition
   /** 회전 각도 (0, 90, 180, 270) */
   rotation: 0 | 90 | 180 | 270
   /** 페어 연결 대상 ID (포털 등) */
   linkedObjectId?: string
+  /** 🆕 영역 범위 (area 타입 에셋용) */
+  bounds?: AreaBounds
   /** 커스텀 데이터 */
   customData?: Record<string, unknown>
   /** 배치자 ID */
@@ -96,6 +119,8 @@ export interface CreateObjectInput {
   position: GridPosition
   rotation?: 0 | 90 | 180 | 270
   linkedObjectId?: string
+  /** 🆕 영역 범위 (area 타입 에셋용) */
+  bounds?: AreaBounds
   customData?: Record<string, unknown>
 }
 
@@ -328,6 +353,10 @@ export interface EditorStoreActions {
   selectAsset: (asset: AssetMetadata | null) => void
   setPairPhase: (phase: PairPlacementPhase) => void
   setPairFirstPosition: (position: GridPosition | null) => void
+  // 🆕 Area Placement Actions
+  setAreaPhase: (phase: AreaPlacementPhase) => void
+  setAreaStartPosition: (position: GridPosition | null) => void
+  setAreaEndPosition: (position: GridPosition | null) => void
 
   // Panel Actions
   togglePanel: () => void

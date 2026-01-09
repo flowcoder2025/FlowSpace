@@ -1,8 +1,8 @@
 # 공간 기반 커뮤니케이션 시스템 설계
 
-> **최종 업데이트**: 2026-01-09
+> **최종 업데이트**: 2026-01-10
 > **상위 문서**: `/docs/ROADMAP.md`
-> **상태**: 📋 설계 완료, 구현 대기
+> **상태**: 🔄 Phase 1, 2, 2.5 구현 완료 | Phase 3, 4 대기
 
 ---
 
@@ -223,27 +223,46 @@ enum MessageType {
 ## 5. 구현 Phase
 
 ### Phase 1: 근접 기반 통신 (Proximity)
-**예상 작업량**: 중
+**예상 작업량**: 중 ✅ 완료
 
-- [ ] LiveKit 트랙 구독 동적 관리
+- [x] LiveKit 트랙 구독 동적 관리
   - `useProximitySubscription` 훅 생성
   - 거리 계산 및 구독/해제 로직
-- [ ] Socket.io 위치 이벤트 활용
+- [x] Socket.io 위치 이벤트 활용
   - `player:move` 이벤트에서 근접 유저 계산
-- [ ] 거리 감쇠 (선택)
+- [x] 거리 감쇠 (선택)
   - 거리에 따른 볼륨 조절
 
 ### Phase 2: 파티 존 시스템 (Party Zone)
-**예상 작업량**: 중~대
+**예상 작업량**: 중~대 ✅ 완료
 
-- [ ] DB 스키마
+- [x] DB 스키마
   - `PartyZone` 테이블 추가
-- [ ] 존 CRUD API
+- [x] 존 CRUD API
   - `/api/spaces/[id]/zones` 엔드포인트
-- [ ] 존 진입/이탈 감지
-  - Socket.io에서 위치 기반 존 체크
-- [ ] 파티 채팅 라우팅
-  - 존 내 유저에게만 메시지 전달
+- [x] 존 진입/이탈 감지
+  - `usePartyZone` 훅으로 위치 기반 존 체크
+- [x] 파티 채팅 라우팅
+  - `party:message` 이벤트로 존 내 유저에게만 메시지 전달
+
+### Phase 2.5: 파티 존 고급 기능 (Party Zone Advanced)
+**예상 작업량**: 소~중 ✅ 완료
+
+- [x] 에디터 영역 배치 타입 추가
+  - `asset-registry.ts`에 `party-zone` 에셋 (placementType: "area")
+  - `editor.types.ts`에 `AreaPlacementPhase`, `AreaBounds` 타입
+  - `editorStore.ts`에 영역 배치 상태 관리
+- [x] MainScene 파티 존 음영 오버레이
+  - 존 진입 시 존 외부 영역 음영 처리 (12% 투명도)
+  - 모든 존 경계선 표시 (연한 파란색)
+  - 현재 존 경계선 강조 (밝은 파란색)
+- [x] usePartyZone → Phaser 이벤트 브릿지
+  - `PARTY_ZONES_LOADED` 이벤트 emit
+  - `PARTY_ZONE_CHANGED` 이벤트 emit
+- [x] 파티 존 채팅 격리
+  - `party:message`가 같은 `partyRoomId`에만 전달
+- [x] useProximitySubscription 파티 존 우선순위
+  - 같은 파티 존 사용자는 항상 구독 (우선순위 2)
 
 ### Phase 3: 스포트라이트 시스템 (Spotlight)
 **예상 작업량**: 중
@@ -332,3 +351,4 @@ function updateSubscriptions(
 | 날짜 | 버전 | 변경 |
 |-----|------|------|
 | 2026-01-09 | 1.0.0 | 초기 설계 문서 작성 |
+| 2026-01-10 | 1.1.0 | Phase 1, 2, 2.5 구현 완료 표시 (근접 통신 + 파티 존 + 고급 기능) |

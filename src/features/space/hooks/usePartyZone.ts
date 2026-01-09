@@ -10,11 +10,14 @@
  * - 로컬 플레이어 위치 기반 존 입장/퇴장 감지
  * - 같은 존에 있는 다른 플레이어 Set 계산
  * - Socket.io joinParty/leaveParty 자동 호출
+ * - 🏠 Phaser 이벤트 브릿지로 존 정보 전달 (음영 오버레이)
  *
  * @see /docs/roadmap/SPATIAL-COMMUNICATION.md
  */
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react"
+import { eventBridge, GameEvents } from "../game/events"
+import type { PartyZoneData, PartyZonesLoadedPayload, PartyZoneChangedPayload } from "../game/events"
 
 const IS_DEV = process.env.NODE_ENV === "development"
 
@@ -155,10 +158,20 @@ export function usePartyZone({
       }
 
       const data = await response.json()
-      setZones(data.zones || [])
+      const loadedZones: PartyZone[] = data.zones || []
+      setZones(loadedZones)
+
+      // 🏠 Phaser에 존 목록 전달 (음영 오버레이용)
+      const phaserZones: PartyZoneData[] = loadedZones.map((z) => ({
+        id: z.id,
+        name: z.name,
+        bounds: z.bounds,
+      }))
+      const payload: PartyZonesLoadedPayload = { zones: phaserZones }
+      eventBridge.emit(GameEvents.PARTY_ZONES_LOADED, payload)
 
       if (IS_DEV) {
-        console.log("[usePartyZone] Zones loaded:", data.zones?.length || 0)
+        console.log("[usePartyZone] Zones loaded:", loadedZones.length, "→ Phaser notified")
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : "알 수 없는 에러"
@@ -226,6 +239,14 @@ export function usePartyZone({
 
         setCurrentZone(detectedZone)
         lastZoneIdRef.current = detectedZoneId
+
+        // 🏠 Phaser에 현재 존 변경 알림 (음영 오버레이 업데이트)
+        const changedPayload: PartyZoneChangedPayload = {
+          currentZone: detectedZone
+            ? { id: detectedZone.id, name: detectedZone.name, bounds: detectedZone.bounds }
+            : null,
+        }
+        eventBridge.emit(GameEvents.PARTY_ZONE_CHANGED, changedPayload)
       }, debounceMs)
     }
 

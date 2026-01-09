@@ -84,7 +84,10 @@
   - 전역/근접 모드 표시
   - 범위 내/외 사용자 수 표시
   - 상세 드롭다운 (사용자 목록)
-- [ ] 근접 기능 활성화 옵션 추가 (공간 설정 - 향후)
+- [x] **근접 기능 활성화 명령어** - 2026-01-10 완료
+  - `@proximity on/off` / `@근접 켜기/끄기` 명령어
+  - Socket.io 이벤트 (proximity:set, proximity:status, proximity:changed)
+  - STAFF 이상 권한 검증
 
 ### 3.2 파티 존 (Zone-based Groups) - ✅ Phase 2 완료
 - [x] Prisma 스키마: PartyZone 모델 추가
@@ -102,7 +105,27 @@
   - FloatingChatOverlay: currentZone, onSendPartyMessage props 추가
   - ChatTabs: 파티 존 내 존 이름 표시 + 🏠 아이콘
   - ChatInputArea: 파티 탭에서 파티 메시지 전송 지원
-- [ ] 존 내 음성 그룹화 (Phase 2.5 - 향후)
+
+### 3.2.5 파티 존 고급 기능 - 🔄 Phase 2.5 진행 중
+> **목표**: 에디터 설정 + 음영 처리 + 채팅 격리 + 음성 그룹화
+
+#### Phase 2.5.1: 에디터 파티 존 오브젝트
+- [ ] `party-zone` 에셋 타입 정의 (asset registry)
+- [ ] 에디터에서 파티 존 영역 드래그 설정 UI
+- [ ] MapObject 저장 시 PartyZone 자동 생성/동기화
+- [ ] 에디터 미리보기: 존 영역 반투명 표시
+
+#### Phase 2.5.2: Phaser 음영 오버레이
+- [ ] 파티 존 진입 시 존 밖 영역 음영 처리
+- [ ] 음영 색상: rgba(0,0,0,0.1~0.15) - 활성/비활성 구분 정도
+- [ ] 존 퇴장 시 음영 해제
+- [ ] 여러 존 경계 처리 (존 내부만 밝게)
+
+#### Phase 2.5.3: 채팅 격리 + 음성 그룹화
+- [ ] 파티 탭 메시지: 같은 존 내 사용자만 수신 (서버 검증)
+- [ ] 타 영역 사용자는 파티 메시지 볼 수 없음
+- [ ] 존 내 사용자끼리 음성/영상 자동 연결
+- [ ] useProximitySubscription: partyZoneUsers 우선 적용
 
 ### 3.3 스포트라이트 시스템 - ✅ Phase 3 완료
 - [x] DB 스키마: SpotlightGrant 모델 (Prisma)

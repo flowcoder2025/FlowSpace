@@ -17,6 +17,7 @@ import type {
   EditorPanelState,
   EditorTool,
   PairPlacementPhase,
+  AreaPlacementPhase,
   PlacedObject,
   HistoryEntry,
   CreateObjectInput,
@@ -39,6 +40,10 @@ const initialModeState: EditorModeState = {
   selectedAsset: null,
   pairPhase: "idle",
   pairFirstPosition: null,
+  // 🆕 영역 배치 초기값
+  areaPhase: "idle",
+  areaStartPosition: null,
+  areaEndPosition: null,
 }
 
 const initialPanelState: EditorPanelState = {
@@ -87,6 +92,10 @@ export const useEditorStore = create<EditorStore>()(
                   selectedAsset: null,
                   pairPhase: "idle",
                   pairFirstPosition: null,
+                  // 🆕 영역 배치도 초기화
+                  areaPhase: "idle",
+                  areaStartPosition: null,
+                  areaEndPosition: null,
                 }),
           },
           panel: {
@@ -101,9 +110,12 @@ export const useEditorStore = create<EditorStore>()(
           mode: {
             ...state.mode,
             selectedTool: tool,
-            // 도구 변경 시 페어 배치 취소
+            // 도구 변경 시 페어/영역 배치 취소
             pairPhase: "idle",
             pairFirstPosition: null,
+            areaPhase: "idle",
+            areaStartPosition: null,
+            areaEndPosition: null,
           },
         }))
       },
@@ -114,9 +126,12 @@ export const useEditorStore = create<EditorStore>()(
             ...state.mode,
             selectedAsset: asset,
             selectedTool: asset ? "place" : "select",
-            // 새 에셋 선택 시 페어 배치 초기화
+            // 새 에셋 선택 시 페어/영역 배치 초기화
             pairPhase: "idle",
             pairFirstPosition: null,
+            areaPhase: "idle",
+            areaStartPosition: null,
+            areaEndPosition: null,
           },
         }))
       },
@@ -135,6 +150,34 @@ export const useEditorStore = create<EditorStore>()(
           mode: {
             ...state.mode,
             pairFirstPosition: position,
+          },
+        }))
+      },
+
+      // 🆕 Area Placement Actions
+      setAreaPhase: (phase: AreaPlacementPhase) => {
+        set((state) => ({
+          mode: {
+            ...state.mode,
+            areaPhase: phase,
+          },
+        }))
+      },
+
+      setAreaStartPosition: (position: GridPosition | null) => {
+        set((state) => ({
+          mode: {
+            ...state.mode,
+            areaStartPosition: position,
+          },
+        }))
+      },
+
+      setAreaEndPosition: (position: GridPosition | null) => {
+        set((state) => ({
+          mode: {
+            ...state.mode,
+            areaEndPosition: position,
           },
         }))
       },
@@ -184,6 +227,7 @@ export const useEditorStore = create<EditorStore>()(
           position: input.position,
           rotation: input.rotation ?? 0,
           linkedObjectId: input.linkedObjectId,
+          bounds: input.bounds, // 🆕 영역 범위 (area 타입용)
           customData: input.customData,
           placedBy: "", // 실제 호출 시 설정
           placedAt: new Date(),
@@ -484,6 +528,16 @@ export const usePairPlacement = () =>
   useEditorStore((state) => ({
     phase: state.mode.pairPhase,
     firstPosition: state.mode.pairFirstPosition,
+  }))
+
+/**
+ * 🆕 영역 배치 상태만 구독
+ */
+export const useAreaPlacement = () =>
+  useEditorStore((state) => ({
+    phase: state.mode.areaPhase,
+    startPosition: state.mode.areaStartPosition,
+    endPosition: state.mode.areaEndPosition,
   }))
 
 /**

@@ -79,6 +79,10 @@ export const GameEvents = {
   // 🎮 Mobile joystick events (모바일 조이스틱)
   JOYSTICK_MOVE: "joystick:move",
   JOYSTICK_STOP: "joystick:stop",
+
+  // 🏠 Party Zone events (파티 존 시각화)
+  PARTY_ZONES_LOADED: "partyZone:loaded",
+  PARTY_ZONE_CHANGED: "partyZone:changed",
 } as const
 
 // Player position type
@@ -128,4 +132,27 @@ export interface JoystickMovePayload {
   y: number
   /** 입력 강도 (0 ~ 1) */
   force: number
+}
+
+// 🏠 Party Zone payload types (파티 존)
+export interface PartyZoneBounds {
+  x1: number
+  y1: number
+  x2: number
+  y2: number
+}
+
+export interface PartyZoneData {
+  id: string
+  name: string
+  bounds: PartyZoneBounds
+}
+
+export interface PartyZonesLoadedPayload {
+  zones: PartyZoneData[]
+}
+
+export interface PartyZoneChangedPayload {
+  /** 현재 위치한 파티 존 (null이면 존 밖) */
+  currentZone: PartyZoneData | null
 }

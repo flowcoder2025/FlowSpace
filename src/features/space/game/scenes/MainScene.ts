@@ -14,6 +14,9 @@ import {
   type EditorModePayload,
   type EditorCanvasClickPayload,
   type JoystickMovePayload,
+  type PartyZoneData,
+  type PartyZonesLoadedPayload,
+  type PartyZoneChangedPayload,
 } from "../events"
 import {
   createCharacterAnimationsFromSpritesheet,
@@ -123,6 +126,8 @@ export class MainScene extends Phaser.Scene {
   private handleEditorPlaceObject!: (data: unknown) => void // 🎨 오브젝트 배치 이벤트
   private handleJoystickMove!: (data: unknown) => void // 🎮 조이스틱 이동 이벤트
   private handleJoystickStop!: (data: unknown) => void // 🎮 조이스틱 정지 이벤트
+  private handlePartyZonesLoaded!: (data: unknown) => void // 🏠 파티 존 목록 로드
+  private handlePartyZoneChanged!: (data: unknown) => void // 🏠 현재 파티 존 변경
 
   // 🎨 배치된 오브젝트 관리
   private placedObjects: Map<string, Phaser.GameObjects.Container> = new Map()
@@ -131,6 +136,12 @@ export class MainScene extends Phaser.Scene {
   private coordinateDisplay!: Phaser.GameObjects.Container
   private coordinateText!: Phaser.GameObjects.Text
   private coordinateBg!: Phaser.GameObjects.Rectangle
+
+  // 🏠 파티 존 시각화
+  private partyZones: PartyZoneData[] = []
+  private currentPartyZone: PartyZoneData | null = null
+  private partyZoneOverlay!: Phaser.GameObjects.Graphics
+  private partyZoneBorders!: Phaser.GameObjects.Graphics
 
   // Jump configuration
   private readonly JUMP_HEIGHT = 20
@@ -263,6 +274,9 @@ export class MainScene extends Phaser.Scene {
 
     // 🎨 Setup coordinate display for editor mode
     this.setupCoordinateDisplay()
+
+    // 🏠 Setup party zone overlay
+    this.setupPartyZoneOverlay()
 
     // Mark scene as active
     this.isSceneActive = true
@@ -702,6 +716,98 @@ export class MainScene extends Phaser.Scene {
     })
   }
 
+  /**
+   * 🏠 파티 존 오버레이 설정
+   * 존 진입 시 해당 존 외 영역을 음영 처리
+   */
+  private setupPartyZoneOverlay() {
+    // 음영 오버레이 (존 밖 영역)
+    this.partyZoneOverlay = this.add.graphics()
+    this.partyZoneOverlay.setDepth(2) // 바닥 타일 위, 오브젝트/캐릭터 아래
+    this.partyZoneOverlay.setScrollFactor(1) // 카메라 스크롤 반영
+
+    // 존 경계선 표시 (에디터/디버그용)
+    this.partyZoneBorders = this.add.graphics()
+    this.partyZoneBorders.setDepth(2)
+    this.partyZoneBorders.setScrollFactor(1)
+
+    if (IS_DEV) {
+      console.log("[MainScene] 🏠 Party zone overlay initialized")
+    }
+  }
+
+  /**
+   * 🏠 파티 존 음영 오버레이 업데이트
+   * 현재 존이 있으면 존 밖 영역을 어둡게 처리
+   */
+  private updatePartyZoneOverlay() {
+    // 기존 그래픽 클리어
+    this.partyZoneOverlay.clear()
+    this.partyZoneBorders.clear()
+
+    const mapConfig = this.tileMapSystem.getMapConfig()
+    const TILE_SIZE = mapConfig.TILE_SIZE
+    const worldBounds = this.tileMapSystem.getWorldBounds()
+
+    // 모든 존 경계선 표시 (디버그용, 연한 선)
+    this.partyZoneBorders.lineStyle(1, 0x3b82f6, 0.3) // 파란색, 연한 선
+    for (const zone of this.partyZones) {
+      const x = zone.bounds.x1 * TILE_SIZE
+      const y = zone.bounds.y1 * TILE_SIZE
+      const width = (zone.bounds.x2 - zone.bounds.x1 + 1) * TILE_SIZE
+      const height = (zone.bounds.y2 - zone.bounds.y1 + 1) * TILE_SIZE
+      this.partyZoneBorders.strokeRect(x, y, width, height)
+    }
+
+    // 현재 존이 없으면 음영 처리 안 함
+    if (!this.currentPartyZone) {
+      return
+    }
+
+    // 현재 존의 픽셀 좌표
+    const zoneX = this.currentPartyZone.bounds.x1 * TILE_SIZE
+    const zoneY = this.currentPartyZone.bounds.y1 * TILE_SIZE
+    const zoneWidth = (this.currentPartyZone.bounds.x2 - this.currentPartyZone.bounds.x1 + 1) * TILE_SIZE
+    const zoneHeight = (this.currentPartyZone.bounds.y2 - this.currentPartyZone.bounds.y1 + 1) * TILE_SIZE
+
+    // 음영 색상 (아주 살짝 - 활성/비활성 구분 정도)
+    const shadowColor = 0x000000
+    const shadowAlpha = 0.12 // 12% 투명도
+
+    // 전체 맵을 음영 처리 (존 영역은 비워둠)
+    this.partyZoneOverlay.fillStyle(shadowColor, shadowAlpha)
+
+    // 상단 영역
+    if (zoneY > 0) {
+      this.partyZoneOverlay.fillRect(0, 0, worldBounds.width, zoneY)
+    }
+
+    // 하단 영역
+    const bottomY = zoneY + zoneHeight
+    if (bottomY < worldBounds.height) {
+      this.partyZoneOverlay.fillRect(0, bottomY, worldBounds.width, worldBounds.height - bottomY)
+    }
+
+    // 좌측 영역 (존 높이만큼)
+    if (zoneX > 0) {
+      this.partyZoneOverlay.fillRect(0, zoneY, zoneX, zoneHeight)
+    }
+
+    // 우측 영역 (존 높이만큼)
+    const rightX = zoneX + zoneWidth
+    if (rightX < worldBounds.width) {
+      this.partyZoneOverlay.fillRect(rightX, zoneY, worldBounds.width - rightX, zoneHeight)
+    }
+
+    // 현재 존 경계선 강조 (밝은 색)
+    this.partyZoneBorders.lineStyle(2, 0x60a5fa, 0.7) // 밝은 파란색
+    this.partyZoneBorders.strokeRect(zoneX, zoneY, zoneWidth, zoneHeight)
+
+    if (IS_DEV) {
+      console.log(`[MainScene] 🏠 Party zone overlay updated: ${this.currentPartyZone.name}`)
+    }
+  }
+
   private isSceneTrulyActive(): boolean {
     return this.isSceneActive && !!this.sys?.displayList
   }
@@ -842,6 +948,25 @@ export class MainScene extends Phaser.Scene {
       }
     }
 
+    // 🏠 파티 존 이벤트 핸들러
+    this.handlePartyZonesLoaded = (data: unknown) => {
+      const { zones } = data as PartyZonesLoadedPayload
+      this.partyZones = zones
+      this.updatePartyZoneOverlay()
+      if (IS_DEV) {
+        console.log(`[MainScene] 🏠 Party zones loaded: ${zones.length} zones`)
+      }
+    }
+
+    this.handlePartyZoneChanged = (data: unknown) => {
+      const { currentZone } = data as PartyZoneChangedPayload
+      this.currentPartyZone = currentZone
+      this.updatePartyZoneOverlay()
+      if (IS_DEV) {
+        console.log(`[MainScene] 🏠 Party zone changed: ${currentZone?.name ?? "none"}`)
+      }
+    }
+
     eventBridge.on(GameEvents.REMOTE_PLAYER_UPDATE, this.handleRemotePlayerUpdate)
     eventBridge.on(GameEvents.REMOTE_PLAYER_JOIN, this.handleRemotePlayerJoin)
     eventBridge.on(GameEvents.REMOTE_PLAYER_LEAVE, this.handleRemotePlayerLeave)
@@ -853,6 +978,8 @@ export class MainScene extends Phaser.Scene {
     eventBridge.on(GameEvents.EDITOR_PLACE_OBJECT, this.handleEditorPlaceObject)
     eventBridge.on(GameEvents.JOYSTICK_MOVE, this.handleJoystickMove)
     eventBridge.on(GameEvents.JOYSTICK_STOP, this.handleJoystickStop)
+    eventBridge.on(GameEvents.PARTY_ZONES_LOADED, this.handlePartyZonesLoaded)
+    eventBridge.on(GameEvents.PARTY_ZONE_CHANGED, this.handlePartyZoneChanged)
   }
 
   /**
@@ -1500,6 +1627,20 @@ export class MainScene extends Phaser.Scene {
     }
     if (this.handleJoystickStop) {
       eventBridge.off(GameEvents.JOYSTICK_STOP, this.handleJoystickStop)
+    }
+    if (this.handlePartyZonesLoaded) {
+      eventBridge.off(GameEvents.PARTY_ZONES_LOADED, this.handlePartyZonesLoaded)
+    }
+    if (this.handlePartyZoneChanged) {
+      eventBridge.off(GameEvents.PARTY_ZONE_CHANGED, this.handlePartyZoneChanged)
+    }
+
+    // 🏠 파티 존 오버레이 정리
+    if (this.partyZoneOverlay) {
+      this.partyZoneOverlay.destroy()
+    }
+    if (this.partyZoneBorders) {
+      this.partyZoneBorders.destroy()
     }
 
     // 🎨 배치된 오브젝트 정리
