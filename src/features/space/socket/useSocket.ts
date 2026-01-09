@@ -68,6 +68,9 @@ interface UseSocketOptions {
   onSpotlightActivated?: (data: SpotlightActivatedData) => void  // 스포트라이트 활성화됨
   onSpotlightDeactivated?: (data: SpotlightActivatedData) => void  // 스포트라이트 비활성화됨
   onSpotlightError?: (message: string) => void  // 스포트라이트 에러
+  // 📡 근접 통신 이벤트 콜백
+  onProximityChanged?: (enabled: boolean, changedBy: string) => void  // 근접 통신 설정 변경됨
+  onProximityError?: (message: string) => void  // 근접 통신 에러
 }
 
 // 🔒 Socket 에러 타입 (세션 검증 실패 등)
@@ -112,6 +115,9 @@ interface UseSocketReturn {
   spotlightStatus: SpotlightStatusData | null  // 현재 스포트라이트 상태
   activateSpotlight: () => void  // 스포트라이트 활성화
   deactivateSpotlight: () => void  // 스포트라이트 비활성화
+  // 📡 근접 통신
+  proximityEnabled: boolean  // 현재 근접 통신 상태
+  setProximity: (enabled: boolean) => void  // 근접 통신 설정 변경
 }
 
 export function useSocket({
@@ -149,6 +155,9 @@ export function useSocket({
   onSpotlightActivated,
   onSpotlightDeactivated,
   onSpotlightError,
+  // 📡 근접 통신 이벤트 콜백
+  onProximityChanged,
+  onProximityError,
 }: UseSocketOptions): UseSocketReturn {
   const socketRef = useRef<Socket<ServerToClientEvents, ClientToServerEvents> | null>(null)
   const [isConnected, setIsConnected] = useState(false)
@@ -163,6 +172,8 @@ export function useSocket({
   const [recordingStatus, setRecordingStatus] = useState<RecordingStatusData | null>(null)
   // 🔦 스포트라이트 상태
   const [spotlightStatus, setSpotlightStatus] = useState<SpotlightStatusData | null>(null)
+  // 📡 근접 통신 상태
+  const [proximityEnabled, setProximityEnabled] = useState<boolean>(false)
 
   // Use refs to persist state across useEffect re-runs (fixes timing race condition)
   const pendingPlayersRef = useRef<PlayerPosition[]>([])
@@ -198,6 +209,9 @@ export function useSocket({
   const onSpotlightActivatedRef = useRef(onSpotlightActivated)
   const onSpotlightDeactivatedRef = useRef(onSpotlightDeactivated)
   const onSpotlightErrorRef = useRef(onSpotlightError)
+  // 📡 근접 통신 이벤트 콜백 refs
+  const onProximityChangedRef = useRef(onProximityChanged)
+  const onProximityErrorRef = useRef(onProximityError)
 
   // 🔄 Store nickname and avatarColor/avatarConfig in refs to enable hot update without reconnection
   const nicknameRef = useRef(nickname)
@@ -234,6 +248,9 @@ export function useSocket({
     onSpotlightActivatedRef.current = onSpotlightActivated
     onSpotlightDeactivatedRef.current = onSpotlightDeactivated
     onSpotlightErrorRef.current = onSpotlightError
+    // 📡 근접 통신 이벤트 콜백 refs 업데이트
+    onProximityChangedRef.current = onProximityChanged
+    onProximityErrorRef.current = onProximityError
     // 🔄 Update profile refs (used for movement events)
     nicknameRef.current = nickname
     avatarColorRef.current = avatarColor
@@ -670,6 +687,27 @@ export function useSocket({
       onSpotlightErrorRef.current?.(data.message)
     })
 
+    // ============================================
+    // 📡 근접 통신 이벤트 리스너
+    // ============================================
+    socket.on("proximity:status", (data: { enabled: boolean }) => {
+      if (IS_DEV) {
+        console.log("[Socket] Proximity status:", data.enabled ? "enabled" : "disabled")
+      }
+      setProximityEnabled(data.enabled)
+    })
+
+    socket.on("proximity:changed", (data: { enabled: boolean; changedBy: string }) => {
+      console.log("[Socket] 📡 Proximity changed to:", data.enabled ? "enabled" : "disabled", "by", data.changedBy)
+      setProximityEnabled(data.enabled)
+      onProximityChangedRef.current?.(data.enabled, data.changedBy)
+    })
+
+    socket.on("proximity:error", (data: { message: string }) => {
+      console.warn("[Socket] Proximity error:", data.message)
+      onProximityErrorRef.current?.(data.message)
+    })
+
     // 🔄 Profile update events (다른 플레이어의 닉네임/아바타 변경)
     socket.on("player:profileUpdated", (data) => {
       if (IS_DEV) {
@@ -979,6 +1017,20 @@ export function useSocket({
     }
   }, [isConnected])
 
+  // ============================================
+  // 📡 근접 통신 명령어
+  // ============================================
+
+  // 근접 통신 설정 변경
+  const setProximity = useCallback((enabled: boolean) => {
+    if (socketRef.current && isConnected) {
+      socketRef.current.emit("proximity:set", { enabled })
+      if (IS_DEV) {
+        console.log("[Socket] Setting proximity:", enabled ? "enabled" : "disabled")
+      }
+    }
+  }, [isConnected])
+
   return {
     isConnected,
     players,
@@ -1009,5 +1061,8 @@ export function useSocket({
     spotlightStatus, // 현재 스포트라이트 상태
     activateSpotlight, // 스포트라이트 활성화
     deactivateSpotlight, // 스포트라이트 비활성화
+    // 📡 근접 통신
+    proximityEnabled, // 현재 근접 통신 상태
+    setProximity, // 근접 통신 설정 변경
   }
 }

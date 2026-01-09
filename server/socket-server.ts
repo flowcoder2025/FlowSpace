@@ -837,6 +837,18 @@ function getOrCreateSpotlightState(spaceId: string): Map<string, ActiveSpotlight
   return spotlightStates.get(spaceId)!
 }
 
+// 📡 Proximity state: spaceId -> boolean (enabled/disabled)
+// 각 공간별 근접 통신 설정 (기본값: false = 전역 모드)
+const proximityStates = new Map<string, boolean>()
+
+function getProximityState(spaceId: string): boolean {
+  return proximityStates.get(spaceId) ?? false
+}
+
+function setProximityState(spaceId: string, enabled: boolean): void {
+  proximityStates.set(spaceId, enabled)
+}
+
 function getOrCreateRoom(spaceId: string): Map<string, PlayerPosition> {
   if (!rooms.has(spaceId)) {
     rooms.set(spaceId, new Map())
@@ -1116,6 +1128,10 @@ io.on("connection", (socket) => {
     } catch (error) {
       console.error("[Socket] Spotlight status error:", error)
     }
+
+    // 📡 현재 근접 통신 상태 전달
+    const proximityEnabled = getProximityState(spaceId)
+    socket.emit("proximity:status", { enabled: proximityEnabled })
 
     // Notify other players in room
     socket.to(spaceId).emit("player:joined", playerPosition)
@@ -2371,6 +2387,55 @@ io.on("connection", (socket) => {
       console.error("[Socket] Spotlight deactivate error:", error)
       socket.emit("spotlight:error", { message: "스포트라이트 비활성화에 실패했습니다." })
     }
+  })
+
+  // ============================================
+  // 📡 근접 통신 설정
+  // ============================================
+
+  // 근접 통신 ON/OFF 설정 (관리자 전용)
+  socket.on("proximity:set", async (data: { enabled: boolean }) => {
+    const { spaceId, playerId, nickname, sessionToken } = socket.data
+
+    if (!spaceId || !playerId) {
+      socket.emit("proximity:error", { message: "공간에 먼저 입장해야 합니다." })
+      return
+    }
+
+    // 🔒 권한 검증 (STAFF 이상만 허용)
+    if (sessionToken) {
+      const verification = await verifyAdminPermission(spaceId, sessionToken, "proximity")
+      if (!verification.valid) {
+        socket.emit("proximity:error", { message: verification.error || "근접 통신 설정 권한이 없습니다. STAFF 이상만 가능합니다." })
+        return
+      }
+    } else if (!IS_DEV) {
+      socket.emit("proximity:error", { message: "권한이 없습니다." })
+      return
+    }
+
+    // 상태 변경
+    setProximityState(spaceId, data.enabled)
+
+    // 📢 공간 내 모든 참가자에게 브로드캐스트
+    io.to(spaceId).emit("proximity:changed", {
+      enabled: data.enabled,
+      changedBy: nickname || "Unknown",
+    })
+
+    // 시스템 메시지 전송
+    const modeText = data.enabled ? "근접 모드" : "전역 모드"
+    const systemMessage: ChatMessageData = {
+      id: `sys-proximity-${Date.now()}`,
+      senderId: "system",
+      senderNickname: "시스템",
+      content: `📡 음성/영상 통신이 ${modeText}로 변경되었습니다. (by ${nickname})`,
+      timestamp: Date.now(),
+      type: "system",
+    }
+    io.to(spaceId).emit("chat:system", systemMessage)
+
+    console.log(`[Socket] 📡 Proximity ${data.enabled ? "ENABLED" : "DISABLED"} by ${nickname} in space ${spaceId}`)
   })
 
   // ============================================

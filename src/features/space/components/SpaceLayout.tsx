@@ -445,6 +445,9 @@ function SpaceLayoutContent({
     joinParty,
     leaveParty,
     sendPartyMessage,
+    // 📡 근접 통신 (Phase 1)
+    proximityEnabled,
+    setProximity,
   } = useSocket({
     spaceId,
     playerId: userId,
@@ -587,15 +590,15 @@ function SpaceLayoutContent({
   }, [currentZone, partyZoneUsers])
 
   // 근접 기반 LiveKit 구독 관리
-  // 현재는 enabled: false로 비활성화 (전역 모드)
-  // 향후 공간 설정에서 활성화 가능
+  // 📡 proximityEnabled: Socket.io에서 관리하는 공간별 설정
+  // 관리자가 @proximity on/off 명령어로 제어 가능
   const { proximityInfo, inRangeCount, outOfRangeCount } = useProximitySubscription({
     localPosition,
     remotePositions,
     spotlightUsers, // 🔦 스포트라이트 시스템 연동 완료
     partyZoneUsers, // 🏠 파티 존 시스템 연동 완료
     config: {
-      enabled: false, // 기본 비활성화 (전역 모드)
+      enabled: proximityEnabled, // 📡 서버에서 관리하는 공간 설정 (기본: 전역 모드)
       proximityRadius: 3.5, // 7×7 타일
       enableVolumeAttenuation: false,
       minVolume: 0.3,
@@ -1355,8 +1358,14 @@ function SpaceLayoutContent({
         setMessages((prev) => addMessagesWithLimit(prev, helpMessages))
         break
       }
+      case "proximity":
+        // 📡 근접 통신 ON/OFF
+        if (result.enabled !== undefined) {
+          setProximity(result.enabled)
+        }
+        break
     }
-  }, [sendMuteCommand, sendUnmuteCommand, sendKickCommand, sendAnnounce, userRole, isSuperAdmin])
+  }, [sendMuteCommand, sendUnmuteCommand, sendKickCommand, sendAnnounce, setProximity, userRole, isSuperAdmin])
 
   const handleToggleMic = useCallback(async () => {
     await toggleMicrophone()

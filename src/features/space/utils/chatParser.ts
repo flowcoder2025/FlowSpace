@@ -11,6 +11,7 @@
  *   - @kick / @강퇴 <닉네임> [사유]
  *   - @ban / @차단 <닉네임> [사유]
  *   - @announce / @공지 <메시지>
+ *   - @proximity / @근접 on|off|켜기|끄기  (근접 통신 ON/OFF)
  *   - @help / @도움말
  * - 에디터 명령어 (설정 파일 기반):
  *   - @편집기 / @editor
@@ -28,7 +29,7 @@ import {
 import type { ParsedEditorCommand } from "../types/editor.types"
 
 export type ParsedInputType = "message" | "whisper" | "command" | "editor_command"
-export type AdminCommandType = "mute" | "unmute" | "kick" | "ban" | "announce" | "help"
+export type AdminCommandType = "mute" | "unmute" | "kick" | "ban" | "announce" | "help" | "proximity"
 
 export interface ParsedInput {
   type: ParsedInputType
@@ -41,6 +42,7 @@ export interface ParsedInput {
     duration?: number  // 음소거 시간 (분)
     reason?: string
     message?: string   // 공지사항 내용
+    enabled?: boolean  // proximity on/off
   }
   // 에디터 명령어 전용 필드
   editorCommand?: ParsedEditorCommand
@@ -194,6 +196,21 @@ function parseAdminCommand(input: string): ParsedInput | null {
       command: "announce",
       commandArgs: {
         message: announceMatch[2].trim(),
+      },
+    }
+  }
+
+  // @proximity / @근접 on/off - 근접 통신 ON/OFF
+  const proximityMatch = trimmed.match(/^@(proximity|근접)\s+(on|off|켜기|끄기)\s*$/i)
+  if (proximityMatch) {
+    const value = proximityMatch[2].toLowerCase()
+    const enabled = value === "on" || value === "켜기"
+    return {
+      type: "command",
+      content: trimmed,
+      command: "proximity",
+      commandArgs: {
+        enabled,
       },
     }
   }

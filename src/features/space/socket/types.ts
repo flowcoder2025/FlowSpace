@@ -410,6 +410,11 @@ export interface ClientToServerEvents {
   // ============================================
   "spotlight:activate": (data: SpotlightActivateRequest) => void    // 스포트라이트 활성화
   "spotlight:deactivate": (data: SpotlightDeactivateRequest) => void // 스포트라이트 비활성화
+
+  // ============================================
+  // 📡 근접 통신 이벤트 (Client → Server)
+  // ============================================
+  "proximity:set": (data: { enabled: boolean }) => void             // 근접 통신 ON/OFF 설정
 }
 
 // Server to Client events
@@ -497,6 +502,13 @@ export interface ServerToClientEvents {
   "spotlight:deactivated": (data: SpotlightActivatedData) => void // 스포트라이트 비활성화됨 (전체 브로드캐스트)
   "spotlight:status": (data: SpotlightStatusData) => void        // 현재 스포트라이트 상태 (입장 시)
   "spotlight:error": (data: { message: string }) => void         // 스포트라이트 에러 (권한 부족 등)
+
+  // ============================================
+  // 📡 근접 통신 이벤트 (Server → Client)
+  // ============================================
+  "proximity:status": (data: { enabled: boolean }) => void              // 현재 근접 통신 상태 (입장 시)
+  "proximity:changed": (data: { enabled: boolean; changedBy: string }) => void  // 근접 통신 설정 변경됨 (브로드캐스트)
+  "proximity:error": (data: { message: string }) => void                // 근접 통신 에러 (권한 부족 등)
 }
 
 // Inter-server events (not used in MVP)

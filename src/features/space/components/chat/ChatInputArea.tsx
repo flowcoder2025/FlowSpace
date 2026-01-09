@@ -31,6 +31,7 @@ export interface AdminCommandResult {
   duration?: number
   reason?: string
   message?: string
+  enabled?: boolean  // 📡 proximity on/off 명령어용
 }
 
 // ============================================
@@ -174,6 +175,7 @@ export function ChatInputArea({
               duration: parsed.commandArgs?.duration,
               reason: parsed.commandArgs?.reason,
               message: parsed.commandArgs?.message,
+              enabled: parsed.commandArgs?.enabled,  // 📡 proximity 명령어용
             })
           } else if (parsed.type === "whisper" && parsed.target && onSendWhisper) {
             // 귓속말 전송 (답장 정보 포함)
