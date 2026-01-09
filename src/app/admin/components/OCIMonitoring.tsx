@@ -23,6 +23,13 @@ import {
 interface OCIMetricsData {
   timestamp: number
   serverIP: string
+  ociStatus: {
+    configured: boolean
+    configStatus: Record<string, boolean>
+    metricsAvailable: boolean
+    trafficAvailable: boolean
+    error: string | null
+  }
   servers: Array<{
     type: "socket.io" | "livekit"
     url: string
@@ -38,22 +45,43 @@ interface OCIMetricsData {
     } | null
   }>
   connections: {
+    socket: { total: number; rooms: number; parties: number }
+    livekit: { rooms: number; participants: number }
     total: number
-    rooms: number
-    parties: number
     details: Array<{ spaceId: string; connections: number }>
   }
   resources: {
-    cpu: { used: number; limit: number; percent: number; unit: string }
-    memory: { usedGB: number; limit: number; percent: number; unit: string }
-    storage: { usedGB: number; limit: number; percent: number; unit: string }
+    cpu: {
+      percent: number
+      loadAverage: number
+      limit: number
+      unit: string
+      source: string
+    }
+    memory: {
+      percent: number
+      usedGB: number
+      totalGB: number
+      limit: number
+      unit: string
+      source: string
+    }
+    storage: {
+      usedGB: number
+      totalGB: number
+      limit: number
+      percent: number
+      unit: string
+      source: string
+    }
     traffic: {
       usedTB: number
+      usedGB: number
       limit: number
       percent: number
       projectedTB: number
       unit: string
-      note?: string
+      source: string
     }
   }
   cost: {
@@ -104,21 +132,28 @@ function ProgressBar({
 function ResourceCard({
   title,
   used,
-  limit,
+  total,
   percent,
   unit,
   alertLevel = "none",
-  note,
+  subtitle,
+  source,
+  extra,
 }: {
   title: string
-  used: number
-  limit: number
+  used: number | string
+  total: number | string
   percent: number
   unit: string
   alertLevel?: "none" | "warning" | "critical"
-  note?: string
+  subtitle?: string
+  source?: string
+  extra?: React.ReactNode
 }) {
   const getStatusBadge = () => {
+    if (source === "unavailable") {
+      return <Badge variant="outline">미연동</Badge>
+    }
     if (alertLevel === "critical" || percent >= 100) {
       return <Badge variant="destructive">초과</Badge>
     }
@@ -137,23 +172,34 @@ function ResourceCard({
       <CardContent className="pt-6">
         <VStack gap="sm">
           <HStack justify="between" align="center">
-            <Text weight="medium">{title}</Text>
+            <VStack gap="xs">
+              <Text weight="medium">{title}</Text>
+              {subtitle && (
+                <Text size="xs" tone="muted" className="truncate max-w-[150px]">
+                  {subtitle}
+                </Text>
+              )}
+            </VStack>
             {getStatusBadge()}
           </HStack>
-          <ProgressBar percent={percent} alertLevel={alertLevel} />
+          <ProgressBar
+            percent={source === "unavailable" ? 0 : percent}
+            alertLevel={alertLevel}
+          />
           <HStack justify="between">
             <Text size="sm" tone="muted">
-              {used} {unit} / {limit} {unit}
+              {source === "unavailable" ? "-" : used} {unit} / {total} {unit}
             </Text>
             <Text size="sm" weight="medium">
-              {percent}%
+              {source === "unavailable" ? "-" : `${percent}%`}
             </Text>
           </HStack>
-          {note && (
+          {source && (
             <Text size="xs" tone="muted" className="italic">
-              {note}
+              {source === "oci-api" ? "OCI Monitoring API" : source === "unavailable" ? "환경변수 설정 필요" : source}
             </Text>
           )}
+          {extra}
         </VStack>
       </CardContent>
     </Card>
@@ -200,24 +246,52 @@ function ServerStatusCard({
         <VStack gap="xs">
           {uptime && (
             <HStack justify="between">
-              <Text size="sm" tone="muted">
-                업타임
-              </Text>
-              <Text size="sm" weight="medium">
-                {uptime.formatted}
-              </Text>
+              <Text size="sm" tone="muted">업타임</Text>
+              <Text size="sm" weight="medium">{uptime.formatted}</Text>
             </HStack>
           )}
           {memory && (
             <HStack justify="between">
-              <Text size="sm" tone="muted">
-                메모리
-              </Text>
-              <Text size="sm" weight="medium">
-                {memory.usedMB} MB
-              </Text>
+              <Text size="sm" tone="muted">메모리</Text>
+              <Text size="sm" weight="medium">{memory.usedMB} MB</Text>
             </HStack>
           )}
+        </VStack>
+      </CardContent>
+    </Card>
+  )
+}
+
+// ============================================
+// OCI Status Banner
+// ============================================
+function OCIStatusBanner({ ociStatus }: { ociStatus: OCIMetricsData["ociStatus"] }) {
+  if (ociStatus.configured && ociStatus.metricsAvailable) {
+    return null // 정상 작동 시 배너 표시 안함
+  }
+
+  return (
+    <Card className="border-yellow-500 bg-yellow-50 dark:bg-yellow-950/20">
+      <CardContent className="py-4">
+        <VStack gap="sm">
+          <HStack gap="sm" align="center">
+            <Badge className="bg-yellow-500 text-white">설정 필요</Badge>
+            <Text size="sm" weight="medium">
+              OCI Monitoring API 미연동
+            </Text>
+          </HStack>
+          {ociStatus.error && (
+            <Text size="xs" tone="muted">
+              에러: {ociStatus.error}
+            </Text>
+          )}
+          <Text size="xs" tone="muted">
+            정확한 CPU, 메모리, 트래픽 데이터를 위해 Vercel 환경변수를 설정하세요:
+          </Text>
+          <div className="rounded bg-muted p-2 font-mono text-xs">
+            OCI_TENANCY_ID, OCI_USER_ID, OCI_FINGERPRINT, OCI_PRIVATE_KEY,
+            OCI_REGION, OCI_COMPARTMENT_ID, OCI_INSTANCE_ID
+          </div>
         </VStack>
       </CardContent>
     </Card>
@@ -230,11 +304,16 @@ function ServerStatusCard({
 function CostSummaryCard({
   cost,
   billing,
+  trafficSource,
 }: {
   cost: OCIMetricsData["cost"]
   billing: OCIMetricsData["billing"]
+  trafficSource: string
 }) {
   const getAlertBadge = () => {
+    if (trafficSource === "unavailable") {
+      return <Badge variant="outline">데이터 없음</Badge>
+    }
     if (cost.alertLevel === "critical") {
       return <Badge variant="destructive">비용 발생</Badge>
     }
@@ -258,77 +337,66 @@ function CostSummaryCard({
       </CardHeader>
       <CardContent>
         <VStack gap="lg">
-          {/* 현재 비용 */}
           <VStack gap="xs">
-            <Text size="sm" tone="muted">
-              현재 추정 비용
-            </Text>
+            <Text size="sm" tone="muted">현재 추정 비용</Text>
             <Text
               weight="bold"
-              className={`text-3xl ${cost.hasCost ? "text-red-500" : "text-green-500"}`}
+              className={`text-3xl ${
+                trafficSource === "unavailable"
+                  ? "text-muted-foreground"
+                  : cost.hasCost
+                    ? "text-red-500"
+                    : "text-green-500"
+              }`}
             >
-              {cost.current.formatted}
+              {trafficSource === "unavailable" ? "-" : cost.current.formatted}
             </Text>
-            {!cost.hasCost && (
-              <Text size="sm" tone="muted">
-                Always Free 범위 내
-              </Text>
+            {trafficSource !== "unavailable" && !cost.hasCost && (
+              <Text size="sm" tone="muted">Always Free 범위 내</Text>
+            )}
+            {trafficSource === "unavailable" && (
+              <Text size="xs" tone="muted">OCI API 연동 필요</Text>
             )}
           </VStack>
 
           <Divider />
 
-          {/* 월말 예측 */}
           <VStack gap="sm">
             <HStack justify="between">
-              <Text size="sm" tone="muted">
-                월말 예측 비용
-              </Text>
+              <Text size="sm" tone="muted">월말 예측 비용</Text>
               <Text size="sm" weight="medium">
-                {cost.projected.formatted}
+                {trafficSource === "unavailable" ? "-" : cost.projected.formatted}
               </Text>
             </HStack>
             <HStack justify="between">
-              <Text size="sm" tone="muted">
-                예측 초과 트래픽
-              </Text>
+              <Text size="sm" tone="muted">예측 초과 트래픽</Text>
               <Text size="sm" weight="medium">
-                {cost.excessTraffic.projectedTB.toFixed(2)} TB
+                {trafficSource === "unavailable"
+                  ? "-"
+                  : `${cost.excessTraffic.projectedTB.toFixed(2)} TB`}
               </Text>
             </HStack>
           </VStack>
 
           <Divider />
 
-          {/* 결제 기간 정보 */}
           <VStack gap="sm">
-            <Text size="sm" weight="medium">
-              이번 달 진행률
-            </Text>
+            <Text size="sm" weight="medium">이번 달 진행률</Text>
             <ProgressBar percent={billing.monthProgress} />
             <HStack justify="between">
               <Text size="xs" tone="muted">
                 {billing.dayOfMonth}일 / {billing.daysInMonth}일
               </Text>
-              <Text size="xs" tone="muted">
-                {billing.daysRemaining}일 남음
-              </Text>
+              <Text size="xs" tone="muted">{billing.daysRemaining}일 남음</Text>
             </HStack>
           </VStack>
 
           <Divider />
 
-          {/* 가격 정보 */}
           <VStack gap="xs" className="rounded-lg bg-muted/50 p-3">
-            <Text size="xs" weight="medium">
-              과금 기준
-            </Text>
-            <Text size="xs" tone="muted">
-              {cost.priceInfo.note}
-            </Text>
-            <Text size="xs" tone="muted">
-              초과 시: {cost.priceInfo.trafficPerGB}
-            </Text>
+            <Text size="xs" weight="medium">과금 기준</Text>
+            <Text size="xs" tone="muted">{cost.priceInfo.note}</Text>
+            <Text size="xs" tone="muted">초과 시: {cost.priceInfo.trafficPerGB}</Text>
           </VStack>
         </VStack>
       </CardContent>
@@ -365,8 +433,6 @@ export function OCIMonitoring() {
 
   useEffect(() => {
     fetchMetrics()
-
-    // 30초마다 자동 새로고침
     const interval = setInterval(fetchMetrics, 30000)
     return () => clearInterval(interval)
   }, [fetchMetrics])
@@ -404,12 +470,8 @@ export function OCIMonitoring() {
       {/* Header */}
       <HStack justify="between" align="center">
         <VStack gap="xs">
-          <Text weight="semibold" size="lg">
-            OCI 통합 서버
-          </Text>
-          <Text size="sm" tone="muted">
-            IP: {data.serverIP}
-          </Text>
+          <Text weight="semibold" size="lg">OCI 통합 서버</Text>
+          <Text size="sm" tone="muted">IP: {data.serverIP}</Text>
         </VStack>
         <HStack gap="sm" align="center">
           {lastUpdated && (
@@ -422,6 +484,9 @@ export function OCIMonitoring() {
           </Button>
         </HStack>
       </HStack>
+
+      {/* OCI Status Banner */}
+      <OCIStatusBanner ociStatus={data.ociStatus} />
 
       {/* Server Status */}
       <Grid cols={2} gap="default">
@@ -436,32 +501,39 @@ export function OCIMonitoring() {
       <Card>
         <CardHeader>
           <CardTitle>연결 현황</CardTitle>
+          <CardDescription>Socket.io + LiveKit 통합</CardDescription>
         </CardHeader>
         <CardContent>
-          <Grid cols={3} gap="lg">
+          <Grid cols={5} gap="lg">
             <VStack gap="xs" align="center">
-              <Text weight="bold" className="text-2xl">
+              <Text weight="bold" className="text-2xl text-primary">
                 {data.connections.total}
               </Text>
-              <Text size="sm" tone="muted">
-                총 연결
-              </Text>
+              <Text size="sm" tone="muted">총 연결</Text>
             </VStack>
             <VStack gap="xs" align="center">
               <Text weight="bold" className="text-2xl">
-                {data.connections.rooms}
+                {data.connections.socket.total}
               </Text>
-              <Text size="sm" tone="muted">
-                활성 공간
-              </Text>
+              <Text size="sm" tone="muted">Socket 연결</Text>
             </VStack>
             <VStack gap="xs" align="center">
               <Text weight="bold" className="text-2xl">
-                {data.connections.parties}
+                {data.connections.socket.rooms}
               </Text>
-              <Text size="sm" tone="muted">
-                파티
+              <Text size="sm" tone="muted">활성 공간</Text>
+            </VStack>
+            <VStack gap="xs" align="center">
+              <Text weight="bold" className="text-2xl">
+                {data.connections.livekit.participants}
               </Text>
+              <Text size="sm" tone="muted">LiveKit 참가자</Text>
+            </VStack>
+            <VStack gap="xs" align="center">
+              <Text weight="bold" className="text-2xl">
+                {data.connections.socket.parties}
+              </Text>
+              <Text size="sm" tone="muted">파티</Text>
             </VStack>
           </Grid>
         </CardContent>
@@ -469,13 +541,12 @@ export function OCIMonitoring() {
 
       {/* Resources & Cost */}
       <Grid cols={3} gap="lg">
-        {/* Always Free Resources */}
         <GridItem colSpan={2}>
           <Card>
             <CardHeader>
-              <CardTitle>Always Free 리소스</CardTitle>
+              <CardTitle>시스템 리소스</CardTitle>
               <CardDescription>
-                Oracle Cloud 무료 한도 사용량
+                OCI VM 실시간 사용량 (Always Free: 4 OCPU, 24GB RAM, 10TB/월)
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -483,39 +554,43 @@ export function OCIMonitoring() {
                 <GridItem>
                   <ResourceCard
                     title="CPU"
-                    used={data.resources.cpu.used}
-                    limit={data.resources.cpu.limit}
+                    used={data.resources.cpu.percent}
+                    total={100}
                     percent={data.resources.cpu.percent}
-                    unit={data.resources.cpu.unit}
+                    unit="%"
+                    subtitle={`Load: ${data.resources.cpu.loadAverage.toFixed(2)}`}
+                    source={data.resources.cpu.source}
                   />
                 </GridItem>
                 <GridItem>
                   <ResourceCard
                     title="메모리"
                     used={data.resources.memory.usedGB}
-                    limit={data.resources.memory.limit}
+                    total={data.resources.memory.totalGB}
                     percent={data.resources.memory.percent}
-                    unit={data.resources.memory.unit}
+                    unit="GB"
+                    source={data.resources.memory.source}
                   />
                 </GridItem>
                 <GridItem>
                   <ResourceCard
                     title="스토리지"
                     used={data.resources.storage.usedGB}
-                    limit={data.resources.storage.limit}
+                    total={data.resources.storage.totalGB}
                     percent={data.resources.storage.percent}
-                    unit={data.resources.storage.unit}
+                    unit="GB"
+                    source={data.resources.storage.source}
                   />
                 </GridItem>
                 <GridItem>
                   <ResourceCard
                     title="트래픽 (이번 달)"
-                    used={data.resources.traffic.usedTB}
-                    limit={data.resources.traffic.limit}
+                    used={data.resources.traffic.usedGB}
+                    total={data.resources.traffic.limit * 1024}
                     percent={data.resources.traffic.percent}
-                    unit={data.resources.traffic.unit}
+                    unit="GB"
                     alertLevel={data.cost.alertLevel}
-                    note={data.resources.traffic.note}
+                    source={data.resources.traffic.source}
                   />
                 </GridItem>
               </Grid>
@@ -523,23 +598,14 @@ export function OCIMonitoring() {
           </Card>
         </GridItem>
 
-        {/* Cost Summary */}
         <GridItem>
-          <CostSummaryCard cost={data.cost} billing={data.billing} />
+          <CostSummaryCard
+            cost={data.cost}
+            billing={data.billing}
+            trafficSource={data.resources.traffic.source}
+          />
         </GridItem>
       </Grid>
-
-      {/* Info Note */}
-      <Card className="border-dashed">
-        <CardContent className="py-4">
-          <HStack gap="sm">
-            <Text size="sm" tone="muted">
-              참고: CPU, 스토리지, 정확한 트래픽은 OCI Monitoring API 연동 후
-              표시됩니다. 현재 트래픽은 연결 수 기반 추정치입니다.
-            </Text>
-          </HStack>
-        </CardContent>
-      </Card>
     </VStack>
   )
 }

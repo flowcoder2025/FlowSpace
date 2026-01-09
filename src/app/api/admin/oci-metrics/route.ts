@@ -1,7 +1,9 @@
 /**
  * OCI 인프라 메트릭 API
  *
- * Oracle Cloud 통합 서버 (Socket.io + LiveKit) 상태 및 비용 조회
+ * Oracle Cloud Infrastructure Monitoring API를 사용하여
+ * 실제 VM 메트릭 및 비용 정보를 조회합니다.
+ *
  * SuperAdmin 전용
  *
  * GET /api/admin/oci-metrics
@@ -18,8 +20,13 @@ import {
   getDaysInMonth,
   formatUSD,
   formatTB,
-  bytesToGB,
 } from "@/lib/utils/oci-cost"
+import {
+  getOCIInstanceMetrics,
+  getMonthlyNetworkTraffic,
+  isOCIConfigured,
+  getOCIConfigStatus,
+} from "@/lib/utils/oci-monitoring"
 
 // OCI 서버 URL (클라이언트용)
 const SOCKET_SERVER_URL =
@@ -28,14 +35,15 @@ const LIVEKIT_SERVER_URL =
   process.env.NEXT_PUBLIC_LIVEKIT_URL?.replace("wss://", "https://") ||
   "https://space-livekit.flow-coder.com"
 
-// OCI 서버 내부 URL (서버 사이드 전용 - Cloudflare 우회)
-// Vercel 서버리스 함수에서 직접 접근
+// OCI 서버 내부 URL (서버 사이드 전용)
 const OCI_INTERNAL_IP = process.env.OCI_INTERNAL_IP || "144.24.72.143"
 const SOCKET_INTERNAL_URL = `http://${OCI_INTERNAL_IP}:3001`
 const LIVEKIT_INTERNAL_URL = `http://${OCI_INTERNAL_IP}:7880`
 
+// ============================================
 // 타입 정의
-interface SocketMetrics {
+// ============================================
+interface SocketServerMetrics {
   server: string
   version: string
   timestamp: number
@@ -43,19 +51,6 @@ interface SocketMetrics {
     seconds: number
     formatted: string
     startTime: string
-  }
-  cpu: {
-    user: number
-    system: number
-    totalMicroseconds: number
-  }
-  memory: {
-    rss: number
-    heapTotal: number
-    heapUsed: number
-    external: number
-    rssMB: number
-    heapUsedMB: number
   }
   connections: {
     total: number
@@ -65,11 +60,17 @@ interface SocketMetrics {
   parties: {
     count: number
   }
-}
-
-interface LiveKitHealth {
-  status: string
-  timestamp?: number
+  process?: {
+    memory?: {
+      rssMB: number
+      heapUsedMB: number
+    }
+  }
+  // v1 호환
+  memory?: {
+    rssMB: number
+    heapUsedMB: number
+  }
 }
 
 export async function GET() {
@@ -86,10 +87,12 @@ export async function GET() {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
-    // 3. 서버 메트릭 수집
-    const [socketMetrics, livekitHealth] = await Promise.all([
+    // 3. 데이터 수집 (병렬 실행)
+    const [socketMetrics, livekitStatus, ociMetrics, monthlyTraffic] = await Promise.all([
       fetchSocketMetrics(),
       fetchLiveKitHealth(),
+      isOCIConfigured() ? getOCIInstanceMetrics() : Promise.resolve(null),
+      isOCIConfigured() ? getMonthlyNetworkTraffic() : Promise.resolve(null),
     ])
 
     // 4. 현재 날짜 정보
@@ -97,29 +100,53 @@ export async function GET() {
     const dayOfMonth = getDayOfMonth(now)
     const daysInMonth = getDaysInMonth(now)
 
-    // 5. 트래픽 추정 (실제 OCI API 연동 전 더미 데이터)
-    // TODO: OCI Monitoring API 연동 시 실제 데이터로 교체
-    const estimatedTrafficTB = calculateEstimatedTraffic(
-      socketMetrics?.connections?.total || 0,
-      socketMetrics?.uptime?.seconds || 0
-    )
+    // 5. OCI 메트릭 처리
+    const hasOCIMetrics = ociMetrics && !("error" in ociMetrics)
+    const hasMonthlyTraffic = monthlyTraffic && !("error" in monthlyTraffic)
 
-    // 6. 비용 계산
-    const costEstimate = calculateCostEstimate(
-      estimatedTrafficTB,
-      dayOfMonth,
-      daysInMonth
-    )
+    // CPU, 메모리 사용량 (OCI API 또는 기본값)
+    let cpuPercent = 0
+    let memoryPercent = 0
+    let loadAverage = 0
 
-    // 7. 리소스 사용량 계산
-    const memoryUsedGB = socketMetrics?.memory
-      ? bytesToGB(socketMetrics.memory.rss)
-      : 0
+    if (hasOCIMetrics) {
+      cpuPercent = ociMetrics.cpu.utilizationPercent
+      memoryPercent = ociMetrics.memory.utilizationPercent
+      loadAverage = ociMetrics.cpu.loadAverage
+    }
+
+    // 트래픽 (OCI API 월별 누적)
+    let trafficTB = 0
+    let trafficGB = 0
+    if (hasMonthlyTraffic) {
+      trafficTB = monthlyTraffic.bytesOutTB
+      trafficGB = monthlyTraffic.bytesOut / (1024 ** 3)
+    }
+
+    // 6. 비용 계산 (실제 트래픽 기반)
+    const costEstimate = calculateCostEstimate(trafficTB, dayOfMonth, daysInMonth)
+
+    // 7. 연결 정보 추출
+    const socketConnections = socketMetrics?.connections?.total || 0
+    const socketRooms = socketMetrics?.connections?.roomCount || 0
+    const parties = socketMetrics?.parties?.count || 0
+
+    // 프로세스 메모리 (v1/v2 호환)
+    const processMemory = socketMetrics?.process?.memory || socketMetrics?.memory
 
     // 응답 구성
     const response = {
       timestamp: Date.now(),
-      serverIP: "144.24.72.143",
+      serverIP: OCI_INTERNAL_IP,
+
+      // OCI API 연동 상태
+      ociStatus: {
+        configured: isOCIConfigured(),
+        configStatus: getOCIConfigStatus(),
+        metricsAvailable: hasOCIMetrics,
+        trafficAvailable: hasMonthlyTraffic,
+        error: ociMetrics && "error" in ociMetrics ? ociMetrics.message : null,
+      },
 
       // 서버 상태
       servers: [
@@ -128,63 +155,70 @@ export async function GET() {
           url: SOCKET_SERVER_URL,
           status: socketMetrics ? ("running" as const) : ("unknown" as const),
           uptime: socketMetrics?.uptime || null,
-          memory: socketMetrics?.memory
+          memory: processMemory
             ? {
-                usedMB: socketMetrics.memory.rssMB,
-                heapUsedMB: socketMetrics.memory.heapUsedMB,
+                usedMB: processMemory.rssMB,
+                heapUsedMB: processMemory.heapUsedMB,
               }
             : null,
         },
         {
           type: "livekit" as const,
           url: LIVEKIT_SERVER_URL.replace("https://", "wss://"),
-          status: livekitHealth ? ("running" as const) : ("unknown" as const),
-          uptime: null, // LiveKit은 별도 메트릭 API 필요
+          status: livekitStatus ? ("running" as const) : ("unknown" as const),
+          uptime: null,
         },
       ],
 
       // 연결 정보
       connections: {
-        total: socketMetrics?.connections?.total || 0,
-        rooms: socketMetrics?.connections?.roomCount || 0,
-        parties: socketMetrics?.parties?.count || 0,
+        socket: {
+          total: socketConnections,
+          rooms: socketRooms,
+          parties: parties,
+        },
+        livekit: {
+          rooms: 0, // LiveKit API 연동 필요
+          participants: 0,
+        },
+        total: socketConnections,
         details: socketMetrics?.connections?.rooms || [],
       },
 
-      // Always Free 리소스 사용량
+      // 리소스 사용량 (OCI Monitoring API 데이터)
       resources: {
         cpu: {
-          used: 0, // OCI API 연동 필요
+          percent: Math.round(cpuPercent * 100) / 100,
+          loadAverage: Math.round(loadAverage * 100) / 100,
           limit: OCI_ALWAYS_FREE_LIMITS.cpu,
-          percent: 0,
-          unit: "OCPU",
+          unit: "%",
+          source: hasOCIMetrics ? "oci-api" : "unavailable",
         },
         memory: {
-          usedGB: Math.round(memoryUsedGB * 100) / 100,
+          percent: Math.round(memoryPercent * 100) / 100,
           limit: OCI_ALWAYS_FREE_LIMITS.memoryGB,
-          percent: calculateResourcePercent(
-            memoryUsedGB,
-            OCI_ALWAYS_FREE_LIMITS.memoryGB
-          ),
+          usedGB: Math.round((memoryPercent / 100) * OCI_ALWAYS_FREE_LIMITS.memoryGB * 100) / 100,
+          totalGB: OCI_ALWAYS_FREE_LIMITS.memoryGB,
           unit: "GB",
+          source: hasOCIMetrics ? "oci-api" : "unavailable",
         },
         storage: {
-          usedGB: 0, // OCI API 연동 필요
+          usedGB: 0, // Block Volume API 필요
+          totalGB: OCI_ALWAYS_FREE_LIMITS.storageGB,
           limit: OCI_ALWAYS_FREE_LIMITS.storageGB,
           percent: 0,
           unit: "GB",
+          source: "unavailable",
         },
         traffic: {
-          usedTB: Math.round(estimatedTrafficTB * 100) / 100,
+          usedTB: Math.round(trafficTB * 1000) / 1000,
+          usedGB: Math.round(trafficGB * 100) / 100,
           limit: OCI_ALWAYS_FREE_LIMITS.trafficTB,
-          percent: calculateResourcePercent(
-            estimatedTrafficTB,
-            OCI_ALWAYS_FREE_LIMITS.trafficTB
-          ),
-          projectedTB: Math.round(costEstimate.projectedExcessTB * 100) / 100 +
-            OCI_ALWAYS_FREE_LIMITS.trafficTB,
+          percent: calculateResourcePercent(trafficTB, OCI_ALWAYS_FREE_LIMITS.trafficTB),
+          projectedTB:
+            Math.round((costEstimate.projectedExcessTB + OCI_ALWAYS_FREE_LIMITS.trafficTB) * 100) / 100,
           unit: "TB",
-          note: "예상치 (실제 OCI API 연동 필요)",
+          source: hasMonthlyTraffic ? "oci-api" : "unavailable",
         },
       },
 
@@ -231,9 +265,9 @@ export async function GET() {
 }
 
 /**
- * Socket.io 서버 메트릭 조회 (직접 IP로 접근)
+ * Socket.io 서버 메트릭 조회
  */
-async function fetchSocketMetrics(): Promise<SocketMetrics | null> {
+async function fetchSocketMetrics(): Promise<SocketServerMetrics | null> {
   try {
     const response = await fetch(`${SOCKET_INTERNAL_URL}/metrics`, {
       cache: "no-store",
@@ -253,18 +287,18 @@ async function fetchSocketMetrics(): Promise<SocketMetrics | null> {
 }
 
 /**
- * LiveKit 서버 상태 조회 (직접 IP로 접근)
+ * LiveKit 서버 상태 조회
  */
-async function fetchLiveKitHealth(): Promise<LiveKitHealth | null> {
+async function fetchLiveKitHealth(): Promise<{ status: string } | null> {
   try {
     const response = await fetch(LIVEKIT_INTERNAL_URL, {
       cache: "no-store",
       signal: AbortSignal.timeout(5000),
     })
 
-    // LiveKit은 404를 반환해도 서버가 동작 중인 것
+    // LiveKit은 404를 반환해도 서버가 동작 중
     if (response.ok || response.status === 404) {
-      return { status: "ok", timestamp: Date.now() }
+      return { status: "ok" }
     }
 
     return null
@@ -272,29 +306,4 @@ async function fetchLiveKitHealth(): Promise<LiveKitHealth | null> {
     console.warn("[OCI Metrics] LiveKit health error:", error)
     return null
   }
-}
-
-/**
- * 트래픽 추정 (연결 수 * 업타임 기반)
- *
- * 실제 OCI API 연동 전 임시 추정값
- * - 평균 연결당 ~500KB/분 (영상 통화 시)
- * - 텍스트만: ~1KB/분
- */
-function calculateEstimatedTraffic(
-  connections: number,
-  uptimeSeconds: number
-): number {
-  // 간단한 추정: 연결당 평균 100KB/분 (텍스트 + 가끔 영상)
-  const avgBytesPerMinutePerConnection = 100 * 1024 // 100KB
-  const uptimeMinutes = uptimeSeconds / 60
-
-  // 평균 동시 연결 수 추정 (현재 연결의 50%)
-  const avgConnections = connections * 0.5
-
-  const totalBytes = avgConnections * avgBytesPerMinutePerConnection * uptimeMinutes
-  const totalTB = totalBytes / (1024 * 1024 * 1024 * 1024)
-
-  // 최소 0.01TB 반환 (서버 운영 중이면)
-  return Math.max(0.01, totalTB)
 }
