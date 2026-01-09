@@ -21,17 +21,17 @@ model User {
   email         String    @unique
   emailVerified DateTime?
   image         String?
-  password      String?   // Credentials 로그인용 (OAuth 사용자는 null)
+  password      String? // Credentials 로그인용 (OAuth 사용자는 null)
 
   // Phase 6: 플랫폼 관리자 플래그
-  isSuperAdmin  Boolean   @default(false)
+  isSuperAdmin Boolean @default(false)
 
   // 녹화 동의 (법적 준수)
   agreedToRecording   Boolean   @default(false)
   agreedToRecordingAt DateTime?
 
   // 캐릭터 커스터마이징 (Phase 1)
-  avatarConfig        Json?     // AvatarConfigSchema 형식
+  avatarConfig Json? // AvatarConfigSchema 형식
 
   // Relations
   accounts            Account[]
@@ -43,9 +43,9 @@ model User {
   generationHistories GenerationHistory[]
 
   // 메타버스 Relations
-  spaces           Space[]          // 소유한 공간
-  spaceEventLogs   SpaceEventLog[]  // 공간 이벤트 로그
-  spaceMemberships SpaceMember[]    // Phase 6: 공간 멤버십
+  spaces           Space[] // 소유한 공간
+  spaceEventLogs   SpaceEventLog[] // 공간 이벤트 로그
+  spaceMemberships SpaceMember[] // Phase 6: 공간 멤버십
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -139,7 +139,7 @@ enum SubscriptionStatus {
 // 6. CreditTransaction (사용량 추적)
 // ============================================
 model CreditTransaction {
-  id      String @id @default(cuid())
+  id      String                @id @default(cuid())
   userId  String
   type    CreditTransactionType
   amount  Int
@@ -165,10 +165,10 @@ enum CreditTransactionType {
 // 7. Project (리소스 - 커스터마이징됨)
 // ============================================
 model Project {
-  id          String   @id @default(cuid())
+  id          String        @id @default(cuid())
   userId      String
   title       String
-  description String?  @db.Text
+  description String?       @db.Text
   status      ProjectStatus @default(ACTIVE)
   metadata    Json?
 
@@ -271,14 +271,14 @@ model RelationDefinition {
 // 12. Template (맵 템플릿)
 // ============================================
 model Template {
-  id          String       @id @default(cuid())
-  key         TemplateKey  @unique
+  id          String      @id @default(cuid())
+  key         TemplateKey @unique
   name        String
   description String?
-  version     String       @default("1.0.0")
-  assetsPath  String       // 맵 파일 경로
-  previewUrl  String?      // 미리보기 이미지
-  isActive    Boolean      @default(true)
+  version     String      @default("1.0.0")
+  assetsPath  String // 맵 파일 경로
+  previewUrl  String? // 미리보기 이미지
+  isActive    Boolean     @default(true)
 
   spaces Space[]
 
@@ -287,34 +287,34 @@ model Template {
 }
 
 enum TemplateKey {
-  OFFICE     // 오피스
-  CLASSROOM  // 강의실/세미나
-  LOUNGE     // 커뮤니티 라운지
+  OFFICE // 오피스
+  CLASSROOM // 강의실/세미나
+  LOUNGE // 커뮤니티 라운지
 }
 
 // ============================================
 // 13. Space (공간/월드)
 // ============================================
 model Space {
-  id          String      @id @default(cuid())
+  id          String  @id @default(cuid())
   name        String
-  description String?     @db.Text
+  description String? @db.Text
   ownerId     String
   templateId  String
 
   // 접근 제어
   accessType   SpaceAccessType @default(PUBLIC)
-  accessSecret String?         // PASSWORD 타입일 때 사용
+  accessSecret String? // PASSWORD 타입일 때 사용
   inviteCode   String          @unique @default(cuid())
 
   // 브랜딩
   logoUrl        String?
-  primaryColor   String?  // hex color
+  primaryColor   String? // hex color
   loadingMessage String?
 
   // 상태
-  status    SpaceStatus @default(ACTIVE)
-  maxUsers  Int         @default(50)
+  status   SpaceStatus @default(ACTIVE)
+  maxUsers Int         @default(50)
 
   // Relations
   owner    User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
@@ -322,9 +322,9 @@ model Space {
 
   eventLogs     SpaceEventLog[]
   guestSessions GuestSession[]
-  members       SpaceMember[]    // Phase 6: 공간 멤버
-  chatMessages  ChatMessage[]    // Phase 6: 채팅 메시지
-  mapObjects    MapObject[]      // 맵 오브젝트 (에디터 배치)
+  members       SpaceMember[] // Phase 6: 공간 멤버
+  chatMessages  ChatMessage[] // Phase 6: 채팅 메시지
+  mapObjects    MapObject[] // 맵 오브젝트 (에디터 배치)
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -336,8 +336,8 @@ model Space {
 }
 
 enum SpaceAccessType {
-  PUBLIC   // 누구나 입장
-  PRIVATE  // 초대된 사용자만
+  PUBLIC // 누구나 입장
+  PRIVATE // 초대된 사용자만
   PASSWORD // 암호 입력 시 입장
 }
 
@@ -360,17 +360,17 @@ model GuestSession {
   sessionToken String   @unique @default(cuid())
   expiresAt    DateTime
 
-  space     Space           @relation(fields: [spaceId], references: [id], onDelete: Cascade)
-  eventLogs SpaceEventLog[]
-  spaceMemberships SpaceMember[]  // Phase 6: 게스트 멤버십
+  space            Space           @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  eventLogs        SpaceEventLog[]
+  spaceMemberships SpaceMember[] // Phase 6: 게스트 멤버십
 
   createdAt DateTime @default(now())
 
   @@index([spaceId])
   @@index([sessionToken])
   // ⚡ 복합 인덱스: 통계 쿼리 최적화 (2025-12-09)
-  @@index([spaceId, createdAt])  // 주간 방문자 쿼리
-  @@index([spaceId, nickname])   // 재방문율 계산
+  @@index([spaceId, createdAt]) // 주간 방문자 쿼리
+  @@index([spaceId, nickname]) // 재방문율 계산
 }
 
 // ============================================
@@ -379,10 +379,11 @@ model GuestSession {
 model SpaceEventLog {
   id             String         @id @default(cuid())
   spaceId        String
-  userId         String?        // 인증된 사용자
-  guestSessionId String?        // 게스트 사용자
+  userId         String? // 인증된 사용자
+  guestSessionId String? // 게스트 사용자
+  participantId  String? // LiveKit participant ID (사용량 측정용)
   eventType      SpaceEventType
-  payload        Json?          // 추가 데이터
+  payload        Json? // 추가 데이터
 
   space        Space         @relation(fields: [spaceId], references: [id], onDelete: Cascade)
   user         User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
@@ -398,24 +399,29 @@ model SpaceEventLog {
   // ⚡ 복합 인덱스: 통계 쿼리 최적화 (2025-12-09)
   @@index([spaceId, eventType, createdAt])
   // ⚡ 4.1: groupBy 쿼리 최적화 (2026-01-09)
-  @@index([spaceId, eventType, userId])          // 인증 사용자 groupBy용
-  @@index([spaceId, eventType, guestSessionId])  // 게스트 groupBy용
+  @@index([spaceId, eventType, userId]) // 인증 사용자 groupBy용
+  @@index([spaceId, eventType, guestSessionId]) // 게스트 groupBy용
 }
 
 enum SpaceEventType {
-  ENTER        // 입장
-  EXIT         // 퇴장
-  INTERACTION  // 오브젝트 상호작용
-  CHAT         // 채팅
-  VOICE_START  // 음성 시작
-  VOICE_END    // 음성 종료
+  ENTER // 입장
+  EXIT // 퇴장
+  INTERACTION // 오브젝트 상호작용
+  CHAT // 채팅
+  VOICE_START // 음성 시작
+  VOICE_END // 음성 종료
+  // 사용량 측정용 (LiveKit)
+  VIDEO_START // 영상 시작
+  VIDEO_END // 영상 종료
+  SCREEN_SHARE_START // 화면공유 시작
+  SCREEN_SHARE_END // 화면공유 종료
   // Phase 6: 관리 이벤트
-  MEMBER_MUTED     // 음소거
-  MEMBER_UNMUTED   // 음소거 해제
-  MEMBER_KICKED    // 강퇴
-  MESSAGE_DELETED  // 메시지 삭제
-  STAFF_ASSIGNED   // STAFF 지정
-  STAFF_REMOVED    // STAFF 해제
+  MEMBER_MUTED // 음소거
+  MEMBER_UNMUTED // 음소거 해제
+  MEMBER_KICKED // 강퇴
+  MESSAGE_DELETED // 메시지 삭제
+  STAFF_ASSIGNED // STAFF 지정
+  STAFF_REMOVED // STAFF 해제
 }
 
 // ============================================
@@ -424,16 +430,16 @@ enum SpaceEventType {
 
 // 공간 내 역할
 enum SpaceRole {
-  OWNER       // 공간 소유자
-  STAFF       // 운영 스탭
+  OWNER // 공간 소유자
+  STAFF // 운영 스탭
   PARTICIPANT // 일반 참가자
 }
 
 // 채팅 제재 상태
 enum ChatRestriction {
-  NONE        // 제한 없음
-  MUTED       // 채팅 금지
-  BANNED      // 강퇴됨
+  NONE // 제한 없음
+  MUTED // 채팅 금지
+  BANNED // 강퇴됨
 }
 
 // 메시지 발신자 타입
@@ -444,10 +450,10 @@ enum SenderType {
 
 // 메시지 타입
 enum MessageType {
-  MESSAGE      // 공개 채팅
-  WHISPER      // 귓속말
-  PARTY        // 파티 채팅
-  SYSTEM       // 시스템 메시지
+  MESSAGE // 공개 채팅
+  WHISPER // 귓속말
+  PARTY // 파티 채팅
+  SYSTEM // 시스템 메시지
   ANNOUNCEMENT // 공지
 }
 
@@ -455,24 +461,24 @@ enum MessageType {
 // 16. SpaceMember (공간 멤버십)
 // ============================================
 model SpaceMember {
-  id               String          @id @default(cuid())
-  spaceId          String
-  userId           String?         // 인증된 사용자
-  guestSessionId   String?         // 게스트 세션 ID
+  id             String  @id @default(cuid())
+  spaceId        String
+  userId         String? // 인증된 사용자
+  guestSessionId String? // 게스트 세션 ID
 
-  displayName      String?         // 공간 내 표시 이름 (닉네임)
+  displayName      String? // 공간 내 표시 이름 (닉네임)
   role             SpaceRole       @default(PARTICIPANT)
   restriction      ChatRestriction @default(NONE)
-  restrictedUntil  DateTime?       // 일시적 음소거 종료 시간
-  restrictedBy     String?         // 제재 실행자 ID
-  restrictedReason String?         // 제재 사유
+  restrictedUntil  DateTime? // 일시적 음소거 종료 시간
+  restrictedBy     String? // 제재 실행자 ID
+  restrictedReason String? // 제재 사유
 
-  space            Space           @relation(fields: [spaceId], references: [id], onDelete: Cascade)
-  user             User?           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  guestSession     GuestSession?   @relation(fields: [guestSessionId], references: [id], onDelete: Cascade)
+  space        Space         @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  user         User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  guestSession GuestSession? @relation(fields: [guestSessionId], references: [id], onDelete: Cascade)
 
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([spaceId, userId])
   @@unique([spaceId, guestSessionId])
@@ -485,14 +491,14 @@ model SpaceMember {
 // 17. MapObject (맵 오브젝트 - 에디터 배치)
 // ============================================
 model MapObject {
-  id             String   @id @default(cuid())
-  spaceId        String
-  assetId        String   // 에셋 레지스트리 ID (e.g., "portal", "chair")
+  id      String @id @default(cuid())
+  spaceId String
+  assetId String // 에셋 레지스트리 ID (e.g., "portal", "chair")
 
   // 위치 정보
-  positionX      Int      // 그리드 X 좌표
-  positionY      Int      // 그리드 Y 좌표
-  rotation       Int      @default(0) // 0, 90, 180, 270
+  positionX Int // 그리드 X 좌표
+  positionY Int // 그리드 Y 좌표
+  rotation  Int @default(0) // 0, 90, 180, 270
 
   // 페어 오브젝트 연결 (포털 등)
   linkedObjectId String?    @unique // 연결된 오브젝트 ID (1:1 관계)
@@ -500,16 +506,16 @@ model MapObject {
   linkedBy       MapObject? @relation("ObjectPair")
 
   // 커스텀 데이터
-  customData     Json?    // pairType, pairRole 등
+  customData Json? // pairType, pairRole 등
 
   // 배치 정보
-  placedBy       String   // userId 또는 guestSessionId
-  placedByType   SenderType @default(USER) // USER or GUEST
+  placedBy     String // userId 또는 guestSessionId
+  placedByType SenderType @default(USER) // USER or GUEST
 
-  space          Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  space Space @relation(fields: [spaceId], references: [id], onDelete: Cascade)
 
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([spaceId])
   @@index([assetId])
@@ -520,25 +526,125 @@ model MapObject {
 // 18. ChatMessage (채팅 메시지 영속화)
 // ============================================
 model ChatMessage {
-  id          String      @id @default(cuid())
-  spaceId     String
-  senderId    String?     // userId 또는 guestSessionId
-  senderType  SenderType  // USER or GUEST
-  senderName  String      // 표시 이름
+  id         String     @id @default(cuid())
+  spaceId    String
+  senderId   String? // userId 또는 guestSessionId
+  senderType SenderType // USER or GUEST
+  senderName String // 표시 이름
 
-  content     String      @db.Text
-  type        MessageType @default(MESSAGE)
-  targetId    String?     // whisper 대상 or partyId
+  content  String      @db.Text
+  type     MessageType @default(MESSAGE)
+  targetId String? // whisper 대상 or partyId
 
-  isDeleted   Boolean     @default(false)
-  deletedBy   String?     // 삭제 실행자 ID
-  deletedAt   DateTime?
+  isDeleted Boolean   @default(false)
+  deletedBy String? // 삭제 실행자 ID
+  deletedAt DateTime?
 
-  space       Space       @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  space Space @relation(fields: [spaceId], references: [id], onDelete: Cascade)
 
-  createdAt   DateTime    @default(now())
+  createdAt DateTime @default(now())
 
   @@index([spaceId, createdAt])
   @@index([senderId])
   @@index([type])
+}
+
+// ============================================
+// 19. ResourceSnapshot (OCI 리소스 스냅샷)
+// 5분마다 수집, 7일 보존 후 삭제
+// ============================================
+model ResourceSnapshot {
+  id        String   @id @default(cuid())
+  timestamp DateTime @default(now())
+
+  // OCI 리소스 메트릭
+  cpuPercent     Float // CPU 사용률 (%)
+  memoryPercent  Float // 메모리 사용률 (%)
+  memoryMB       Float // 메모리 절대값 (MB)
+  trafficGB      Float // 월 누적 트래픽 (GB)
+  trafficDeltaMB Float // 5분간 트래픽 증가량 (MB)
+
+  // 동시 접속 정보 (상관관계 분석용)
+  concurrentUsers Int // 전체 동시접속
+  activeRooms     Int // 활성 공간 수
+
+  @@index([timestamp])
+}
+
+// ============================================
+// 20. UsageHourly (시간별 집계)
+// 매시간 Raw 데이터 집계, 90일 보존 후 삭제
+// ============================================
+model UsageHourly {
+  id        String   @id @default(cuid())
+  hourStart DateTime // 시간 시작 (예: 2026-01-10 10:00:00)
+
+  spaceId String? // 특정 공간 (null이면 전체)
+
+  // 접속 통계
+  peakUsers     Int // 시간 내 최대 동시접속
+  avgUsers      Float // 평균 동시접속
+  totalSessions Int // 시작된 세션 수
+
+  // 미디어 사용량 (분 단위)
+  videoMinutes       Float // 영상 사용 분
+  audioMinutes       Float // 음성 사용 분
+  screenShareMinutes Float // 화면공유 분
+
+  // 채팅 통계
+  chatCount Int // 채팅 메시지 수
+
+  // 리소스 통계
+  avgCpuPercent    Float
+  avgMemoryPercent Float
+  trafficMB        Float // 시간 동안 트래픽 (MB)
+
+  // 도출 메트릭
+  trafficPerVideoMin Float? // MB/영상-분 (상관관계)
+
+  createdAt DateTime @default(now())
+
+  @@unique([hourStart, spaceId])
+  @@index([hourStart])
+  @@index([spaceId])
+}
+
+// ============================================
+// 21. UsageDaily (일별 집계)
+// 매일 자정 집계, 영구 보존
+// ============================================
+model UsageDaily {
+  id   String   @id @default(cuid())
+  date DateTime @db.Date
+
+  spaceId String? // 특정 공간 (null이면 전체)
+
+  // 접속 통계
+  uniqueUsers       Int // 순 방문자
+  peakConcurrent    Int // 최대 동시접속
+  totalMinutes      Float // 총 체류시간 (분)
+  avgSessionMinutes Float // 평균 세션 길이
+
+  // 미디어 사용량 (분 단위)
+  videoMinutes       Float
+  audioMinutes       Float
+  screenShareMinutes Float
+
+  // 채팅 통계
+  chatCount Int
+
+  // 리소스 통계
+  avgCpuPercent    Float
+  avgMemoryPercent Float
+  trafficGB        Float // 일일 트래픽 (GB)
+
+  // 도출 메트릭 (비용 예측용)
+  gbPerVideoHour Float? // GB/영상-시간 (핵심 공식)
+  gbPerUserHour  Float? // GB/사용자-시간
+
+  createdAt DateTime @default(now())
+
+  @@unique([date, spaceId])
+  @@index([date])
+  @@index([spaceId])
 }

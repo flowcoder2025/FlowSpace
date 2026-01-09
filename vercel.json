@@ -21,6 +21,14 @@
     {
       "path": "/api/cron/cleanup-sessions",
       "schedule": "0 19 * * *"
+    },
+    {
+      "path": "/api/cron/collect-metrics",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/aggregate-usage",
+      "schedule": "5 * * * *"
     }
   ]
 }

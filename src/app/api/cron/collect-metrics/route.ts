@@ -1,0 +1,158 @@
+/**
+ * 리소스 스냅샷 수집 Cron API
+ *
+ * 5분마다 실행되어 OCI 리소스 사용량을 수집하고
+ * ResourceSnapshot 테이블에 저장합니다.
+ *
+ * POST /api/cron/collect-metrics
+ *
+ * 트리거: Vercel Cron 또는 수동 호출
+ */
+
+import { NextRequest, NextResponse } from "next/server"
+import { prisma } from "@/lib/prisma"
+import {
+  getOCIInstanceMetrics,
+  getMonthlyNetworkTraffic,
+  isOCIConfigured,
+} from "@/lib/utils/oci-monitoring"
+
+// OCI 서버 내부 URL (서버 사이드 전용)
+const OCI_INTERNAL_IP = process.env.OCI_INTERNAL_IP || "144.24.72.143"
+const SOCKET_INTERNAL_URL = `http://${OCI_INTERNAL_IP}:3001`
+
+// Cron secret for verification (Vercel Cron)
+const CRON_SECRET = process.env.CRON_SECRET
+
+// ============================================
+// POST /api/cron/collect-metrics
+// ============================================
+export async function POST(request: NextRequest) {
+  try {
+    // 1. Cron 인증 검증 (Vercel Cron 또는 수동 호출)
+    const authHeader = request.headers.get("authorization")
+
+    if (CRON_SECRET && authHeader !== `Bearer ${CRON_SECRET}`) {
+      // 개발 환경에서는 경고만
+      if (process.env.NODE_ENV !== "development") {
+        return NextResponse.json(
+          { error: "Unauthorized" },
+          { status: 401 }
+        )
+      }
+      console.warn("[Collect Metrics] Running without CRON_SECRET in development")
+    }
+
+    // 2. 메트릭 수집 (병렬 실행)
+    const [socketMetrics, ociMetrics, monthlyTraffic] = await Promise.all([
+      fetchSocketMetrics(),
+      isOCIConfigured() ? getOCIInstanceMetrics() : Promise.resolve(null),
+      isOCIConfigured() ? getMonthlyNetworkTraffic() : Promise.resolve(null),
+    ])
+
+    // 3. 메트릭 추출
+    const hasOCIMetrics = ociMetrics && !("error" in ociMetrics)
+    const hasMonthlyTraffic = monthlyTraffic && !("error" in monthlyTraffic)
+
+    // CPU, 메모리 사용량
+    const cpuPercent = hasOCIMetrics ? ociMetrics.cpu.utilizationPercent : 0
+    const memoryPercent = hasOCIMetrics ? ociMetrics.memory.utilizationPercent : 0
+    const memoryMB = memoryPercent > 0 ? (memoryPercent / 100) * 24 * 1024 : 0 // 24GB to MB
+
+    // 트래픽 (월간 누적)
+    const trafficGB = hasMonthlyTraffic
+      ? monthlyTraffic.bytesOut / (1024 ** 3)
+      : 0
+
+    // 연결 정보
+    const concurrentUsers = socketMetrics?.connections?.total || 0
+    const activeRooms = socketMetrics?.connections?.roomCount || 0
+
+    // 4. 이전 스냅샷 조회 (델타 계산용)
+    const lastSnapshot = await prisma.resourceSnapshot.findFirst({
+      orderBy: { timestamp: "desc" },
+      select: { trafficGB: true },
+    })
+
+    // 델타 계산 (MB 단위)
+    const trafficDeltaMB = lastSnapshot
+      ? (trafficGB - lastSnapshot.trafficGB) * 1024
+      : 0
+
+    // 델타가 음수면 월초 리셋으로 간주
+    const adjustedDeltaMB = trafficDeltaMB < 0 ? trafficGB * 1024 : trafficDeltaMB
+
+    // 5. 스냅샷 저장
+    const snapshot = await prisma.resourceSnapshot.create({
+      data: {
+        cpuPercent,
+        memoryPercent,
+        memoryMB,
+        trafficGB,
+        trafficDeltaMB: adjustedDeltaMB,
+        concurrentUsers,
+        activeRooms,
+      },
+    })
+
+    console.log(`[Collect Metrics] Snapshot saved: ${snapshot.id}`)
+    console.log(`  CPU: ${cpuPercent.toFixed(2)}%, Memory: ${memoryPercent.toFixed(2)}%`)
+    console.log(`  Traffic: ${trafficGB.toFixed(3)} GB, Delta: ${adjustedDeltaMB.toFixed(2)} MB`)
+    console.log(`  Users: ${concurrentUsers}, Rooms: ${activeRooms}`)
+
+    return NextResponse.json({
+      success: true,
+      snapshotId: snapshot.id,
+      metrics: {
+        cpuPercent: Math.round(cpuPercent * 100) / 100,
+        memoryPercent: Math.round(memoryPercent * 100) / 100,
+        trafficGB: Math.round(trafficGB * 1000) / 1000,
+        trafficDeltaMB: Math.round(adjustedDeltaMB * 100) / 100,
+        concurrentUsers,
+        activeRooms,
+      },
+    })
+  } catch (error) {
+    console.error("[Collect Metrics] Error:", error)
+    return NextResponse.json(
+      { error: "Failed to collect metrics" },
+      { status: 500 }
+    )
+  }
+}
+
+// GET 메서드도 지원 (Vercel Cron 호환)
+export async function GET(request: NextRequest) {
+  // Vercel Cron은 GET 요청을 보냄
+  return POST(request)
+}
+
+// ============================================
+// Helper: Socket.io 서버 메트릭 조회
+// ============================================
+interface SocketServerMetrics {
+  connections?: {
+    total: number
+    rooms?: Array<{ spaceId: string; connections: number }>
+    roomCount: number
+  }
+}
+
+async function fetchSocketMetrics(): Promise<SocketServerMetrics | null> {
+  try {
+    const response = await fetch(`${SOCKET_INTERNAL_URL}/metrics`, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(5000),
+    })
+
+    if (!response.ok) {
+      console.warn(`[Collect Metrics] Socket.io metrics failed: ${response.status}`)
+      return null
+    }
+
+    return await response.json()
+  } catch (error) {
+    console.warn("[Collect Metrics] Socket.io metrics error:", error)
+    return null
+  }
+}
