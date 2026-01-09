@@ -4,6 +4,10 @@
     {
       "path": "/api/cron/cleanup-messages",
       "schedule": "0 18 * * *"
+    },
+    {
+      "path": "/api/cron/cleanup-sessions",
+      "schedule": "0 19 * * *"
     }
   ]
 }
