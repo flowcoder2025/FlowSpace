@@ -238,25 +238,29 @@ export async function getMonthlyNetworkTraffic(): Promise<{
     const now = new Date()
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
 
+    // OCI 메트릭은 bytes/sec (rate)를 반환
+    // 1시간 간격으로 mean()을 구하고, 시간(3600초)을 곱해서 실제 바이트 계산
     const request: oci.monitoring.requests.SummarizeMetricsDataRequest = {
       compartmentId: OCI_CONFIG.compartmentId,
       summarizeMetricsDataDetails: {
         namespace: "oci_computeagent",
-        query: `NetworksBytesOut[1d]{resourceId = "${OCI_CONFIG.instanceId}"}.sum()`,
+        query: `NetworksBytesOut[1h]{resourceId = "${OCI_CONFIG.instanceId}"}.mean()`,
         startTime: monthStart,
         endTime: now,
-        resolution: "1d",
+        resolution: "1h",
       },
     }
 
     const response = await client.summarizeMetricsData(request)
 
     let totalBytesOut = 0
+    const SECONDS_PER_HOUR = 3600
     if (response.items && response.items.length > 0) {
       const datapoints = response.items[0].aggregatedDatapoints
       if (datapoints) {
         for (const dp of datapoints) {
-          totalBytesOut += dp.value ?? 0
+          // mean (bytes/sec) * 3600초 = 시간당 바이트
+          totalBytesOut += (dp.value ?? 0) * SECONDS_PER_HOUR
         }
       }
     }
