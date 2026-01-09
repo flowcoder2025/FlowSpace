@@ -8,6 +8,7 @@
 
 import { createServer } from "http"
 import { createHash } from "crypto"
+import { execSync } from "child_process"
 import { Server } from "socket.io"
 import { PrismaClient, type MapObject } from "@prisma/client"
 import type {
@@ -541,6 +542,46 @@ function formatUptime(seconds: number): string {
   return parts.join(" ")
 }
 
+/**
+ * 디스크 스토리지 사용량 조회
+ * df 명령어로 루트 파티션 정보를 파싱
+ */
+interface StorageMetrics {
+  totalGB: number
+  usedGB: number
+  availableGB: number
+  usedPercent: number
+  mountPoint: string
+}
+
+function getStorageMetrics(): StorageMetrics | null {
+  try {
+    // df -B1 /: 루트 파티션 정보를 바이트 단위로 조회
+    const output = execSync("df -B1 / 2>/dev/null | tail -1", { encoding: "utf-8" })
+    const parts = output.trim().split(/\s+/)
+
+    if (parts.length >= 6) {
+      const totalBytes = parseInt(parts[1], 10)
+      const usedBytes = parseInt(parts[2], 10)
+      const availableBytes = parseInt(parts[3], 10)
+      const usedPercent = parseInt(parts[4].replace("%", ""), 10)
+      const mountPoint = parts[5]
+
+      return {
+        totalGB: Math.round((totalBytes / (1024 ** 3)) * 100) / 100,
+        usedGB: Math.round((usedBytes / (1024 ** 3)) * 100) / 100,
+        availableGB: Math.round((availableBytes / (1024 ** 3)) * 100) / 100,
+        usedPercent,
+        mountPoint,
+      }
+    }
+    return null
+  } catch (error) {
+    console.error("[Socket] Failed to get storage metrics:", error)
+    return null
+  }
+}
+
 // Create HTTP server for health checks (Railway requirement)
 const httpServer = createServer((req, res) => {
   const url = req.url || ""
@@ -590,9 +631,12 @@ const httpServer = createServer((req, res) => {
     const uptimeSeconds = process.uptime()
     const startTime = Date.now() - (uptimeSeconds * 1000)
 
+    // 스토리지 사용량 조회
+    const storage = getStorageMetrics()
+
     const response = {
       server: "socket.io",
-      version: "1.0.0",
+      version: "2.0.0", // 스토리지 메트릭 추가
       timestamp: Date.now(),
       uptime: {
         seconds: Math.floor(uptimeSeconds),
@@ -612,6 +656,14 @@ const httpServer = createServer((req, res) => {
         rssMB: Math.round(memUsage.rss / 1024 / 1024),
         heapUsedMB: Math.round(memUsage.heapUsed / 1024 / 1024),
       },
+      // 🆕 스토리지 메트릭 (v2.0.0)
+      storage: storage ? {
+        totalGB: storage.totalGB,
+        usedGB: storage.usedGB,
+        availableGB: storage.availableGB,
+        usedPercent: storage.usedPercent,
+        mountPoint: storage.mountPoint,
+      } : null,
       connections: {
         total: totalConnections,
         rooms: roomStats,

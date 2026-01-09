@@ -71,6 +71,14 @@ interface SocketServerMetrics {
     rssMB: number
     heapUsedMB: number
   }
+  // v2.0.0 스토리지 메트릭
+  storage?: {
+    totalGB: number
+    usedGB: number
+    availableGB: number
+    usedPercent: number
+    mountPoint: string
+  } | null
 }
 
 export async function GET() {
@@ -203,12 +211,14 @@ export async function GET() {
           source: hasOCIMetrics ? "oci-api" : "unavailable",
         },
         storage: {
-          usedGB: 0, // Block Volume API 필요
-          totalGB: OCI_ALWAYS_FREE_LIMITS.storageGB,
+          usedGB: socketMetrics?.storage?.usedGB ?? 0,
+          totalGB: socketMetrics?.storage?.totalGB ?? OCI_ALWAYS_FREE_LIMITS.storageGB,
           limit: OCI_ALWAYS_FREE_LIMITS.storageGB,
-          percent: 0,
+          percent: socketMetrics?.storage?.usedPercent ?? 0,
+          availableGB: socketMetrics?.storage?.availableGB ?? 0,
           unit: "GB",
-          source: "unavailable",
+          source: socketMetrics?.storage ? "socket-server" : "unavailable",
+          mountPoint: socketMetrics?.storage?.mountPoint ?? null,
         },
         traffic: {
           usedTB: Math.round(trafficTB * 1000) / 1000,
