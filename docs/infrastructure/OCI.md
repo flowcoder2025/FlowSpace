@@ -2,7 +2,12 @@
 
 > **목적**: LiveKit + Socket.io를 Oracle Always Free에 통합 배포하여 인프라 비용 $0 달성
 > **작성일**: 2026-01-07
-> **상태**: 동업자 협의 후 진행 예정
+> **상태**: ✅ 배포 완료 (2026-01-09)
+>
+> **운영 중인 서버**:
+> - Socket.io: `https://space-socket.flow-coder.com`
+> - LiveKit: `wss://space-livekit.flow-coder.com`
+> - OCI IP: `144.24.72.143`
 
 ---
 
@@ -161,23 +166,23 @@
 
 통합 서버에는 2개의 서브도메인이 필요합니다.
 
-### 4.1 자체 도메인 사용 (추천)
+### 4.1 자체 도메인 사용 (현재 설정)
 
 ```
-flowspace.app             → Vercel (Next.js)
-socket.flowspace.app      → Oracle (Socket.io)
-livekit.flowspace.app     → Oracle (LiveKit)
+space.flow-coder.com        → Vercel (Next.js)
+space-socket.flow-coder.com → Oracle (Socket.io) - 144.24.72.143
+space-livekit.flow-coder.com → Oracle (LiveKit) - 144.24.72.143
 ```
 
 **DNS 설정**:
 ```
 Type: A
-Name: socket
-Value: [Oracle Public IP]
+Name: space-socket
+Value: 144.24.72.143
 
 Type: A
-Name: livekit
-Value: [Oracle Public IP]
+Name: space-livekit
+Value: 144.24.72.143
 ```
 
 ### 4.2 무료 도메인 서비스
@@ -371,16 +376,32 @@ logging:
 
 **~/flowspace/caddy/Caddyfile**:
 ```
-# Socket.io
-socket.yourdomain.com {
-    reverse_proxy localhost:3001
+# Socket.io (WebSocket 지원)
+space-socket.flow-coder.com {
+    reverse_proxy localhost:3001 {
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+        header_up Connection {>Connection}
+        header_up Upgrade {>Upgrade}
+    }
 }
 
 # LiveKit
-livekit.yourdomain.com {
-    reverse_proxy localhost:7880
+space-livekit.flow-coder.com {
+    reverse_proxy localhost:7880 {
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+        header_up Connection {>Connection}
+        header_up Upgrade {>Upgrade}
+    }
 }
 ```
+
+> 📁 실제 Caddyfile: `/terraform/flowspace-stack/caddy/Caddyfile` 참조
 
 #### Step 3.8: 서비스 시작
 ```bash
@@ -409,10 +430,10 @@ API Secret: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 **.env.production** (로컬):
 ```env
 # Socket.io - Oracle Cloud
-NEXT_PUBLIC_SOCKET_URL="https://socket.yourdomain.com"
+NEXT_PUBLIC_SOCKET_URL="https://space-socket.flow-coder.com"
 
 # LiveKit - Oracle Cloud Self-hosted
-NEXT_PUBLIC_LIVEKIT_URL="wss://livekit.yourdomain.com"
+NEXT_PUBLIC_LIVEKIT_URL="wss://space-livekit.flow-coder.com"
 LIVEKIT_API_KEY="APIFlowspace"
 LIVEKIT_API_SECRET="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 ```
@@ -433,10 +454,10 @@ vercel --prod
 #### Step 5.1: 서버 상태 확인
 ```bash
 # Socket.io
-curl https://socket.yourdomain.com/health
+curl https://space-socket.flow-coder.com/health
 
 # LiveKit
-curl https://livekit.yourdomain.com
+curl https://space-livekit.flow-coder.com
 ```
 
 #### Step 5.2: FlowSpace 테스트
@@ -736,33 +757,33 @@ final_message: "Cloud-init completed in $UPTIME seconds"
 ## 7. 체크리스트
 
 ### 배포 전
-- [ ] 예산 알림 설정 ($1)
-- [ ] SSH 키 생성
-- [ ] Compartment OCID 확인
-- [ ] 도메인 결정
+- [x] 예산 알림 설정 ($1)
+- [x] SSH 키 생성
+- [x] Compartment OCID 확인
+- [x] 도메인 결정 (space-socket.flow-coder.com, space-livekit.flow-coder.com)
 
 ### 배포
-- [ ] Terraform Apply 완료
-- [ ] Public IP 확인
-- [ ] SSH 접속 확인
-- [ ] Docker 동작 확인
+- [x] Terraform Apply 완료
+- [x] Public IP 확인 (144.24.72.143)
+- [x] SSH 접속 확인
+- [x] Docker 동작 확인
 
 ### 서비스 설정
-- [ ] docker-compose.yml 생성
-- [ ] Socket.io Dockerfile 생성
-- [ ] livekit.yaml 생성
-- [ ] Caddyfile 생성
-- [ ] docker-compose up -d
+- [x] docker-compose.yml 생성
+- [x] Socket.io Dockerfile 생성
+- [x] livekit.yaml 생성
+- [x] Caddyfile 생성 (Cloudflare Origin Certificate + @websocket 매처)
+- [x] docker-compose up -d
 
 ### DNS & SSL
-- [ ] DNS A 레코드 설정 (socket, livekit)
-- [ ] SSL 자동 발급 확인 (Caddy)
+- [x] DNS A 레코드 설정 (Cloudflare → 144.24.72.143)
+- [x] SSL 설정 완료 (Cloudflare Origin Certificate, Full Strict 모드)
 
 ### FlowSpace 연동
-- [ ] .env.production 업데이트
-- [ ] Vercel 환경변수 업데이트
-- [ ] Vercel 재배포
-- [ ] 통합 테스트
+- [x] .env.production 업데이트
+- [x] Vercel 환경변수 업데이트 (konarae/flowspace)
+- [x] Vercel 재배포
+- [x] 통합 테스트 완료 (2026-01-09)
 
 ---
 
@@ -794,11 +815,52 @@ exit && ssh -i ~/.ssh/flowspace-oci ubuntu@[IP]
 ### SSL 인증서 실패
 ```bash
 # DNS 전파 확인
-dig socket.yourdomain.com
-dig livekit.yourdomain.com
+dig space-socket.flow-coder.com
+dig space-livekit.flow-coder.com
 
 # Caddy 로그
 docker-compose logs caddy
+```
+
+### WebSocket 400 Bad Request (Cloudflare 경유 시)
+
+**문제**: Cloudflare 프록시를 통해 WebSocket 연결 시 `400 Bad Request` 반환
+**원인**: Cloudflare가 HTTP/2 → HTTP/1.1 변환 시 `Connection: Upgrade` 헤더가 손실됨
+
+**해결**: Caddyfile에 `@websocket` 매처 사용
+
+```
+# ❌ 잘못된 설정 (헤더 수동 전달 - 작동 안함)
+reverse_proxy socket-server:3001 {
+    header_up Connection {>Connection}
+    header_up Upgrade {>Upgrade}
+}
+
+# ✅ 올바른 설정 (@websocket 매처 사용)
+@websocket {
+    header Connection *Upgrade*
+    header Upgrade websocket
+}
+reverse_proxy @websocket socket-server:3001 {
+    header_up Host {host}
+    header_up X-Forwarded-Proto https
+}
+reverse_proxy socket-server:3001 {
+    header_up Host {host}
+    header_up X-Forwarded-Proto https
+}
+```
+
+**검증**:
+```bash
+# polling 테스트 (HTTP)
+curl https://space-socket.flow-coder.com/socket.io/?EIO=4&transport=polling
+
+# WebSocket 테스트 (101 Switching Protocols 확인)
+curl -v "https://space-socket.flow-coder.com/socket.io/?EIO=4&transport=websocket" \
+  -H "Connection: Upgrade" -H "Upgrade: websocket" \
+  -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" \
+  -H "Sec-WebSocket-Version: 13"
 ```
 
 ### LiveKit 연결 실패
