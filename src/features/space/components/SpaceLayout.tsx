@@ -304,6 +304,19 @@ function SpaceLayoutContent({
     setMessages((prev) => addMessagesWithLimit(prev, errorMessage))
   }, [])
 
+  // 📡 근접 통신 에러 핸들러
+  const handleProximityError = useCallback((message: string) => {
+    const errorMessage: ChatMessage = {
+      id: `proximity-error-${Date.now()}`,
+      senderId: "system",
+      senderNickname: "시스템",
+      content: `📡 ${message}`,
+      timestamp: new Date(),
+      type: "system",
+    }
+    setMessages((prev) => addMessagesWithLimit(prev, errorMessage))
+  }, [])
+
   // 📢 공지 메시지 핸들러
   const handleAnnouncement = useCallback((data: AnnouncementData) => {
     const announceMessage: ChatMessage = {
@@ -465,6 +478,7 @@ function SpaceLayoutContent({
     onMessageFailed: handleMessageFailed,    // ❌ DB 저장 실패 시 롤백
     onAdminError: handleAdminError,          // 🛡️ 관리 에러
     onChatError: handleChatError,            // 🔇 채팅 에러 (음소거 등)
+    onProximityError: handleProximityError,  // 📡 근접 통신 에러
     onRecordingStarted: handleRecordingStarted,   // 🎬 녹화 시작
     onRecordingStopped: handleRecordingStopped,   // 🎬 녹화 중지
     onRecordingError: handleRecordingError,       // 🎬 녹화 에러

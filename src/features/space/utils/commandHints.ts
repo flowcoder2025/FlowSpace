@@ -119,6 +119,13 @@ export const ALL_COMMANDS: CommandInfo[] = [
     category: "admin",
     requiresPermission: true,
   },
+  {
+    command: "@proximity / @근접",
+    description: "근접 통신 ON/OFF (7×7 범위)",
+    example: "@근접 켜기 또는 @proximity off",
+    category: "admin",
+    requiresPermission: true,
+  },
 
   // ========== 에디터 명령어 (스탭/오너만) ==========
   {
@@ -253,6 +260,7 @@ const ADMIN_HINTS: string[] = [
   "💡 @kick 닉네임 으로 사용자를 강퇴할 수 있어요",
   "💡 @공지 메시지 로 전체 공지를 보낼 수 있어요",
   "💡 @편집기 로 맵 에디터를 열 수 있어요",
+  "💡 @근접 켜기/끄기 로 근접 통신을 ON/OFF 할 수 있어요",
 ]
 
 let currentHintIndex = 0
@@ -336,6 +344,7 @@ export const ADMIN_WELCOME_ADDITION = `
 • @mute / @음소거: 사용자 음소거
 • @kick / @강퇴: 사용자 강퇴
 • @공지: 전체 공지 전송
+• @근접 켜기/끄기: 근접 통신 ON/OFF
 • @편집기: 맵 에디터 열기`
 
 /**
