@@ -955,7 +955,7 @@ docker-compose logs livekit
 
 | 항목 | 값 |
 |-----|-----|
-| **Vercel Team** | konarae (FlowCoder) |
+| **Vercel Team** | flowcoder (FlowCoder) |
 | **프로젝트명** | flowspace |
 | **Primary Domain** | https://space.flow-coder.com |
 | **Vercel Alias** | flowspace-gamma.vercel.app |
@@ -979,13 +979,13 @@ NEXT_PUBLIC_SOCKET_URL=https://space-socket.flow-coder.com
 
 ```bash
 # 프로젝트 연결 (konarae 팀의 flowspace)
-vercel link --yes --project flowspace --scope konarae
+vercel link --yes --project flowspace --scope flowcoder
 
 # 환경변수 확인
-vercel env ls --scope konarae
+vercel env ls --scope flowcoder
 
 # 환경변수 추가 (production)
-echo "value" | vercel env add VAR_NAME production --scope konarae
+echo "value" | vercel env add VAR_NAME production --scope flowcoder
 
 # 프로덕션 배포
 vercel --prod --yes
