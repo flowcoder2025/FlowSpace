@@ -34,11 +34,18 @@ import type { ParsedEditorCommand } from "../../types/editor.types"
 // ============================================
 // FloatingChatOverlay Props
 // ============================================
+// 🏠 파티 존 정보 (Phase 2)
+interface PartyZoneInfo {
+  id: string
+  name: string
+}
+
 interface FloatingChatOverlayProps {
   messages: ChatMessage[]
   players: Map<string, PlayerPosition>  // 🔄 SSOT: 현재 닉네임 조회용
   onSendMessage: (content: string, replyTo?: ReplyToData) => void  // 답장 지원
   onSendWhisper?: (targetNickname: string, content: string, replyTo?: ReplyToData) => void  // 📬 귓속말 전송 + 답장
+  onSendPartyMessage?: (content: string, replyTo?: ReplyToData) => void  // 🏠 파티 메시지 전송 (Phase 2)
   onReact?: (messageId: string, type: ReactionType) => void
   onAdminCommand?: (result: AdminCommandResult) => void  // 🛡️ 관리 명령어
   onEditorCommand?: (command: ParsedEditorCommand) => void  // 🎨 에디터 명령어
@@ -52,6 +59,8 @@ interface FloatingChatOverlayProps {
   onLoadMore?: () => void  // 스크롤 상단 도달 시 호출
   isLoadingMore?: boolean  // 과거 메시지 로딩 중
   hasMoreMessages?: boolean  // 더 불러올 메시지 존재 여부
+  // 🏠 Phase 2: 파티 존 연동
+  currentZone?: PartyZoneInfo | null  // 현재 위치한 파티 존
 }
 
 // ============================================
@@ -62,6 +71,7 @@ export function FloatingChatOverlay({
   players,
   onSendMessage,
   onSendWhisper,
+  onSendPartyMessage,
   onReact,
   onAdminCommand,
   onEditorCommand,
@@ -76,6 +86,8 @@ export function FloatingChatOverlay({
   onLoadMore,
   isLoadingMore = false,
   hasMoreMessages = true,
+  // 🏠 Phase 2: 파티 존 연동
+  currentZone,
 }: FloatingChatOverlayProps) {
   const { isActive, toggleMode, deactivate } = useChatMode()
   const { position, size, isDragging, isResizing, handleMoveStart, handleResizeStart } = useChatDrag()
@@ -224,6 +236,21 @@ export function FloatingChatOverlay({
     onSendWhisper(targetNickname, content, socketReplyTo)
     setReplyTo(null)
   }, [onSendWhisper])
+
+  // 🏠 파티 메시지 전송 핸들러 (Phase 2)
+  const handleSendPartyMessage = useCallback((content: string, replyToData?: ReplyTo) => {
+    if (!onSendPartyMessage) return
+    // ReplyTo → ReplyToData 변환
+    const socketReplyTo: ReplyToData | undefined = replyToData
+      ? {
+          id: replyToData.id,
+          senderNickname: replyToData.senderNickname,
+          content: replyToData.content,
+        }
+      : undefined
+    onSendPartyMessage(content, socketReplyTo)
+    setReplyTo(null)
+  }, [onSendPartyMessage])
 
   // 📬 탭 변경 핸들러 (변경 시 해당 탭의 읽음 시간 업데이트)
   const handleTabChange = useCallback((tab: ChatTab) => {
@@ -425,6 +452,7 @@ export function FloatingChatOverlay({
           canManageChat={canManageChat}
           fontSize={chatFontSize}
           onFontSizeChange={handleFontSizeChange}
+          currentZone={currentZone}
         />
       )}
 
@@ -543,6 +571,7 @@ export function FloatingChatOverlay({
       <ChatInputArea
         onSend={handleSendMessage}
         onSendWhisper={handleSendWhisper}
+        onSendPartyMessage={handleSendPartyMessage}
         onAdminCommand={onAdminCommand}
         onEditorCommand={onEditorCommand}
         onDeactivate={handleDeactivate}
@@ -550,6 +579,8 @@ export function FloatingChatOverlay({
         replyTo={replyTo}
         onCancelReply={handleCancelReply}
         whisperHistory={whisperHistory}
+        activeTab={activeTab}
+        currentZone={currentZone}
       />
 
       {/* 리사이즈 핸들 (우하단) */}

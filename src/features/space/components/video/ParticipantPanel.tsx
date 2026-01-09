@@ -136,6 +136,8 @@ interface ParticipantPanelProps {
   isMemberPanelOpen?: boolean
   /** 🧑‍🤝‍🧑 멤버 관리 패널 토글 콜백 */
   onToggleMemberPanel?: () => void
+  /** 🔦 스포트라이트 활성화된 사용자 ID Set */
+  spotlightUsers?: Set<string>
 }
 
 // ============================================
@@ -178,6 +180,7 @@ export function ParticipantPanel({
   inviteCode,
   isMemberPanelOpen = false,
   onToggleMemberPanel,
+  spotlightUsers,
 }: ParticipantPanelProps) {
   // 내부 상태 (외부 제어가 없을 때 사용)
   const [internalViewMode, setInternalViewMode] = useState<ParticipantViewMode>("sidebar")
@@ -498,6 +501,7 @@ export function ParticipantPanel({
                   allAudioTracks={allAudioTracks}
                   globalOutputVolume={audioSettings.outputVolume}
                   mirrorLocalVideo={videoSettings.mirrorMode}
+                  isSpotlight={spotlightUsers?.has(track.participantId)}
                   className="ring-2 ring-primary/50"
                 />
               ))}
@@ -512,6 +516,7 @@ export function ParticipantPanel({
               isLocal={track.participantId === localParticipantId}
               globalOutputVolume={audioSettings.outputVolume}
               mirrorLocalVideo={videoSettings.mirrorMode}
+              isSpotlight={spotlightUsers?.has(track.participantId)}
             />
           ))}
         </div>
@@ -643,6 +648,7 @@ export function ParticipantPanel({
                 allAudioTracks={allAudioTracks}
                 globalOutputVolume={audioSettings.outputVolume}
                 mirrorLocalVideo={videoSettings.mirrorMode}
+                isSpotlight={spotlightUsers?.has(track.participantId)}
                 className="ring-2 ring-primary/50 w-full aspect-video"
               />
             ))}
@@ -668,6 +674,7 @@ export function ParticipantPanel({
                 isLocal={track.participantId === localParticipantId}
                 globalOutputVolume={audioSettings.outputVolume}
                 mirrorLocalVideo={videoSettings.mirrorMode}
+                isSpotlight={spotlightUsers?.has(track.participantId)}
                 className="h-full"
               />
             </div>

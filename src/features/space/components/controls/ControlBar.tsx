@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { cn } from "@/lib/utils"
 import {
   Button,
   DropdownMenu,
@@ -102,6 +103,22 @@ const ChevronDownIcon = () => (
   </svg>
 )
 
+const SpotlightIcon = ({ active }: { active?: boolean }) => (
+  <svg
+    className="size-5"
+    fill={active ? "var(--color-yellow-400)" : "none"}
+    stroke={active ? "var(--color-yellow-400)" : "currentColor"}
+    viewBox="0 0 24 24"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
+    />
+  </svg>
+)
+
 const MicSmallIcon = () => (
   <svg className="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z" />
@@ -180,6 +197,12 @@ interface ControlBarProps {
   onOpenSettings?: () => void
   onOpenMediaSettings?: (tab: "audio" | "video") => void
   onDismissError?: () => void
+  /** 스포트라이트 권한 보유 여부 */
+  hasSpotlightGrant?: boolean
+  /** 스포트라이트 활성화 여부 */
+  isSpotlightActive?: boolean
+  /** 스포트라이트 토글 핸들러 */
+  onToggleSpotlight?: () => void
 }
 
 // ============================================
@@ -199,6 +222,9 @@ export function ControlBar({
   onOpenSettings,
   onOpenMediaSettings,
   onDismissError,
+  hasSpotlightGrant,
+  isSpotlightActive,
+  onToggleSpotlight,
 }: ControlBarProps) {
   // 미디어 장치 훅
   const {
@@ -532,6 +558,27 @@ export function ControlBar({
               </div>
             )}
           </div>
+        )}
+
+        {/* Spotlight Toggle - 권한이 있는 사용자만 표시 */}
+        {hasSpotlightGrant && onToggleSpotlight && (
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => {
+              onToggleSpotlight()
+              // 클릭 후 포커스 해제
+              ;(document.activeElement as HTMLElement)?.blur()
+            }}
+            className={cn(
+              "border-white/30 text-white bg-transparent hover:bg-white/10 focus-visible:ring-0 focus-visible:ring-offset-0",
+              isSpotlightActive && "border-yellow-400 bg-yellow-400/20 text-yellow-400 hover:bg-yellow-400/30"
+            )}
+            aria-label={isSpotlightActive ? "스포트라이트 끄기" : "스포트라이트 켜기"}
+            title={isSpotlightActive ? "스포트라이트 끄기 (전체 브로드캐스트 중지)" : "스포트라이트 켜기 (전체 참가자에게 브로드캐스트)"}
+          >
+            <SpotlightIcon active={isSpotlightActive} />
+          </Button>
         )}
 
         <div className="mx-0.5 sm:mx-1 h-5 w-px bg-white/20" />

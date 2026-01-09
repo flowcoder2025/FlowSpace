@@ -19,7 +19,7 @@
 import { useState, useRef, useEffect, useCallback } from "react"
 import { cn } from "@/lib/utils"
 import { parseChatInput, isWhisperFormat, type AdminCommandType } from "../../utils/chatParser"
-import type { ReplyTo } from "../../types/space.types"
+import type { ReplyTo, ChatTab } from "../../types/space.types"
 import type { ParsedEditorCommand } from "../../types/editor.types"
 
 // ============================================
@@ -54,12 +54,19 @@ function XIcon({ className }: { className?: string }) {
   )
 }
 
+// 🏠 파티 존 정보 (Phase 2)
+interface PartyZoneInfo {
+  id: string
+  name: string
+}
+
 // ============================================
 // ChatInputArea Props
 // ============================================
 interface ChatInputAreaProps {
   onSend: (message: string, replyTo?: ReplyTo) => void  // 답장 정보 포함 가능
   onSendWhisper?: (targetNickname: string, content: string, replyTo?: ReplyTo) => void  // 📬 귓속말 전송
+  onSendPartyMessage?: (content: string, replyTo?: ReplyTo) => void  // 🏠 파티 메시지 전송 (Phase 2)
   onAdminCommand?: (result: AdminCommandResult) => void  // 🛡️ 관리 명령어 (Phase 6)
   onEditorCommand?: (command: ParsedEditorCommand) => void  // 🎨 에디터 명령어
   onDeactivate: () => void
@@ -67,6 +74,9 @@ interface ChatInputAreaProps {
   replyTo?: ReplyTo | null  // 답장 중인 메시지
   onCancelReply?: () => void  // 답장 취소 콜백
   whisperHistory?: string[]  // 📬 귓속말 히스토리 (최근 대화 상대 닉네임 목록)
+  // 🏠 Phase 2: 파티 존 연동
+  activeTab?: ChatTab  // 현재 활성 탭
+  currentZone?: PartyZoneInfo | null  // 현재 위치한 파티 존
 }
 
 // ============================================
@@ -75,6 +85,7 @@ interface ChatInputAreaProps {
 export function ChatInputArea({
   onSend,
   onSendWhisper,
+  onSendPartyMessage,
   onAdminCommand,
   onEditorCommand,
   onDeactivate,
@@ -82,6 +93,8 @@ export function ChatInputArea({
   replyTo,
   onCancelReply,
   whisperHistory = [],
+  activeTab = "all",
+  currentZone,
 }: ChatInputAreaProps) {
   const [value, setValue] = useState("")
   const inputRef = useRef<HTMLInputElement>(null)
@@ -95,6 +108,8 @@ export function ChatInputArea({
   const isCommandMode = value.trim().startsWith("@")
   // 답장 모드인지 확인
   const isReplyMode = !!replyTo
+  // 🏠 파티 모드인지 확인 (파티 탭 + 파티 존 내)
+  const isPartyMode = activeTab === "party" && !!currentZone
 
   // 📬 히스토리 탐색 가능 조건: "/"만 입력하거나 "/닉네임" 형태 (공백 없음)
   const canNavigateHistory = whisperHistory.length > 0 &&
@@ -164,8 +179,13 @@ export function ChatInputArea({
             // 귓속말 전송 (답장 정보 포함)
             onSendWhisper(parsed.target, parsed.content, replyTo || undefined)
           } else if (parsed.type === "message") {
-            // 일반 메시지 전송 (답장 정보 포함)
-            onSend(parsed.content, replyTo || undefined)
+            // 🏠 파티 모드일 때는 파티 메시지로 전송
+            if (isPartyMode && onSendPartyMessage) {
+              onSendPartyMessage(parsed.content, replyTo || undefined)
+            } else {
+              // 일반 메시지 전송 (답장 정보 포함)
+              onSend(parsed.content, replyTo || undefined)
+            }
           }
           setValue("")
           setHistoryIndex(-1)  // 히스토리 인덱스 초기화
@@ -187,7 +207,7 @@ export function ChatInputArea({
       }
       // WASD, 방향키 등 다른 키는 기본 동작 (텍스트 입력) 허용
     },
-    [value, onSend, onSendWhisper, onAdminCommand, onEditorCommand, onDeactivate, replyTo, onCancelReply, canNavigateHistory, historyIndex, whisperHistory]
+    [value, onSend, onSendWhisper, onSendPartyMessage, isPartyMode, onAdminCommand, onEditorCommand, onDeactivate, replyTo, onCancelReply, canNavigateHistory, historyIndex, whisperHistory]
   )
 
   if (!isActive) return null
@@ -240,7 +260,7 @@ export function ChatInputArea({
           backdropFilter: "blur(4px)",
         }}
       >
-        {/* 입력 프롬프트 - 귓속말/답장/명령어 모드일 때 색상 변경 */}
+        {/* 입력 프롬프트 - 귓속말/답장/명령어/파티 모드일 때 색상 변경 */}
         <span
           className={cn(
             "text-[11px] shrink-0",
@@ -250,13 +270,23 @@ export function ChatInputArea({
               ? "text-amber-400"
               : isWhisperMode
               ? "text-purple-400"
+              : isPartyMode
+              ? "text-blue-400"
               : "text-white/60"
           )}
           style={{
             textShadow: "0 1px 2px rgba(0,0,0,0.8)",
           }}
         >
-          {isReplyMode ? "[답장]" : isCommandMode ? "[명령어]" : isWhisperMode ? "[귓속말]" : "[전체]"}
+          {isReplyMode
+            ? "[답장]"
+            : isCommandMode
+            ? "[명령어]"
+            : isWhisperMode
+            ? "[귓속말]"
+            : isPartyMode
+            ? `[🏠${currentZone?.name || "파티"}]`
+            : "[전체]"}
         </span>
         {/* 입력창 */}
         <input

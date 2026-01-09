@@ -237,6 +237,58 @@ export interface ReplyToData {
 }
 
 // ============================================
+// 스포트라이트 관련 타입
+// ============================================
+
+// 스포트라이트 권한 부여/취소 알림 데이터
+export interface SpotlightGrantedData {
+  grantId: string
+  targetId: string           // userId 또는 guestSessionId
+  targetNickname: string
+  targetType: "user" | "guest"
+  grantedBy: string
+  grantedByNickname: string
+  expiresAt?: string         // ISO 8601 형식
+}
+
+// 스포트라이트 취소 알림 데이터
+export interface SpotlightRevokedData {
+  grantId: string
+  targetId: string
+  targetNickname: string
+  revokedBy: string
+  revokedByNickname: string
+}
+
+// 스포트라이트 활성화/비활성화 알림 데이터
+export interface SpotlightActivatedData {
+  participantId: string      // 활성화한 참가자 ID
+  nickname: string
+  isActive: boolean
+}
+
+// 스포트라이트 상태 데이터 (입장 시 동기화)
+export interface SpotlightStatusData {
+  // 현재 스포트라이트가 활성화된 참가자들
+  activeSpotlights: Array<{
+    participantId: string
+    nickname: string
+  }>
+  // 본인의 스포트라이트 권한 여부
+  hasGrant: boolean
+  grantId?: string
+  expiresAt?: string
+}
+
+// 스포트라이트 활성화 요청 (Client → Server)
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+export interface SpotlightActivateRequest {}
+
+// 스포트라이트 비활성화 요청 (Client → Server)
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+export interface SpotlightDeactivateRequest {}
+
+// ============================================
 // 리액션 관련 타입
 // ============================================
 
@@ -352,6 +404,12 @@ export interface ClientToServerEvents {
   // 리액션 이벤트 (Client → Server)
   // ============================================
   "reaction:toggle": (data: ReactionAddRequest) => void
+
+  // ============================================
+  // 스포트라이트 이벤트 (Client → Server)
+  // ============================================
+  "spotlight:activate": (data: SpotlightActivateRequest) => void    // 스포트라이트 활성화
+  "spotlight:deactivate": (data: SpotlightDeactivateRequest) => void // 스포트라이트 비활성화
 }
 
 // Server to Client events
@@ -429,6 +487,16 @@ export interface ServerToClientEvents {
   // 리액션 이벤트 (Server → Client)
   // ============================================
   "reaction:updated": (data: ReactionData) => void           // 리액션 추가/제거됨 (브로드캐스트)
+
+  // ============================================
+  // 스포트라이트 이벤트 (Server → Client)
+  // ============================================
+  "spotlight:granted": (data: SpotlightGrantedData) => void      // 스포트라이트 권한 부여됨 (전체 브로드캐스트)
+  "spotlight:revoked": (data: SpotlightRevokedData) => void      // 스포트라이트 권한 취소됨 (전체 브로드캐스트)
+  "spotlight:activated": (data: SpotlightActivatedData) => void  // 스포트라이트 활성화됨 (전체 브로드캐스트)
+  "spotlight:deactivated": (data: SpotlightActivatedData) => void // 스포트라이트 비활성화됨 (전체 브로드캐스트)
+  "spotlight:status": (data: SpotlightStatusData) => void        // 현재 스포트라이트 상태 (입장 시)
+  "spotlight:error": (data: { message: string }) => void         // 스포트라이트 에러 (권한 부족 등)
 }
 
 // Inter-server events (not used in MVP)
@@ -452,4 +520,8 @@ export interface SocketData {
   memberId?: string     // SpaceMember ID (권한 관리용)
   role?: SpaceRole      // 공간 내 역할
   restriction?: ChatRestriction  // 채팅 제한 상태
+  // 스포트라이트 정보
+  hasSpotlightGrant?: boolean    // 스포트라이트 권한 보유 여부
+  spotlightGrantId?: string      // 스포트라이트 권한 ID
+  isSpotlightActive?: boolean    // 스포트라이트 활성화 여부
 }

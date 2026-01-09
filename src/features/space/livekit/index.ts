@@ -33,3 +33,11 @@ export type {
   MediaState,
   ParticipantTrack,
 } from "./types"
+
+// 공간 기반 커뮤니케이션 (Phase 3)
+export { useProximitySubscription } from "./useProximitySubscription"
+export type {
+  Position,
+  ProximityConfig,
+  UseProximitySubscriptionOptions,
+} from "./useProximitySubscription"

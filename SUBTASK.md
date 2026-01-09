@@ -1,145 +1,135 @@
-# SUBTASK: 사용량 측정 시스템 구현
+# SUBTASK: 인프라 설정 및 기능 구현
 
-> **상위 문서**: `/CLAUDE.md`, `/docs/infrastructure/OCI.md`
-> **생성일**: 2026-01-09
-> **목표**: 시범 운영용 리소스-사용량 상관관계 측정 시스템
-
----
-
-## 작업 배경
-
-부트캠프 시범 운영을 위한 실측 기반 비용 예측 시스템:
-- **목표**: "영상 N명 × M시간 = 트래픽 X GB" 공식 도출
-- **방식**: 이벤트 로깅 + 리소스 스냅샷 + 상관관계 분석
-- **데이터 보존**: Raw(7일) → 시간별(90일) → 일별(영구)
+> **상위 문서**: `/CLAUDE.md`, `/docs/ROADMAP.md`
+> **생성일**: 2026-01-10
+> **목표**: OCI 인프라 완성 + Admin 대시보드 + 공간 기반 커뮤니케이션
 
 ---
 
-## Phase 1: 스키마 확장 ✅
+## 작업 개요
 
-### 1.1 EventType 확장
-- [x] VIDEO_START, VIDEO_END 추가
-- [x] SCREEN_SHARE_START, SCREEN_SHARE_END 추가
-
-### 1.2 SpaceEventLog 확장
-- [x] participantId 필드 추가 (LiveKit 연동용)
-- [x] metadata Json 필드 활용 확인 (기존 존재)
-
-### 1.3 ResourceSnapshot 모델
-- [x] 신규 모델 생성
-- [x] cpuPercent, memoryPercent, memoryMB, trafficGB, trafficDeltaMB, concurrentUsers, activeRooms
-
-### 1.4 집계 모델
-- [x] UsageHourly (시간별 집계) - 90일 보존
-- [x] UsageDaily (일별 집계) - 영구 보존
-
-### 1.5 데이터베이스 적용
-- [x] prisma db push 실행 완료
+| 순서 | 작업 | 예상 시간 | 상태 |
+|:---:|------|:--------:|:----:|
+| 1 | OCI LiveKit Webhook 설정 | ~5분 | ✅ 완료 |
+| 2 | Admin 대시보드 - 사용량 분석 탭 | ~2시간 | ✅ 완료 |
+| 3 | 공간 기반 커뮤니케이션 | ~1일 | ✅ 완료 |
 
 ---
 
-## Phase 2: LiveKit Webhook 연동 ✅
+## Task 1: OCI LiveKit Webhook 설정
 
-### 2.1 Webhook 엔드포인트
-- [x] /api/livekit/webhook 생성
-- [x] Webhook 시그니처 검증 (WebhookReceiver)
+> **목표**: 사용량 측정 시스템이 VIDEO_START/END 이벤트를 수신하도록 설정
 
-### 2.2 이벤트 처리
-- [x] track_published → VIDEO_START / SCREEN_SHARE_START
-- [x] track_unpublished → VIDEO_END / SCREEN_SHARE_END
+### 1.1 LiveKit 설정 파일 수정
+- [x] OCI 서버 SSH 접속
+- [x] `/home/ubuntu/flowspace/livekit/livekit.yaml` 수정
+- [x] webhook URL 추가: `https://flow-metaverse.vercel.app/api/livekit/webhook`
 
-### 2.3 LiveKit 서버 설정
-- [x] livekit.yaml에 webhook_url 추가 (로컬)
-- [ ] OCI 서버 재배포 (수동 - 아래 Production 설정 참고)
+### 1.2 LiveKit 컨테이너 재시작
+- [x] Docker 컨테이너 재시작
+- [x] 로그 확인
 
-**Production 설정 필요 (OCI livekit.yaml)**:
-```yaml
-webhook:
-  urls:
-    - https://[VERCEL_DOMAIN]/api/livekit/webhook
-  api_key: [LIVEKIT_API_KEY]
-```
+### 1.3 검증
+- [x] LiveKit 서버 정상 시작 확인 (v1.9.10)
 
 ---
 
-## Phase 3: 리소스 스냅샷 수집 ✅
+## Task 2: Admin 대시보드 - 사용량 분석 탭
 
-### 3.1 Cron 엔드포인트
-- [x] /api/cron/collect-metrics 생성
-- [x] OCI 메트릭 조회 → ResourceSnapshot 저장
+> **목표**: 수집된 사용량 데이터를 시각화하는 Admin UI
 
-### 3.2 Vercel Cron 설정
-- [x] vercel.json cron 설정 (*/5 * * * * - 5분마다)
+### 2.1 페이지 생성
+- [x] `UsageAnalysis.tsx` 컴포넌트 생성
+- [x] Admin 페이지에 "사용량 분석" 탭 추가
 
-### 3.3 트래픽 델타 계산
-- [x] 이전 스냅샷과 비교하여 증가량 계산 (월초 리셋 처리 포함)
+### 2.2 데이터 페칭
+- [x] `/api/admin/usage/analysis` 연동
+- [x] useState/useEffect로 데이터 로딩
+
+### 2.3 시계열 그래프
+- [x] recharts 설치
+- [x] 트래픽 AreaChart (GB 단위)
+- [x] 사용자/CPU LineChart (복합 Y축)
+- [x] 기간 선택 (시간별/일별/주별, 7/14/30/90일)
+
+### 2.4 상관관계 분석 표시
+- [x] GB/영상-분, GB/영상-시간 카드
+- [x] GB/사용자-시간 카드
+- [x] CPU%/사용자 카드
+- [x] 신뢰도 Badge (low/medium/high)
+
+### 2.5 비용 예측 계산기
+- [x] 동시접속자/일일시간/운영일수 입력
+- [x] 예상 트래픽 (GB/TB) 계산
+- [x] 예상 비용 (USD/KRW) 계산
+- [x] OCI 10TB 무료 한도 반영
 
 ---
 
-## Phase 4: 집계 시스템 ✅
+## Task 3: 공간 기반 커뮤니케이션
 
-### 4.1 시간별 집계
-- [x] Raw 데이터 → UsageHourly 집계 로직
-- [x] 매시간 실행 cron (5 * * * * - 매시 5분)
+> **목표**: 근접 통신, 파티 존, 스포트라이트 시스템 구현
+> **설계 문서**: `/docs/roadmap/SPATIAL-COMMUNICATION.md`
 
-### 4.2 일별 집계
-- [x] UsageHourly → UsageDaily 집계 로직
-- [x] UTC 0시 실행 (같은 cron에서 조건부)
+### 3.1 근접 통신 (Proximity Chat) - ✅ Phase 1 완료
+- [x] `useProximitySubscription` 훅 생성
+  - 7×7 타일 범위 감지 로직
+  - 거리 기반 볼륨 계산
+  - LiveKit 트랙 구독 제어 (RemoteTrackPublication.setSubscribed)
+  - 스포트라이트/파티 존 우선순위 처리 구조
+- [x] SpaceLayout에 훅 통합
+  - 로컬 플레이어 위치 추적 (eventBridge PLAYER_MOVED)
+  - 원격 플레이어 위치 변환 (Socket.io players → Position Map)
+- [x] `ProximityIndicator` UI 컴포넌트
+  - 전역/근접 모드 표시
+  - 범위 내/외 사용자 수 표시
+  - 상세 드롭다운 (사용자 목록)
+- [ ] 근접 기능 활성화 옵션 추가 (공간 설정 - 향후)
 
-### 4.3 데이터 정리
-- [x] 7일 지난 ResourceSnapshot 삭제
-- [x] 90일 지난 UsageHourly 삭제
-- [x] UTC 1시 실행 (같은 cron에서 조건부)
+### 3.2 파티 존 (Zone-based Groups) - ✅ Phase 2 완료
+- [x] Prisma 스키마: PartyZone 모델 추가
+- [x] API 라우트: `/api/spaces/[id]/zones` CRUD (GET/POST), `/api/spaces/[id]/zones/[zoneId]` (GET/PUT/DELETE)
+- [x] `usePartyZone` 훅 구현
+  - 공간 내 파티 존 목록 페칭
+  - 그리드 좌표 기반 존 입장/퇴장 감지 (픽셀→타일 변환)
+  - 디바운스 처리 (경계선 왔다갔다 방지)
+  - 같은 존 내 사용자 Set 계산 (partyZoneUsers)
+  - Socket.io joinParty/leaveParty 자동 호출
+- [x] SpaceLayout 통합
+  - usePartyZone 훅 연결
+  - partyZoneUsers → useProximitySubscription 연동
+- [x] 채팅 UI 통합
+  - FloatingChatOverlay: currentZone, onSendPartyMessage props 추가
+  - ChatTabs: 파티 존 내 존 이름 표시 + 🏠 아이콘
+  - ChatInputArea: 파티 탭에서 파티 메시지 전송 지원
+- [ ] 존 내 음성 그룹화 (Phase 2.5 - 향후)
 
----
-
-## Phase 5: 분석 API & 대시보드 ✅
-
-### 5.1 분석 API
-- [x] /api/admin/usage/analysis 엔드포인트
-- [x] 시간대별 이벤트 ↔ 리소스 매칭 (hourly/daily/weekly)
-- [x] 상관관계 계산 (GB/영상-분, GB/사용자-시간, CPU/사용자)
-- [x] 비용 예측 공식 자동 도출
-
-### 5.2 Admin 대시보드 UI
-- [ ] 사용량 분석 탭 추가 (향후 구현)
-- [ ] 시계열 그래프 (향후 구현)
-- [ ] 상관관계 분석 결과 표시 (향후 구현)
-- [ ] 비용 예측 계산기 (향후 구현)
-
-> **참고**: 대시보드 UI는 데이터 수집 이후 구현 예정. API를 통해 JSON으로 분석 결과 확인 가능.
+### 3.3 스포트라이트 시스템 - ✅ Phase 3 완료
+- [x] DB 스키마: SpotlightGrant 모델 (Prisma)
+- [x] API 라우트: grant/revoke/activate 엔드포인트
+- [x] Socket.io 서버: spotlight:activate/deactivate 이벤트
+- [x] 클라이언트 훅: useSocket 스포트라이트 상태/명령 추가
+- [x] SpaceLayout: spotlightUsers 연동 + useProximitySubscription 통합
+- [x] UI 컴포넌트: ControlBar 스포트라이트 버튼 + VideoTile 스포트라이트 인디케이터
+- [x] 스포트라이트 활성화 시 전체 공간에 음성/영상 브로드캐스트
 
 ---
 
 ## 진행 상태
 
-| Phase | 상태 | 완료일 |
-|-------|------|--------|
-| Phase 1 | ✅ 완료 | 2026-01-09 |
-| Phase 2 | ✅ 완료 | 2026-01-09 |
-| Phase 3 | ✅ 완료 | 2026-01-09 |
-| Phase 4 | ✅ 완료 | 2026-01-09 |
-| Phase 5 | ✅ 완료 | 2026-01-09 |
+| Task | 상태 | 시작 | 완료 |
+|------|:----:|------|------|
+| Task 1 | ✅ 완료 | 2026-01-10 | 2026-01-10 |
+| Task 2 | ✅ 완료 | 2026-01-10 | 2026-01-10 |
+| Task 3 | ✅ 완료 | 2026-01-10 | 2026-01-10 |
 
 ---
 
-## 마무리 체크리스트 (CLAUDE.md 0.7.4 준수)
+## 변경 이력
 
-- [x] 타입체크: `npx tsc --noEmit` ✅
-- [x] 빌드테스트: `npm run build` ✅
-- [x] 문서 업데이트 (SUBTASK.md)
-- [ ] Git 커밋 & 푸시
-- [ ] 완료 보고 & 피드백 요청
-
----
-
-## 예상 결과물
-
-```
-측정 시스템 완성 후:
-
-1. 시범 운영 2주 → 데이터 축적
-2. 분석: "영상 1명 = 0.14 GB/분" (실측)
-3. 50명 × 5시간 × 22일 = 9.24 TB (실측 기반 예측)
-4. 가격 확정: 월 ₩200,000 (마진 45%)
-```
+| 날짜 | 변경 |
+|-----|------|
+| 2026-01-10 | 초기 생성 - 3개 Task 계획 수립 |
+| 2026-01-10 | Task 3 Phase 1 완료 - 근접 통신 기본 구조 구현 |
+| 2026-01-10 | Task 3 Phase 2 완료 - 파티 존 시스템 구현 (DB/API/훅/UI) |
+| 2026-01-10 | **SUBTASK 전체 완료** - Task 1~3 모두 완료, 빌드 검증 통과 |

@@ -33,3 +33,11 @@ export { useDebouncedEditorSave } from "./useDebouncedEditorSave"
 
 // Phase 6: 과거 메시지 페이지네이션
 export { usePastMessages, mergePastMessages } from "./usePastMessages"
+
+// 공간 기반 커뮤니케이션
+export {
+  usePartyZone,
+  type PartyZone,
+  type PartyZoneBounds,
+  type UsePartyZoneOptions,
+} from "./usePartyZone"

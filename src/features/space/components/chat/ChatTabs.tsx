@@ -35,6 +35,12 @@ const TABS: TabConfig[] = [
   { id: "links", label: "링크", shortLabel: "링", badgeColor: "bg-emerald-500" },
 ]
 
+// 🏠 파티 존 정보 (Phase 2)
+interface PartyZoneInfo {
+  id: string
+  name: string
+}
+
 // ============================================
 // ChatTabs Props
 // ============================================
@@ -52,6 +58,8 @@ interface ChatTabsProps {
   fontSize?: ChatFontSize
   /** 글씨 크기 변경 콜백 */
   onFontSizeChange?: (size: ChatFontSize) => void
+  /** 🏠 현재 위치한 파티 존 (Phase 2) */
+  currentZone?: PartyZoneInfo | null
 }
 
 // ============================================
@@ -67,6 +75,7 @@ export function ChatTabs({
   onOpenSettings,
   fontSize = "medium",
   onFontSizeChange,
+  currentZone,
 }: ChatTabsProps) {
   // 글씨 크기 증가/감소 핸들러
   const handleFontSizeIncrease = (e: React.MouseEvent) => {
@@ -118,6 +127,11 @@ export function ChatTabs({
         const unreadCount = unreadCounts[tab.id]
         const hasUnread = unreadCount > 0 && !isActive
 
+        // 🏠 파티 탭 특별 처리: 존에 있을 때 존 이름 표시
+        const isPartyTab = tab.id === "party"
+        const isInZone = !!currentZone
+        const partyLabel = isPartyTab && isInZone ? currentZone.name : tab.label
+
         return (
           <button
             key={tab.id}
@@ -130,11 +144,21 @@ export function ChatTabs({
               "outline-none focus:outline-none focus-visible:outline-none",
               isActive
                 ? "bg-white/15 text-white font-medium"
-                : "text-white/60 hover:text-white/80"
+                : "text-white/60 hover:text-white/80",
+              // 🏠 파티 존 안에 있을 때 파티 탭 강조
+              isPartyTab && isInZone && !isActive && "text-blue-400 hover:text-blue-300"
             )}
+            // 🏠 파티 탭에 존 정보 툴팁
+            title={isPartyTab && isInZone ? `${currentZone.name} 파티 채팅` : undefined}
           >
             {/* 탭 라벨 */}
-            <span>{tab.label}</span>
+            <span className="flex items-center gap-1">
+              {/* 🏠 파티 존 아이콘 (존에 있을 때만) */}
+              {isPartyTab && isInZone && (
+                <span className="text-[8px]">🏠</span>
+              )}
+              {partyLabel}
+            </span>
 
             {/* 읽지 않은 메시지 배지 */}
             {hasUnread && (

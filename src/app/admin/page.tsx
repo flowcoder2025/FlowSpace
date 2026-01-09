@@ -23,6 +23,7 @@ import {
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { getText } from "@/lib/text-config"
 import { OCIMonitoring } from "./components/OCIMonitoring"
+import { UsageAnalysis } from "./components/UsageAnalysis"
 
 // ============================================
 // Types
@@ -424,6 +425,7 @@ export default function AdminDashboardPage() {
             <Tabs defaultValue="dashboard">
               <TabsList>
                 <TabsTrigger value="dashboard">대시보드</TabsTrigger>
+                <TabsTrigger value="usage">사용량 분석</TabsTrigger>
                 <TabsTrigger value="oci">OCI 인프라</TabsTrigger>
               </TabsList>
 
@@ -570,6 +572,11 @@ export default function AdminDashboardPage() {
               </GridItem>
             </Grid>
                 </VStack>
+              </TabsContent>
+
+              {/* Usage Analysis Tab */}
+              <TabsContent value="usage" className="mt-6">
+                <UsageAnalysis />
               </TabsContent>
 
               {/* OCI Infrastructure Tab */}

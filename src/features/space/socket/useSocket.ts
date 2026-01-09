@@ -24,6 +24,9 @@ import type {
   // 리액션 이벤트 타입
   ReactionData,
   ReactionType,
+  // 스포트라이트 이벤트 타입
+  SpotlightActivatedData,
+  SpotlightStatusData,
 } from "./types"
 import { eventBridge, GameEvents } from "../game/events"
 
@@ -61,6 +64,10 @@ interface UseSocketOptions {
   onRecordingError?: (message: string) => void  // 녹화 에러
   // 👍 리액션 이벤트 콜백
   onReactionUpdated?: (data: ReactionData) => void  // 리액션 추가/제거
+  // 🔦 스포트라이트 이벤트 콜백
+  onSpotlightActivated?: (data: SpotlightActivatedData) => void  // 스포트라이트 활성화됨
+  onSpotlightDeactivated?: (data: SpotlightActivatedData) => void  // 스포트라이트 비활성화됨
+  onSpotlightError?: (message: string) => void  // 스포트라이트 에러
 }
 
 // 🔒 Socket 에러 타입 (세션 검증 실패 등)
@@ -101,6 +108,10 @@ interface UseSocketReturn {
   stopRecording: () => void   // 녹화 중지
   // 👍 리액션 명령어
   toggleReaction: (messageId: string, type: ReactionType) => void  // 리액션 토글
+  // 🔦 스포트라이트 명령어
+  spotlightStatus: SpotlightStatusData | null  // 현재 스포트라이트 상태
+  activateSpotlight: () => void  // 스포트라이트 활성화
+  deactivateSpotlight: () => void  // 스포트라이트 비활성화
 }
 
 export function useSocket({
@@ -134,6 +145,10 @@ export function useSocket({
   onRecordingError,
   // 👍 리액션 이벤트 콜백
   onReactionUpdated,
+  // 🔦 스포트라이트 이벤트 콜백
+  onSpotlightActivated,
+  onSpotlightDeactivated,
+  onSpotlightError,
 }: UseSocketOptions): UseSocketReturn {
   const socketRef = useRef<Socket<ServerToClientEvents, ClientToServerEvents> | null>(null)
   const [isConnected, setIsConnected] = useState(false)
@@ -146,6 +161,8 @@ export function useSocket({
   const [partyState, setPartyState] = useState<PartyState>({ partyId: null, partyName: null })
   // 🔴 녹화 상태 (법적 준수 - REC 표시용)
   const [recordingStatus, setRecordingStatus] = useState<RecordingStatusData | null>(null)
+  // 🔦 스포트라이트 상태
+  const [spotlightStatus, setSpotlightStatus] = useState<SpotlightStatusData | null>(null)
 
   // Use refs to persist state across useEffect re-runs (fixes timing race condition)
   const pendingPlayersRef = useRef<PlayerPosition[]>([])
@@ -177,6 +194,10 @@ export function useSocket({
   const onRecordingErrorRef = useRef(onRecordingError)
   // 👍 리액션 이벤트 콜백 ref
   const onReactionUpdatedRef = useRef(onReactionUpdated)
+  // 🔦 스포트라이트 이벤트 콜백 refs
+  const onSpotlightActivatedRef = useRef(onSpotlightActivated)
+  const onSpotlightDeactivatedRef = useRef(onSpotlightDeactivated)
+  const onSpotlightErrorRef = useRef(onSpotlightError)
 
   // 🔄 Store nickname and avatarColor/avatarConfig in refs to enable hot update without reconnection
   const nicknameRef = useRef(nickname)
@@ -209,6 +230,10 @@ export function useSocket({
     onRecordingErrorRef.current = onRecordingError
     // 👍 리액션 이벤트 콜백 ref 업데이트
     onReactionUpdatedRef.current = onReactionUpdated
+    // 🔦 스포트라이트 이벤트 콜백 refs 업데이트
+    onSpotlightActivatedRef.current = onSpotlightActivated
+    onSpotlightDeactivatedRef.current = onSpotlightDeactivated
+    onSpotlightErrorRef.current = onSpotlightError
     // 🔄 Update profile refs (used for movement events)
     nicknameRef.current = nickname
     avatarColorRef.current = avatarColor
@@ -605,6 +630,46 @@ export function useSocket({
       onReactionUpdatedRef.current?.(data)
     })
 
+    // ============================================
+    // 🔦 스포트라이트 이벤트 리스너
+    // ============================================
+    socket.on("spotlight:activated", (data: SpotlightActivatedData) => {
+      console.log("[Socket] 🔦 Spotlight activated by:", data.nickname)
+      // 상태 업데이트 - activeSpotlights 배열에 추가
+      setSpotlightStatus((prev) => {
+        if (!prev) return prev
+        const newActiveSpotlights = [...prev.activeSpotlights]
+        if (!newActiveSpotlights.some(s => s.participantId === data.participantId)) {
+          newActiveSpotlights.push({ participantId: data.participantId, nickname: data.nickname })
+        }
+        return { ...prev, activeSpotlights: newActiveSpotlights }
+      })
+      onSpotlightActivatedRef.current?.(data)
+    })
+
+    socket.on("spotlight:deactivated", (data: SpotlightActivatedData) => {
+      console.log("[Socket] ⬛ Spotlight deactivated by:", data.nickname)
+      // 상태 업데이트 - activeSpotlights 배열에서 제거
+      setSpotlightStatus((prev) => {
+        if (!prev) return prev
+        const newActiveSpotlights = prev.activeSpotlights.filter(s => s.participantId !== data.participantId)
+        return { ...prev, activeSpotlights: newActiveSpotlights }
+      })
+      onSpotlightDeactivatedRef.current?.(data)
+    })
+
+    socket.on("spotlight:status", (data: SpotlightStatusData) => {
+      if (IS_DEV) {
+        console.log("[Socket] Spotlight status:", data.activeSpotlights.length, "active, hasGrant:", data.hasGrant)
+      }
+      setSpotlightStatus(data)
+    })
+
+    socket.on("spotlight:error", (data: { message: string }) => {
+      console.warn("[Socket] Spotlight error:", data.message)
+      onSpotlightErrorRef.current?.(data.message)
+    })
+
     // 🔄 Profile update events (다른 플레이어의 닉네임/아바타 변경)
     socket.on("player:profileUpdated", (data) => {
       if (IS_DEV) {
@@ -890,6 +955,30 @@ export function useSocket({
     }
   }, [isConnected])
 
+  // ============================================
+  // 🔦 스포트라이트 명령어
+  // ============================================
+
+  // 스포트라이트 활성화
+  const activateSpotlight = useCallback(() => {
+    if (socketRef.current && isConnected) {
+      socketRef.current.emit("spotlight:activate", {})
+      if (IS_DEV) {
+        console.log("[Socket] Requesting spotlight activate")
+      }
+    }
+  }, [isConnected])
+
+  // 스포트라이트 비활성화
+  const deactivateSpotlight = useCallback(() => {
+    if (socketRef.current && isConnected) {
+      socketRef.current.emit("spotlight:deactivate", {})
+      if (IS_DEV) {
+        console.log("[Socket] Requesting spotlight deactivate")
+      }
+    }
+  }, [isConnected])
+
   return {
     isConnected,
     players,
@@ -916,5 +1005,9 @@ export function useSocket({
     stopRecording, // 녹화 중지
     // 👍 리액션 명령어
     toggleReaction, // 리액션 토글
+    // 🔦 스포트라이트 명령어
+    spotlightStatus, // 현재 스포트라이트 상태
+    activateSpotlight, // 스포트라이트 활성화
+    deactivateSpotlight, // 스포트라이트 비활성화
   }
 }

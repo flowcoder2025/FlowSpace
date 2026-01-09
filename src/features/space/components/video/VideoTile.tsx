@@ -31,6 +31,12 @@ const ScreenShareIcon = () => (
   </svg>
 )
 
+const SpotlightBadgeIcon = () => (
+  <svg className="size-3" fill="currentColor" viewBox="0 0 20 20">
+    <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" />
+  </svg>
+)
+
 const SpeakingIcon = () => (
   <svg className="size-3 animate-pulse" fill="currentColor" viewBox="0 0 20 20">
     <path fillRule="evenodd" d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM14.657 2.929a1 1 0 011.414 0A9.972 9.972 0 0119 10a9.972 9.972 0 01-2.929 7.071 1 1 0 01-1.414-1.414A7.971 7.971 0 0017 10c0-2.21-.894-4.208-2.343-5.657a1 1 0 010-1.414zm-2.829 2.828a1 1 0 011.415 0A5.983 5.983 0 0115 10a5.984 5.984 0 01-1.757 4.243 1 1 0 01-1.415-1.415A3.984 3.984 0 0013 10a3.983 3.983 0 00-1.172-2.828 1 1 0 010-1.415z" clipRule="evenodd" />
@@ -125,6 +131,8 @@ interface VideoTileProps {
   globalOutputVolume?: number
   /** 🪞 로컬 비디오 미러 모드 */
   mirrorLocalVideo?: boolean
+  /** 🔦 스포트라이트 활성화 여부 (전역 브로드캐스트 중) */
+  isSpotlight?: boolean
 }
 
 // ============================================
@@ -140,6 +148,7 @@ export function VideoTile({
   allAudioTracks = [],
   globalOutputVolume = 100,
   mirrorLocalVideo = true,
+  isSpotlight = false,
 }: VideoTileProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
@@ -527,7 +536,10 @@ export function VideoTile({
         "group relative aspect-video rounded-lg bg-black",
         // 전체화면이 아닐 때만 overflow-hidden (Portal이 잘리지 않도록)
         !isFullscreen && "overflow-hidden",
-        track.isSpeaking && "ring-2 ring-primary ring-offset-2",
+        // 스포트라이트 활성화 시 노란색 ring (speaking보다 우선)
+        isSpotlight && "ring-2 ring-yellow-400 ring-offset-2",
+        // 스포트라이트가 아닐 때만 speaking ring 표시
+        !isSpotlight && track.isSpeaking && "ring-2 ring-primary ring-offset-2",
         isFullscreen && "fixed inset-0 z-50 aspect-auto rounded-none",
         className
       )}
@@ -745,7 +757,13 @@ export function VideoTile({
         )}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
-            {track.isSpeaking && (
+            {/* 스포트라이트 활성화 표시 */}
+            {isSpotlight && (
+              <div className="rounded bg-yellow-500/90 p-0.5 text-black" title="스포트라이트 활성화 - 전체 브로드캐스트 중">
+                <SpotlightBadgeIcon />
+              </div>
+            )}
+            {track.isSpeaking && !isSpotlight && (
               <div className="rounded bg-primary/80 p-0.5 text-white">
                 <SpeakingIcon />
               </div>
@@ -754,6 +772,7 @@ export function VideoTile({
               {track.participantName}
               {isLocal && " (나)"}
               {isScreenShare && " - 화면공유"}
+              {isSpotlight && " (스포트라이트)"}
             </Text>
           </div>
           <div className="flex items-center gap-1">

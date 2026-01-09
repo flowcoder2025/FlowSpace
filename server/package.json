@@ -1,0 +1,11 @@
+{
+  "name": "flowspace-socket-server",
+  "version": "1.0.0",
+  "main": "socket-server.js",
+  "scripts": {
+    "start": "node socket-server.js"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.2.1"
+  }
+}

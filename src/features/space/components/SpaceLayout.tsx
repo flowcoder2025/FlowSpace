@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useCallback, useMemo, useEffect, useRef } from "react"
+import { cn } from "@/lib/utils"
 
 import { SpaceHeader } from "./SpaceHeader"
 import { FloatingChatOverlay, MobileChatOverlay, type AdminCommandResult } from "./chat"
@@ -13,11 +14,12 @@ import { SpaceSettingsModal } from "./SpaceSettingsModal"
 import { MediaSettingsModal, type MediaSettingsTab } from "./settings"
 import { MemberPanel } from "./MemberPanel"
 import { RecordingIndicator } from "./RecordingIndicator"
+import { ProximityIndicator } from "./ProximityIndicator"
 import { EditorPanel, EditorModeIndicator } from "./editor"
 import { IOSAudioActivator } from "./IOSAudioActivator"
 import { useSocket } from "../socket"
-import { LiveKitRoomProvider, useLiveKitMedia } from "../livekit"
-import { useNotificationSound, useChatStorage, usePastMessages, mergePastMessages, useAudioSettings, useAudioGateProcessor } from "../hooks"
+import { LiveKitRoomProvider, useLiveKitMedia, useProximitySubscription, type Position } from "../livekit"
+import { useNotificationSound, useChatStorage, usePastMessages, mergePastMessages, useAudioSettings, useAudioGateProcessor, usePartyZone } from "../hooks"
 import { generateFullHelpMessages, getNextRotatingHint, getWelcomeMessage, HINT_INTERVAL_MS } from "../utils/commandHints"
 import { useEditorCommands } from "../hooks/useEditorCommands"
 import { useEditorStore } from "../stores/editorStore"
@@ -216,11 +218,25 @@ function SpaceLayoutContent({
   // 🔔 알림음 훅
   const { playWhisperSound } = useNotificationSound()
 
-  // 🎮 캐릭터 위치/방향 상태 (Phaser에서 eventBridge로 업데이트, 향후 사용 예정)
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [characterPosition, _setCharacterPosition] = useState<GridPosition>({ x: 5, y: 5 })
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [characterDirection, _setCharacterDirection] = useState<"up" | "down" | "left" | "right">("down")
+  // 🎮 캐릭터 위치/방향 상태 (Phaser에서 eventBridge로 업데이트)
+  const [characterPosition, setCharacterPosition] = useState<GridPosition>({ x: 5, y: 5 })
+  const [characterDirection, setCharacterDirection] = useState<"up" | "down" | "left" | "right">("down")
+
+  // 📍 Phaser PLAYER_MOVED 이벤트 수신 → 로컬 캐릭터 위치 업데이트
+  useEffect(() => {
+    const handlePlayerMoved = (payload: unknown) => {
+      const pos = payload as { x: number; y: number; direction?: "up" | "down" | "left" | "right" }
+      setCharacterPosition({ x: pos.x, y: pos.y })
+      if (pos.direction) {
+        setCharacterDirection(pos.direction)
+      }
+    }
+
+    eventBridge.on(GameEvents.PLAYER_MOVED, handlePlayerMoved)
+    return () => {
+      eventBridge.off(GameEvents.PLAYER_MOVED, handlePlayerMoved)
+    }
+  }, [])
 
   // Socket message handlers (📦 500개 메모리 상한 적용)
   const handleChatMessage = useCallback((data: ChatMessageData) => {
@@ -420,6 +436,15 @@ function SpaceLayoutContent({
     toggleReaction,
     // 🎬 녹화 상태 및 제어 (법적 준수)
     recordingStatus,
+    // 🔦 스포트라이트 상태 및 제어
+    spotlightStatus,
+    activateSpotlight,
+    deactivateSpotlight,
+    // 🏠 파티 존 (Phase 2)
+    partyState,
+    joinParty,
+    leaveParty,
+    sendPartyMessage,
   } = useSocket({
     spaceId,
     playerId: userId,
@@ -514,6 +539,76 @@ function SpaceLayoutContent({
       console.warn("[SpaceLayout] AudioGate 에러:", gateError)
     }
   }, [gateError])
+
+  // ============================================
+  // 📍 Phase 3: 근접 기반 커뮤니케이션 (Proximity Chat)
+  // ============================================
+
+  // 원격 플레이어 위치 맵 (Socket.io players → Position 변환)
+  const remotePositions = useMemo(() => {
+    const positions = new Map<string, Position>()
+    players.forEach((player, playerId) => {
+      positions.set(playerId, { x: player.x, y: player.y })
+    })
+    return positions
+  }, [players])
+
+  // 로컬 플레이어 위치 (근접 계산용)
+  const localPosition: Position | null = useMemo(() => {
+    return characterPosition ? { x: characterPosition.x, y: characterPosition.y } : null
+  }, [characterPosition])
+
+  // 🔦 스포트라이트 활성화된 사용자 Set
+  const spotlightUsers = useMemo(() => {
+    if (!spotlightStatus?.activeSpotlights) return new Set<string>()
+    return new Set(spotlightStatus.activeSpotlights.map(s => s.participantId))
+  }, [spotlightStatus?.activeSpotlights])
+
+  // 🏠 파티 존 감지 (Phase 2)
+  const {
+    currentZone,
+    partyZoneUsers,
+    zones: partyZones,
+  } = usePartyZone({
+    spaceId,
+    localPosition,
+    remotePositions,
+    tileSize: 32, // 타일 크기 (픽셀)
+    onJoinParty: joinParty,
+    onLeaveParty: leaveParty,
+    debounceMs: 300,
+  })
+
+  // 📍 파티 존 디버그 로그 (개발 모드)
+  useEffect(() => {
+    if (process.env.NODE_ENV === "development" && currentZone) {
+      console.log("[PartyZone] 현재 존:", currentZone.name, "동일 존 사용자:", partyZoneUsers.size)
+    }
+  }, [currentZone, partyZoneUsers])
+
+  // 근접 기반 LiveKit 구독 관리
+  // 현재는 enabled: false로 비활성화 (전역 모드)
+  // 향후 공간 설정에서 활성화 가능
+  const { proximityInfo, inRangeCount, outOfRangeCount } = useProximitySubscription({
+    localPosition,
+    remotePositions,
+    spotlightUsers, // 🔦 스포트라이트 시스템 연동 완료
+    partyZoneUsers, // 🏠 파티 존 시스템 연동 완료
+    config: {
+      enabled: false, // 기본 비활성화 (전역 모드)
+      proximityRadius: 3.5, // 7×7 타일
+      enableVolumeAttenuation: false,
+      minVolume: 0.3,
+      updateThrottleMs: 100,
+    },
+  })
+
+  // 📍 근접 정보 디버그 로그 (개발 모드)
+  useEffect(() => {
+    if (process.env.NODE_ENV === "development" && proximityInfo.enabled) {
+      console.log("[Proximity] In range:", inRangeCount, "Out of range:", outOfRangeCount)
+    }
+  }, [proximityInfo, inRangeCount, outOfRangeCount])
 
   // 🎨 에디터 상태 구독
   const isEditorActive = useEditorStore((state) => state.mode.isActive)
@@ -1384,6 +1479,20 @@ function SpaceLayoutContent({
           </div>
         )}
 
+        {/* 📍 근접 모드 인디케이터 (상단 좌측, 에디터 아래) */}
+        <div className={cn(
+          "pointer-events-auto absolute left-4 z-20",
+          isEditorActive ? "top-12" : "top-2"
+        )}>
+          <ProximityIndicator
+            enabled={proximityInfo.enabled}
+            inRangeCount={inRangeCount}
+            outOfRangeCount={outOfRangeCount}
+            inRangeUsers={proximityInfo.inRange}
+            outOfRangeUsers={proximityInfo.outOfRange}
+          />
+        </div>
+
         {/* 📱 채팅 오버레이 - 모바일/데스크톱 분기 */}
         {isTouchDevice ? (
           // 📱 모바일: 하단 고정 입력 바 + 전체화면 오버레이
@@ -1410,6 +1519,7 @@ function SpaceLayoutContent({
             players={players}
             onSendMessage={handleSendMessage}
             onSendWhisper={handleSendWhisper}
+            onSendPartyMessage={sendPartyMessage}
             onAdminCommand={handleAdminCommand}
             onEditorCommand={handleEditorCommand}
             onDeleteMessage={deleteMessage}
@@ -1422,6 +1532,7 @@ function SpaceLayoutContent({
             onLoadMore={handleLoadMore}
             isLoadingMore={isLoadingMore}
             hasMoreMessages={hasMoreMessages}
+            currentZone={currentZone}
           />
         )}
 
@@ -1439,6 +1550,7 @@ function SpaceLayoutContent({
               inviteCode={spaceInviteCode}
               isMemberPanelOpen={isMemberPanelOpen}
               onToggleMemberPanel={handleToggleMemberPanel}
+              spotlightUsers={spotlightUsers}
             />
           </div>
         )}
@@ -1456,6 +1568,7 @@ function SpaceLayoutContent({
               inviteCode={spaceInviteCode}
               isMemberPanelOpen={isMemberPanelOpen}
               onToggleMemberPanel={handleToggleMemberPanel}
+              spotlightUsers={spotlightUsers}
               className="h-full"
             />
           </div>
@@ -1473,6 +1586,7 @@ function SpaceLayoutContent({
               inviteCode={spaceInviteCode}
               isMemberPanelOpen={isMemberPanelOpen}
               onToggleMemberPanel={handleToggleMemberPanel}
+              spotlightUsers={spotlightUsers}
             />
           </div>
         )}
@@ -1488,6 +1602,7 @@ function SpaceLayoutContent({
               inviteCode={spaceInviteCode}
               isMemberPanelOpen={isMemberPanelOpen}
               onToggleMemberPanel={handleToggleMemberPanel}
+              spotlightUsers={spotlightUsers}
             />
           </div>
         )}
@@ -1542,6 +1657,16 @@ function SpaceLayoutContent({
           onOpenSettings={handleOpenSettings}
           onOpenMediaSettings={handleOpenMediaSettings}
           onDismissError={handleDismissError}
+          // 🔦 스포트라이트 시스템
+          hasSpotlightGrant={spotlightStatus?.hasGrant}
+          isSpotlightActive={spotlightUsers.has(resolvedUserId)}
+          onToggleSpotlight={spotlightStatus?.hasGrant ? () => {
+            if (spotlightUsers.has(resolvedUserId)) {
+              deactivateSpotlight()
+            } else {
+              activateSpotlight()
+            }
+          } : undefined}
         />
       </div>
 

@@ -1,6 +1,6 @@
 # FlowSpace 개발 로드맵
 
-> **최종 업데이트**: 2026-01-08
+> **최종 업데이트**: 2026-01-10
 > **PRD 참조**: `/docs/prd.md`
 > **상위 문서**: `/CLAUDE.md` (루트 헌법)
 
@@ -199,8 +199,8 @@ src/features/space/game/scenes/MainScene.ts
 - [x] ~~쿼리 중복 최적화~~ → 18→10개 쿼리 통합 완료 (2026-01-09)
 - [x] ~~사용자 열거 방지~~ → 일관된 에러 응답 구현 완료 (2026-01-09)
 - [x] ~~RBAC 정책, 이중 검증, cuid 안전성~~ → 문제 없음 확인 (2026-01-09)
-- [ ] **3.7 공간 기반 커뮤니케이션** → [설계 문서](./roadmap/SPATIAL-COMMUNICATION.md)
-- [ ] **3.8 스포트라이트 시스템** → [설계 문서](./roadmap/SPATIAL-COMMUNICATION.md)
+- [x] **3.7 공간 기반 커뮤니케이션** → ✅ 완료 (2026-01-10) [설계 문서](./roadmap/SPATIAL-COMMUNICATION.md)
+- [x] **3.8 스포트라이트 시스템** → ✅ 완료 (2026-01-10) [설계 문서](./roadmap/SPATIAL-COMMUNICATION.md)
 
 ### 5.3 기존 체크리스트
 
@@ -231,6 +231,7 @@ src/features/space/game/scenes/MainScene.ts
 
 | 날짜 | 작업 | 관련 파일 |
 |-----|------|----------|
+| 2026-01-10 | **공간 기반 커뮤니케이션 구현 완료** - 근접 통신 (Phase 1), 파티 존 (Phase 2), 스포트라이트 (Phase 3) | `useProximitySubscription.ts`, `usePartyZone.ts`, `zones/route.ts`, 채팅 컴포넌트 |
 | 2026-01-09 | **공간 기반 커뮤니케이션 설계** - 근접 통신, 파티 존, 스포트라이트 시스템 설계 문서 작성 | `docs/roadmap/SPATIAL-COMMUNICATION.md` |
 | 2026-01-09 | **보안 36/38 (95%)** - 3.12, 3.13, 4.2 문제없음 확인, 3.7/3.8 재정의 | `TASK.md` |
 | 2026-01-09 | **쿼리+인덱스 최적화** - 3.2 쿼리 통합 (18→10), 4.1 groupBy 인덱스 | `admin/stats/route.ts`, `schema.prisma` |

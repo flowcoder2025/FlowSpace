@@ -45,6 +45,11 @@ import type {
   // 리액션 이벤트 타입
   ReactionAddRequest,
   ReactionData,
+  // 스포트라이트 이벤트 타입
+  SpotlightGrantedData,
+  SpotlightRevokedData,
+  SpotlightActivatedData,
+  SpotlightStatusData,
 } from "../src/features/space/socket/types"
 
 const PORT = parseInt(process.env.PORT || process.env.SOCKET_PORT || "3001", 10)
@@ -817,6 +822,21 @@ const partyRooms = new Map<string, Set<string>>()
 // 각 공간별 녹화 상태 추적 (법적 준수)
 const recordingStates = new Map<string, RecordingStatusData>()
 
+// 🔦 Spotlight state: spaceId -> Map<participantId, { nickname: string }>
+// 각 공간별 활성화된 스포트라이트 추적
+interface ActiveSpotlight {
+  participantId: string
+  nickname: string
+}
+const spotlightStates = new Map<string, Map<string, ActiveSpotlight>>()
+
+function getOrCreateSpotlightState(spaceId: string): Map<string, ActiveSpotlight> {
+  if (!spotlightStates.has(spaceId)) {
+    spotlightStates.set(spaceId, new Map())
+  }
+  return spotlightStates.get(spaceId)!
+}
+
 function getOrCreateRoom(spaceId: string): Map<string, PlayerPosition> {
   if (!rooms.has(spaceId)) {
     rooms.set(spaceId, new Map())
@@ -1026,6 +1046,75 @@ io.on("connection", (socket) => {
     const currentRecordingState = recordingStates.get(spaceId)
     if (currentRecordingState?.isRecording) {
       socket.emit("recording:status", currentRecordingState)
+    }
+
+    // 🔦 현재 스포트라이트 상태 전달
+    try {
+      const spotlightState = spotlightStates.get(spaceId)
+      const activeSpotlights = spotlightState
+        ? Array.from(spotlightState.values())
+        : []
+
+      // 본인의 스포트라이트 권한 확인
+      let hasGrant = false
+      let grantId: string | undefined
+      let expiresAt: string | undefined
+
+      if (sessionToken) {
+        // userId 또는 guestSessionId로 스포트라이트 권한 조회
+        let spotlightGrant = null
+
+        // 인증 사용자인 경우 userId로 조회
+        if (socket.data.userId) {
+          spotlightGrant = await prisma.spotlightGrant.findFirst({
+            where: {
+              spaceId,
+              userId: socket.data.userId,
+              OR: [
+                { expiresAt: null },
+                { expiresAt: { gt: new Date() } },
+              ],
+            },
+          })
+        } else if (sessionToken.startsWith("guest-")) {
+          // 게스트 세션에서 guestSessionId 조회
+          const guestSession = await prisma.guestSession.findUnique({
+            where: { sessionToken },
+            select: { id: true },
+          })
+          if (guestSession) {
+            spotlightGrant = await prisma.spotlightGrant.findFirst({
+              where: {
+                spaceId,
+                guestSessionId: guestSession.id,
+                OR: [
+                  { expiresAt: null },
+                  { expiresAt: { gt: new Date() } },
+                ],
+              },
+            })
+          }
+        }
+        if (spotlightGrant) {
+          hasGrant = true
+          grantId = spotlightGrant.id
+          expiresAt = spotlightGrant.expiresAt?.toISOString()
+          // SocketData에 스포트라이트 정보 저장
+          socket.data.hasSpotlightGrant = true
+          socket.data.spotlightGrantId = spotlightGrant.id
+          socket.data.isSpotlightActive = spotlightGrant.isActive
+        }
+      }
+
+      const spotlightStatus: SpotlightStatusData = {
+        activeSpotlights,
+        hasGrant,
+        grantId,
+        expiresAt,
+      }
+      socket.emit("spotlight:status", spotlightStatus)
+    } catch (error) {
+      console.error("[Socket] Spotlight status error:", error)
     }
 
     // Notify other players in room
@@ -2169,6 +2258,122 @@ io.on("connection", (socket) => {
   })
 
   // ============================================
+  // 🔦 스포트라이트 이벤트 (공간 기반 커뮤니케이션)
+  // ============================================
+
+  // 스포트라이트 활성화
+  socket.on("spotlight:activate", async () => {
+    const { spaceId, playerId, nickname, sessionToken, hasSpotlightGrant, spotlightGrantId } = socket.data
+
+    if (!spaceId || !playerId) {
+      socket.emit("spotlight:error", { message: "공간 정보가 없습니다." })
+      return
+    }
+
+    // 🔒 권한 검증: 스포트라이트 권한이 있어야 활성화 가능
+    if (!hasSpotlightGrant || !spotlightGrantId) {
+      socket.emit("spotlight:error", { message: "스포트라이트 권한이 없습니다." })
+      return
+    }
+
+    try {
+      // DB에서 권한 유효성 재확인
+      const grant = await prisma.spotlightGrant.findFirst({
+        where: {
+          id: spotlightGrantId,
+          spaceId,
+          OR: [
+            { expiresAt: null },
+            { expiresAt: { gt: new Date() } },
+          ],
+        },
+      })
+
+      if (!grant) {
+        socket.data.hasSpotlightGrant = false
+        socket.data.spotlightGrantId = undefined
+        socket.emit("spotlight:error", { message: "스포트라이트 권한이 만료되었습니다." })
+        return
+      }
+
+      // 활성화 상태로 업데이트
+      await prisma.spotlightGrant.update({
+        where: { id: spotlightGrantId },
+        data: { isActive: true },
+      })
+
+      socket.data.isSpotlightActive = true
+
+      // 메모리 상태 업데이트
+      const spotlightState = getOrCreateSpotlightState(spaceId)
+      spotlightState.set(playerId, {
+        participantId: playerId,
+        nickname: nickname || "Unknown",
+      })
+
+      // 📢 공간 내 모든 참가자에게 브로드캐스트
+      const activatedData: SpotlightActivatedData = {
+        participantId: playerId,
+        nickname: nickname || "Unknown",
+        isActive: true,
+      }
+      io.to(spaceId).emit("spotlight:activated", activatedData)
+
+      console.log(`[Socket] 🔦 Spotlight ACTIVATED by ${nickname} in space ${spaceId}`)
+    } catch (error) {
+      console.error("[Socket] Spotlight activate error:", error)
+      socket.emit("spotlight:error", { message: "스포트라이트 활성화에 실패했습니다." })
+    }
+  })
+
+  // 스포트라이트 비활성화
+  socket.on("spotlight:deactivate", async () => {
+    const { spaceId, playerId, nickname, spotlightGrantId, isSpotlightActive } = socket.data
+
+    if (!spaceId || !playerId) {
+      socket.emit("spotlight:error", { message: "공간 정보가 없습니다." })
+      return
+    }
+
+    // 이미 비활성화 상태인 경우
+    if (!isSpotlightActive) {
+      socket.emit("spotlight:error", { message: "스포트라이트가 이미 비활성화 상태입니다." })
+      return
+    }
+
+    try {
+      // DB 업데이트
+      if (spotlightGrantId) {
+        await prisma.spotlightGrant.update({
+          where: { id: spotlightGrantId },
+          data: { isActive: false },
+        })
+      }
+
+      socket.data.isSpotlightActive = false
+
+      // 메모리 상태 업데이트
+      const spotlightState = spotlightStates.get(spaceId)
+      if (spotlightState) {
+        spotlightState.delete(playerId)
+      }
+
+      // 📢 공간 내 모든 참가자에게 브로드캐스트
+      const deactivatedData: SpotlightActivatedData = {
+        participantId: playerId,
+        nickname: nickname || "Unknown",
+        isActive: false,
+      }
+      io.to(spaceId).emit("spotlight:deactivated", deactivatedData)
+
+      console.log(`[Socket] ⬛ Spotlight DEACTIVATED by ${nickname} in space ${spaceId}`)
+    } catch (error) {
+      console.error("[Socket] Spotlight deactivate error:", error)
+      socket.emit("spotlight:error", { message: "스포트라이트 비활성화에 실패했습니다." })
+    }
+  })
+
+  // ============================================
   // 🗺️ 맵 오브젝트 이벤트 (에디터)
   // ============================================
 
@@ -2437,6 +2642,29 @@ io.on("connection", (socket) => {
         recordingStates.delete(spaceId)
         io.to(spaceId).emit("recording:stopped", stoppedStatus)
         console.log(`[Socket] ⬛ Recording auto-stopped (${nickname} disconnected) in space ${spaceId}`)
+      }
+
+      // 🔦 스포트라이트 정리: 스포트라이트 활성화 중이었다면 비활성화
+      const spotlightState = spotlightStates.get(spaceId)
+      if (spotlightState?.has(playerId)) {
+        spotlightState.delete(playerId)
+
+        // DB 업데이트 (비동기, 실패해도 disconnect 처리는 계속)
+        if (socket.data.spotlightGrantId) {
+          prisma.spotlightGrant.update({
+            where: { id: socket.data.spotlightGrantId },
+            data: { isActive: false },
+          }).catch(() => {})
+        }
+
+        // 다른 참가자에게 알림
+        const deactivatedData: SpotlightActivatedData = {
+          participantId: playerId,
+          nickname: nickname || "Unknown",
+          isActive: false,
+        }
+        io.to(spaceId).emit("spotlight:deactivated", deactivatedData)
+        console.log(`[Socket] ⬛ Spotlight auto-deactivated (${nickname} disconnected) in space ${spaceId}`)
       }
 
       // 🎉 파티 정리: 파티에 참가 중이었다면 룸에서 제거

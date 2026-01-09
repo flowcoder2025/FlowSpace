@@ -320,11 +320,13 @@ model Space {
   owner    User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   template Template @relation(fields: [templateId], references: [id])
 
-  eventLogs     SpaceEventLog[]
-  guestSessions GuestSession[]
-  members       SpaceMember[] // Phase 6: 공간 멤버
-  chatMessages  ChatMessage[] // Phase 6: 채팅 메시지
-  mapObjects    MapObject[] // 맵 오브젝트 (에디터 배치)
+  eventLogs       SpaceEventLog[]
+  guestSessions   GuestSession[]
+  members         SpaceMember[] // Phase 6: 공간 멤버
+  chatMessages    ChatMessage[] // Phase 6: 채팅 메시지
+  mapObjects      MapObject[] // 맵 오브젝트 (에디터 배치)
+  spotlightGrants SpotlightGrant[] // Phase 3: 스포트라이트 권한
+  partyZones      PartyZone[] // Phase 2: 파티 존
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -646,5 +648,60 @@ model UsageDaily {
 
   @@unique([date, spaceId])
   @@index([date])
+  @@index([spaceId])
+}
+
+// ============================================
+// 22. SpotlightGrant (스포트라이트 권한)
+// 공간 기반 커뮤니케이션 Phase 3
+// ============================================
+model SpotlightGrant {
+  id        String   @id @default(cuid())
+  spaceId   String
+
+  // 권한 대상 (userId 또는 guestSessionId)
+  userId         String?
+  guestSessionId String?
+
+  // 권한 부여 정보
+  grantedBy String    // 부여한 관리자 ID
+  grantedAt DateTime  @default(now())
+  expiresAt DateTime? // 만료 시간 (선택)
+
+  // 현재 상태
+  isActive Boolean @default(false) // 스포트라이트 활성화 여부
+
+  space Space @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@unique([spaceId, userId])
+  @@unique([spaceId, guestSessionId])
+  @@index([spaceId])
+  @@index([spaceId, isActive])
+}
+
+// ============================================
+// 23. PartyZone (파티 존)
+// 공간 기반 커뮤니케이션 Phase 2
+// ============================================
+model PartyZone {
+  id      String @id @default(cuid())
+  spaceId String
+  name    String // "회의실 A", "강연장" 등
+
+  // 영역 좌표 (그리드 단위)
+  boundsX1 Int // 좌상단 X
+  boundsY1 Int // 좌상단 Y
+  boundsX2 Int // 우하단 X
+  boundsY2 Int // 우하단 Y
+
+  // 생성 정보
+  createdBy     String
+  createdByType SenderType @default(USER) // USER or GUEST
+
+  space Space @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([spaceId])
 }
