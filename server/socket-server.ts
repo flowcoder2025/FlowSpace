@@ -79,6 +79,92 @@ if (process.env.NODE_ENV !== "production") {
 }
 
 // ============================================
+// 📝 구조화된 로거 (JSON 형식 + 에러 코드)
+// ============================================
+/**
+ * 에러 코드 체계:
+ * E1xxx: 인증/세션 (Authentication)
+ * E2xxx: 연결/소켓 (Connection)
+ * E3xxx: 데이터베이스 (Database)
+ * E4xxx: 외부 API (External API)
+ * E5xxx: 비즈니스 로직 (Business Logic)
+ * E6xxx: 시스템/인프라 (System)
+ *
+ * I로 시작하면 Info 레벨 로그
+ */
+const ErrorCodes = {
+  // E1xxx: 인증/세션
+  E1001: "세션 토큰 없음",
+  E1002: "세션 검증 실패",
+  E1003: "인증 필요",
+  E1004: "권한 없음",
+
+  // E2xxx: 연결/소켓
+  E2001: "클라이언트 연결됨",
+  E2002: "클라이언트 연결 해제",
+  E2003: "중복 세션 감지",
+  E2004: "소켓 룸 입장 실패",
+  E2005: "소켓 통신 오류",
+
+  // E3xxx: 데이터베이스
+  E3001: "채팅 저장 실패",
+  E3002: "멤버 제한 로드 실패",
+  E3003: "멤버 제한 저장 실패",
+  E3004: "오브젝트 저장 실패",
+  E3005: "DB 연결 오류",
+
+  // E4xxx: 외부 API
+  E4001: "이벤트 로깅 API 실패",
+  E4002: "세션 검증 API 실패",
+  E4003: "외부 API 타임아웃",
+
+  // E5xxx: 비즈니스 로직
+  E5001: "닉네임 스푸핑 감지",
+  E5002: "뮤트된 사용자 메시지 차단",
+  E5003: "권한 검증 실패",
+  E5004: "녹화 상태 오류",
+  E5005: "오브젝트 동기화 실패",
+
+  // E6xxx: 시스템
+  E6001: "서버 시작",
+  E6002: "서버 종료",
+  E6003: "서버 오류",
+  E6004: "메모리 경고",
+} as const
+
+type ErrorCode = keyof typeof ErrorCodes
+type LogLevel = "info" | "warn" | "error"
+
+interface LogContext {
+  sessionId?: string
+  spaceId?: string
+  playerId?: string
+  socketId?: string
+  nickname?: string
+  [key: string]: unknown
+}
+
+function createLogEntry(level: LogLevel, code: ErrorCode | string, msg: string, ctx?: LogContext) {
+  return JSON.stringify({
+    ts: new Date().toISOString(),
+    level,
+    service: "socket",
+    code,
+    msg,
+    ...ctx,
+  })
+}
+
+const logger = {
+  info: (code: ErrorCode | string, msg: string, ctx?: LogContext) =>
+    console.log(createLogEntry("info", code, msg, ctx)),
+  warn: (code: ErrorCode | string, msg: string, ctx?: LogContext) =>
+    console.warn(createLogEntry("warn", code, msg, ctx)),
+  error: (code: ErrorCode | string, msg: string, ctx?: LogContext) =>
+    console.error(createLogEntry("error", code, msg, ctx)),
+}
+
+// ============================================
 // 📊 이벤트 로깅 함수
 // ============================================
 async function logGuestEvent(
@@ -667,7 +753,7 @@ function removeFromPartyRoom(spaceId: string, partyId: string, socketId: string)
 }
 
 io.on("connection", (socket) => {
-  console.log(`[Socket] Client connected: ${socket.id}`)
+  logger.info("E2001", "Client connected", { socketId: socket.id })
 
   // Join space - 🔒 세션 토큰 검증 추가
   socket.on("join:space", async ({ spaceId, playerId, nickname, avatarColor, avatarConfig, sessionToken }) => {
@@ -688,12 +774,12 @@ io.on("connection", (socket) => {
       verifiedPlayerId = playerId // user-{userId}
       verifiedNickname = nickname
       verifiedAvatarColor = avatarColor || "default"
-      console.log(`[Socket] Auth session detected, using auth user ID: ${verifiedPlayerId}`)
+      logger.info("I1001", "Auth session detected", { playerId: verifiedPlayerId, socketId: socket.id })
     } else if (sessionToken && !isDevSession) {
       const verification = await verifyGuestSession(sessionToken, spaceId)
 
       if (!verification.valid) {
-        console.warn(`[Socket] Session verification failed for ${socket.id}:`, verification.error)
+        logger.warn("E1002", "Session verification failed", { socketId: socket.id, error: verification.error })
         // 운영환경에서는 연결 거부
         if (!IS_DEV) {
           socket.emit("error", { message: "Invalid session" })
@@ -701,7 +787,7 @@ io.on("connection", (socket) => {
           return
         }
         // 개발환경에서는 경고만 출력하고 진행
-        console.warn("[Socket] DEV MODE: Allowing connection despite invalid session")
+        logger.warn("E1002", "DEV MODE: Allowing connection despite invalid session", { socketId: socket.id })
       } else {
         // 🔒 서버에서 검증된 값으로 덮어쓰기 (클라이언트 입력 무시)
         verifiedPlayerId = verification.participantId!
@@ -709,12 +795,12 @@ io.on("connection", (socket) => {
         verifiedAvatarColor = (verification.avatar as AvatarColor) || "default"
 
         if (IS_DEV) {
-          console.log(`[Socket] Session verified: ${verifiedPlayerId} (${verifiedNickname})`)
+          logger.info("I1002", "Session verified", { playerId: verifiedPlayerId, nickname: verifiedNickname })
         }
       }
     } else if (!IS_DEV && !sessionToken) {
       // 운영환경에서 세션 토큰 없이 접근 시 거부
-      console.warn(`[Socket] No session token provided for ${socket.id}`)
+      logger.warn("E1001", "No session token provided", { socketId: socket.id })
       socket.emit("error", { message: "Session token required" })
       socket.disconnect(true)
       return
@@ -722,11 +808,11 @@ io.on("connection", (socket) => {
       // 개발환경에서 세션 없이 접근 시 임시 ID 생성
       if (!sessionToken) {
         verifiedPlayerId = `dev-anon-${Date.now()}`
-        console.log(`[Socket] DEV MODE: No session, using temp ID: ${verifiedPlayerId}`)
+        logger.info("I1003", "DEV MODE: No session, using temp ID", { playerId: verifiedPlayerId })
       } else {
         // dev- 세션의 경우 클라이언트가 보낸 ID 그대로 사용 (page.tsx에서 이미 생성됨)
         // verifiedPlayerId는 이미 playerId로 초기화되어 있음
-        console.log(`[Socket] DEV MODE: Dev session, using client ID: ${verifiedPlayerId}`)
+        logger.info("I1003", "DEV MODE: Using client ID", { playerId: verifiedPlayerId })
       }
     }
 
@@ -745,11 +831,11 @@ io.on("connection", (socket) => {
         socket.data.restriction = memberRestriction.restriction
         socket.data.memberId = memberRestriction.memberId
         if (IS_DEV) {
-          console.log(`[Socket] Loaded restriction for ${verifiedPlayerId}: ${memberRestriction.restriction}`)
+          logger.info("I3001", "Loaded member restriction", { playerId: verifiedPlayerId, restriction: memberRestriction.restriction })
         }
       }
     } catch (error) {
-      console.error(`[Socket] Failed to load member restriction:`, error)
+      logger.error("E3002", "Failed to load member restriction", { playerId: verifiedPlayerId, error: (error as Error).message })
     }
 
     // Join socket room
@@ -761,7 +847,7 @@ io.on("connection", (socket) => {
     // 📊 Phase 3.10: 중복 접속 시 기존 소켓 강제 종료 (같은 playerId로 재연결 허용)
     const existingEntry = Array.from(room.entries()).find(([, p]) => p.id === verifiedPlayerId)
     if (existingEntry) {
-      console.log(`[Socket] Duplicate session detected for ${verifiedPlayerId}, disconnecting old socket`)
+      logger.warn("E2003", "Duplicate session detected", { playerId: verifiedPlayerId, spaceId })
 
       // 기존 소켓 찾아서 종료
       const socketsInRoom = io.sockets.adapter.rooms.get(spaceId)
@@ -770,7 +856,7 @@ io.on("connection", (socket) => {
           if (oldSocketId === socket.id) continue // 현재 소켓은 제외
           const oldSocket = io.sockets.sockets.get(oldSocketId)
           if (oldSocket && oldSocket.data.playerId === verifiedPlayerId) {
-            console.log(`[Socket] 🔄 Disconnecting old socket ${oldSocketId} for ${verifiedPlayerId}`)
+            logger.info("E2003", "Disconnecting old socket", { oldSocketId, playerId: verifiedPlayerId })
             oldSocket.emit("error", { message: "다른 기기에서 접속하여 연결이 종료되었습니다." })
             oldSocket.disconnect(true)
             break // 첫 번째만 종료 (일반적으로 1개만 있음)
@@ -991,7 +1077,7 @@ io.on("connection", (socket) => {
           realId: savedMessage.id,
         })
       }).catch((error) => {
-        console.error("[Socket] Failed to save chat message:", error)
+        logger.error("E3001", "Failed to save chat message", { spaceId, playerId, error: (error as Error).message })
         // ❌ DB 저장 실패 시 클라이언트에 롤백 이벤트 전송
         io.to(spaceId).emit("chat:messageFailed", {
           tempId,
@@ -1067,7 +1153,7 @@ io.on("connection", (socket) => {
     // 🔒 Phase 2.8: 닉네임 스푸핑 방지 - 동일 닉네임이 다른 playerId를 가지면 에러
     const uniquePlayerIds = new Set(targetSockets.map(s => s.data.playerId))
     if (uniquePlayerIds.size > 1) {
-      console.warn(`[Socket] Nickname spoofing detected: "${targetNickname}" has ${uniquePlayerIds.size} different playerIds`)
+      logger.warn("E5001", "Nickname spoofing detected", { targetNickname, uniqueCount: uniquePlayerIds.size, spaceId })
       socket.emit("whisper:error", { message: `"${targetNickname}" 닉네임이 중복되어 귓속말을 보낼 수 없습니다. 상대방에게 닉네임 변경을 요청하세요.` })
       return
     }
@@ -1129,10 +1215,10 @@ io.on("connection", (socket) => {
       }
 
       if (IS_DEV) {
-        console.log(`[Socket] Whisper saved to DB: ${tempId} → ${savedMessage.id}`)
+        logger.info("I3002", "Whisper saved to DB", { tempId, realId: savedMessage.id })
       }
     }).catch((error) => {
-      console.error("[Socket] Failed to save whisper message:", error)
+      logger.error("E3001", "Failed to save whisper message", { spaceId, playerId, error: (error as Error).message })
       // ❌ DB 저장 실패 시 발신자와 수신자 모두에게 롤백 이벤트 전송
       const failedData = { tempId, reason: "귓속말 저장에 실패했습니다." }
       socket.emit("whisper:messageFailed", failedData)
@@ -1262,12 +1348,12 @@ io.on("connection", (socket) => {
         realId: savedMessage.id,
       })
     }).catch((error) => {
-      console.error("[Socket] Failed to save party message:", error)
+      logger.error("E3001", "Failed to save party message", { spaceId, partyId, playerId, error: (error as Error).message })
       // 파티 메시지는 롤백하지 않음 (이미 전송됨, 저장 실패는 로깅만)
     })
 
     if (IS_DEV) {
-      console.log(`[Socket] Party message in ${partyName}: ${nickname}: ${content.trim().substring(0, 30)}...`)
+      logger.info("I3003", "Party message", { partyName, nickname, contentPreview: content.trim().substring(0, 30) })
     }
   })
 
@@ -2278,28 +2364,26 @@ io.on("connection", (socket) => {
       }
     }
 
-    console.log(`[Socket] Client disconnected: ${socket.id} (${reason})`)
+    logger.info("E2002", "Client disconnected", { socketId: socket.id, reason })
   })
 })
 
 // Immediate startup log (before listen completes)
-console.log(`[Socket] Starting server on port ${PORT}...`)
-console.log(`[Socket] NODE_ENV: ${process.env.NODE_ENV}`)
-console.log(`[Socket] CORS origins: ${CORS_ORIGINS.join(", ")}`)
+logger.info("E6001", "Starting server", { port: PORT, env: process.env.NODE_ENV, cors: CORS_ORIGINS })
 
 // Graceful shutdown handler
 process.on("SIGTERM", () => {
-  console.log("[Socket] Received SIGTERM, shutting down gracefully...")
+  logger.info("E6002", "Received SIGTERM, shutting down gracefully")
   httpServer.close(() => {
-    console.log("[Socket] Server closed")
+    logger.info("E6002", "Server closed")
     process.exit(0)
   })
 })
 
 process.on("SIGINT", () => {
-  console.log("[Socket] Received SIGINT, shutting down gracefully...")
+  logger.info("E6002", "Received SIGINT, shutting down gracefully")
   httpServer.close(() => {
-    console.log("[Socket] Server closed")
+    logger.info("E6002", "Server closed")
     process.exit(0)
   })
 })
@@ -2307,12 +2391,10 @@ process.on("SIGINT", () => {
 // Start HTTP server (Socket.io attaches automatically)
 // Railway requires binding to 0.0.0.0 for external access
 httpServer.listen(PORT, "0.0.0.0", () => {
-  console.log(`[Socket] ✅ Server successfully running on port ${PORT}`)
-  console.log(`[Socket] Health check: http://0.0.0.0:${PORT}/health`)
-  console.log(`[Socket] Waiting for connections...`)
+  logger.info("E6001", "Server successfully running", { port: PORT, healthCheck: `http://0.0.0.0:${PORT}/health` })
 })
 
 httpServer.on("error", (err) => {
-  console.error("[Socket] ❌ Server error:", err)
+  logger.error("E6003", "Server error", { error: err.message })
   process.exit(1)
 })
