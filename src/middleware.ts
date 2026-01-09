@@ -13,6 +13,7 @@ import type { NextRequest } from "next/server"
 const ALLOWED_ORIGINS = [
   "http://localhost:3000",
   "http://127.0.0.1:3000",
+  "https://space.flow-coder.com",
   process.env.NEXT_PUBLIC_APP_URL,
   // Vercel Preview URLs
   /^https:\/\/.*\.vercel\.app$/,

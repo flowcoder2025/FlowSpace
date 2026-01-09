@@ -949,7 +949,86 @@ docker-compose logs livekit
 
 ---
 
-## 11. 참고 자료
+## 11. Vercel 배포 정보
+
+### 11.1 프로젝트 구조
+
+| 항목 | 값 |
+|-----|-----|
+| **Vercel Team** | konarae (FlowCoder) |
+| **프로젝트명** | flowspace |
+| **Primary Domain** | https://space.flow-coder.com |
+| **Vercel Alias** | flowspace-gamma.vercel.app |
+
+### 11.2 환경 변수 (Production)
+
+```bash
+# 필수 LiveKit 환경변수
+NEXT_PUBLIC_LIVEKIT_URL=wss://space-livekit.flow-coder.com  # 클라이언트 WebSocket
+LIVEKIT_URL=https://space-livekit.flow-coder.com            # 서버 HTTP API (토큰 발급용)
+LIVEKIT_API_KEY=APIckbN3jsUGFhP
+LIVEKIT_API_SECRET=***
+
+# Socket.io
+NEXT_PUBLIC_SOCKET_URL=https://space-socket.flow-coder.com
+```
+
+> ⚠️ **주의**: `LIVEKIT_URL`은 서버 사이드에서 토큰 발급 시 사용. `NEXT_PUBLIC_LIVEKIT_URL`과 별개.
+
+### 11.3 Vercel CLI 명령어
+
+```bash
+# 프로젝트 연결 (konarae 팀의 flowspace)
+vercel link --yes --project flowspace --scope konarae
+
+# 환경변수 확인
+vercel env ls --scope konarae
+
+# 환경변수 추가 (production)
+echo "value" | vercel env add VAR_NAME production --scope konarae
+
+# 프로덕션 배포
+vercel --prod --yes
+
+# 배포 확인
+vercel ls
+```
+
+### 11.4 도메인 설정
+
+**현재 설정**:
+- `space.flow-coder.com` → Primary domain (프로덕션 사용)
+- `flowspace-gamma.vercel.app` → Vercel alias (레거시, 리다이렉트 설정됨)
+
+**vercel.json 리다이렉트**:
+```json
+{
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "flowspace-gamma.vercel.app" }],
+      "destination": "https://space.flow-coder.com/:path*",
+      "permanent": true
+    }
+  ]
+}
+```
+
+> ⚠️ **알려진 제한**: Vercel alias 도메인에서는 호스트 기반 리다이렉트가 작동하지 않을 수 있음.
+
+---
+
+## 12. 변경 이력
+
+| 날짜 | 내용 |
+|------|------|
+| 2026-01-07 | 초기 문서 작성 |
+| 2026-01-09 | OCI 배포 완료, SSL 설정 완료 |
+| 2026-01-09 | Vercel 환경변수 `LIVEKIT_URL` 추가, 중복 프로젝트 정리 |
+
+---
+
+## 13. 참고 자료
 
 - [Oracle Cloud Free Tier](https://www.oracle.com/cloud/free/)
 - [LiveKit Self-hosting](https://docs.livekit.io/realtime/self-hosting/)
@@ -957,3 +1036,4 @@ docker-compose logs livekit
 - [Socket.io Documentation](https://socket.io/docs/v4/)
 - [Caddy Server](https://caddyserver.com/docs/)
 - [OCI Resource Manager](https://docs.oracle.com/en-us/iaas/Content/ResourceManager/home.htm)
+- [Vercel CLI](https://vercel.com/docs/cli)
