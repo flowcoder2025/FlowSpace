@@ -433,6 +433,28 @@ function cleanupRateLimitState(playerId: string, spaceId: string): void {
   rateLimitMap.delete(playerId)
 }
 
+// ============================================
+// 📊 유틸리티 함수
+// ============================================
+
+/**
+ * 업타임을 읽기 쉬운 형식으로 변환
+ */
+function formatUptime(seconds: number): string {
+  const days = Math.floor(seconds / 86400)
+  const hours = Math.floor((seconds % 86400) / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+  const secs = Math.floor(seconds % 60)
+
+  const parts: string[] = []
+  if (days > 0) parts.push(`${days}d`)
+  if (hours > 0) parts.push(`${hours}h`)
+  if (minutes > 0) parts.push(`${minutes}m`)
+  if (secs > 0 || parts.length === 0) parts.push(`${secs}s`)
+
+  return parts.join(" ")
+}
+
 // Create HTTP server for health checks (Railway requirement)
 const httpServer = createServer((req, res) => {
   const url = req.url || ""
@@ -460,6 +482,63 @@ const httpServer = createServer((req, res) => {
     res.writeHead(200, { "Content-Type": "application/json", ...corsHeaders })
     res.end(JSON.stringify(response))
     console.log(`[Socket] Health check responded: 200 OK`)
+  }
+  // 🆕 Metrics API: GET /metrics (OCI 모니터링용)
+  else if (url === "/metrics" && method === "GET") {
+    // CPU 사용량 계산
+    const cpuUsage = process.cpuUsage()
+    const cpuPercent = ((cpuUsage.user + cpuUsage.system) / 1000000) // 마이크로초 → 초
+
+    // 메모리 사용량
+    const memUsage = process.memoryUsage()
+
+    // 연결 통계
+    const totalConnections = io.sockets.sockets.size
+    const roomStats: Array<{ spaceId: string; connections: number }> = []
+
+    for (const [spaceId, players] of rooms.entries()) {
+      roomStats.push({ spaceId, connections: players.size })
+    }
+
+    // 서버 시작 시간 (트래픽 추정용)
+    const uptimeSeconds = process.uptime()
+    const startTime = Date.now() - (uptimeSeconds * 1000)
+
+    const response = {
+      server: "socket.io",
+      version: "1.0.0",
+      timestamp: Date.now(),
+      uptime: {
+        seconds: Math.floor(uptimeSeconds),
+        formatted: formatUptime(uptimeSeconds),
+        startTime: new Date(startTime).toISOString(),
+      },
+      cpu: {
+        user: cpuUsage.user,
+        system: cpuUsage.system,
+        totalMicroseconds: cpuUsage.user + cpuUsage.system,
+      },
+      memory: {
+        rss: memUsage.rss,
+        heapTotal: memUsage.heapTotal,
+        heapUsed: memUsage.heapUsed,
+        external: memUsage.external,
+        rssMB: Math.round(memUsage.rss / 1024 / 1024),
+        heapUsedMB: Math.round(memUsage.heapUsed / 1024 / 1024),
+      },
+      connections: {
+        total: totalConnections,
+        rooms: roomStats,
+        roomCount: rooms.size,
+      },
+      parties: {
+        count: partyRooms.size,
+      },
+    }
+
+    res.writeHead(200, { "Content-Type": "application/json", ...corsHeaders })
+    res.end(JSON.stringify(response, null, 2))
+    console.log(`[Socket] Metrics API responded: ${totalConnections} connections`)
   }
   // 🆕 Presence API: GET /presence/:spaceId
   else if (url.startsWith("/presence/") && method === "GET") {

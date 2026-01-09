@@ -20,7 +20,9 @@ import {
   Badge,
   Divider,
 } from "@/components/ui"
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { getText } from "@/lib/text-config"
+import { OCIMonitoring } from "./components/OCIMonitoring"
 
 // ============================================
 // Types
@@ -418,6 +420,16 @@ export default function AdminDashboardPage() {
               </Button>
             </HStack>
 
+            {/* Tabs */}
+            <Tabs defaultValue="dashboard">
+              <TabsList>
+                <TabsTrigger value="dashboard">대시보드</TabsTrigger>
+                <TabsTrigger value="oci">OCI 인프라</TabsTrigger>
+              </TabsList>
+
+              {/* Dashboard Tab */}
+              <TabsContent value="dashboard" className="mt-6">
+                <VStack gap="xl">
             {/* Stats */}
             <Grid cols={4} gap="default">
               <GridItem>
@@ -557,6 +569,14 @@ export default function AdminDashboardPage() {
                 </Card>
               </GridItem>
             </Grid>
+                </VStack>
+              </TabsContent>
+
+              {/* OCI Infrastructure Tab */}
+              <TabsContent value="oci" className="mt-6">
+                <OCIMonitoring />
+              </TabsContent>
+            </Tabs>
           </VStack>
         </Container>
       </Section>
