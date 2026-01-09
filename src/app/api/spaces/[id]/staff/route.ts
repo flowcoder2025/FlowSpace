@@ -34,26 +34,23 @@ export async function POST(
     // 1. OWNER 권한 확인
     await requireSpaceRole(spaceId, "OWNER")
 
-    // 2. 대상 사용자 존재 확인
+    // 2. 대상 사용자 존재 확인 + OWNER 여부 확인 (동시 조회)
     const targetUser = await prisma.user.findUnique({
       where: { id: userId },
+      select: { id: true },
     })
 
-    if (!targetUser) {
-      return NextResponse.json(
-        { error: "User not found" },
-        { status: 404 }
-      )
-    }
-
-    // 3. 이미 OWNER인지 확인
     const existingMember = await prisma.spaceMember.findUnique({
       where: { spaceId_userId: { spaceId, userId } },
+      select: { role: true },
     })
 
-    if (existingMember?.role === "OWNER") {
+    // 📊 Phase 3.15: 일관된 에러 응답 (사용자 열거 방지)
+    // 사용자 미존재, OWNER 역할 변경 시도 모두 동일한 메시지로 응답
+    const cannotAssign = !targetUser || existingMember?.role === "OWNER"
+    if (cannotAssign) {
       return NextResponse.json(
-        { error: "Cannot change owner role" },
+        { error: "Cannot assign staff role to this user" },
         { status: 400 }
       )
     }

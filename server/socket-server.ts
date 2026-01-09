@@ -202,6 +202,112 @@ async function verifyGuestSession(
 }
 
 // ============================================
+// 📊 Phase 3.9: 음소거 상태 DB 조회/저장
+// ============================================
+interface MemberRestrictionResult {
+  restriction: ChatRestriction
+  memberId: string
+}
+
+/**
+ * DB에서 멤버의 음소거 상태 불러오기
+ * - 인증 사용자: userId로 조회
+ * - 게스트 사용자: guestSessionId로 조회
+ */
+async function loadMemberRestriction(
+  spaceId: string,
+  playerId: string,
+  sessionToken?: string
+): Promise<MemberRestrictionResult | null> {
+  try {
+    // playerId 형식에 따라 조회 조건 결정
+    // user-{userId} → userId로 조회
+    // guest-{guestSessionId} → guestSessionId로 조회
+    let whereCondition: { spaceId: string; userId?: string; guestSessionId?: string }
+
+    if (playerId.startsWith("user-")) {
+      const userId = playerId.replace("user-", "")
+      whereCondition = { spaceId, userId }
+    } else if (playerId.startsWith("guest-")) {
+      const guestSessionId = playerId.replace("guest-", "")
+      whereCondition = { spaceId, guestSessionId }
+    } else {
+      // dev 세션 등은 스킵
+      return null
+    }
+
+    const member = await prisma.spaceMember.findFirst({
+      where: whereCondition,
+      select: { id: true, restriction: true, restrictedUntil: true },
+    })
+
+    if (!member) return null
+
+    // 일시적 음소거인 경우 시간 체크
+    if (member.restriction === "MUTED" && member.restrictedUntil) {
+      if (new Date() > member.restrictedUntil) {
+        // 음소거 기간 만료 → NONE으로 업데이트
+        await prisma.spaceMember.update({
+          where: { id: member.id },
+          data: { restriction: "NONE", restrictedUntil: null },
+        })
+        return { restriction: "NONE", memberId: member.id }
+      }
+    }
+
+    return { restriction: member.restriction, memberId: member.id }
+  } catch (error) {
+    console.error("[Socket] loadMemberRestriction error:", error)
+    return null
+  }
+}
+
+/**
+ * DB에 멤버의 음소거 상태 저장
+ */
+async function saveMemberRestriction(
+  spaceId: string,
+  playerId: string,
+  restriction: ChatRestriction,
+  restrictedBy?: string,
+  durationMinutes?: number,
+  reason?: string
+): Promise<boolean> {
+  try {
+    let whereCondition: { spaceId: string; userId?: string; guestSessionId?: string }
+
+    if (playerId.startsWith("user-")) {
+      const userId = playerId.replace("user-", "")
+      whereCondition = { spaceId, userId }
+    } else if (playerId.startsWith("guest-")) {
+      const guestSessionId = playerId.replace("guest-", "")
+      whereCondition = { spaceId, guestSessionId }
+    } else {
+      return false
+    }
+
+    const restrictedUntil = durationMinutes
+      ? new Date(Date.now() + durationMinutes * 60000)
+      : null
+
+    await prisma.spaceMember.updateMany({
+      where: whereCondition,
+      data: {
+        restriction,
+        restrictedBy: restriction === "NONE" ? null : restrictedBy,
+        restrictedUntil: restriction === "NONE" ? null : restrictedUntil,
+        restrictedReason: restriction === "NONE" ? null : reason,
+      },
+    })
+
+    return true
+  } catch (error) {
+    console.error("[Socket] saveMemberRestriction error:", error)
+    return false
+  }
+}
+
+// ============================================
 // 🚦 Rate Limiting (채팅 도배 방지)
 // ============================================
 const RATE_LIMIT = {
@@ -552,6 +658,20 @@ io.on("connection", (socket) => {
     socket.data.avatarColor = verifiedAvatarColor
     socket.data.avatarConfig = verifiedAvatarConfig  // Phase 1: 커스터마이징
     socket.data.sessionToken = sessionToken // 중복 접속 방지용
+
+    // 📊 Phase 3.9: DB에서 음소거 상태 불러오기 (서버 재시작 후에도 유지)
+    try {
+      const memberRestriction = await loadMemberRestriction(spaceId, verifiedPlayerId, sessionToken)
+      if (memberRestriction) {
+        socket.data.restriction = memberRestriction.restriction
+        socket.data.memberId = memberRestriction.memberId
+        if (IS_DEV) {
+          console.log(`[Socket] Loaded restriction for ${verifiedPlayerId}: ${memberRestriction.restriction}`)
+        }
+      }
+    } catch (error) {
+      console.error(`[Socket] Failed to load member restriction:`, error)
+    }
 
     // Join socket room
     socket.join(spaceId)
@@ -1221,7 +1341,23 @@ io.on("connection", (socket) => {
       // 첫 번째 소켓에서 playerId 가져오기 (이벤트 데이터용)
       const firstTargetSocket = targetSockets[0]
 
-      // 시스템 메시지로 음소거 알림 (실제 DB 저장 없이 메모리 기반)
+      // 📊 Phase 3.9: DB에 음소거 상태 저장 (서버 재시작 후에도 유지)
+      const targetPlayerId = firstTargetSocket.data.playerId
+      if (targetPlayerId) {
+        const saved = await saveMemberRestriction(
+          spaceId,
+          targetPlayerId,
+          "MUTED",
+          socket.data.playerId,
+          data.duration,
+          data.reason
+        )
+        if (saved) {
+          console.log(`[Socket] 💾 Saved MUTED restriction to DB for ${targetPlayerId}`)
+        }
+      }
+
+      // 시스템 메시지로 음소거 알림
       const systemMessage: ChatMessageData = {
         id: `sys-${Date.now()}`,
         senderId: "system",
@@ -1349,6 +1485,15 @@ io.on("connection", (socket) => {
 
       // 첫 번째 소켓에서 playerId 가져오기 (이벤트 데이터용)
       const firstTargetSocket = targetSockets[0]
+
+      // 📊 Phase 3.9: DB에서 음소거 상태 해제 (서버 재시작 후에도 유지)
+      const targetPlayerId = firstTargetSocket.data.playerId
+      if (targetPlayerId) {
+        const saved = await saveMemberRestriction(spaceId, targetPlayerId, "NONE")
+        if (saved) {
+          console.log(`[Socket] 💾 Saved NONE restriction to DB for ${targetPlayerId}`)
+        }
+      }
 
       const systemMessage: ChatMessageData = {
         id: `sys-${Date.now()}`,

@@ -27,19 +27,14 @@ export async function DELETE(
     // 2. 대상 멤버 조회
     const targetMember = await prisma.spaceMember.findUnique({
       where: { spaceId_userId: { spaceId, userId } },
+      select: { role: true },
     })
 
-    if (!targetMember) {
+    // 📊 Phase 3.15: 일관된 에러 응답 (사용자 열거 방지)
+    // 멤버 미존재, STAFF가 아닌 경우 모두 동일한 메시지로 응답
+    if (!targetMember || targetMember.role !== "STAFF") {
       return NextResponse.json(
-        { error: "Member not found" },
-        { status: 404 }
-      )
-    }
-
-    // 3. STAFF가 아닌 경우 에러
-    if (targetMember.role !== "STAFF") {
-      return NextResponse.json(
-        { error: "User is not a staff member" },
+        { error: "Cannot remove staff role from this user" },
         { status: 400 }
       )
     }
