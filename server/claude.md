@@ -238,10 +238,76 @@ leave:space / disconnect 이벤트
 
 ---
 
+## 11. /metrics 엔드포인트 (v2.0.0)
+
+### 11.1 개요
+
+```
+GET http://[OCI_IP]:3001/metrics
+
+용도: Admin 대시보드 OCI 모니터링용 서버 상태 정보 제공
+```
+
+### 11.2 응답 형식
+
+```json
+{
+  "server": "socket.io",
+  "version": "2.0.0",
+  "timestamp": 1736400000000,
+  "uptime": {
+    "seconds": 86400,
+    "formatted": "1d 0h 0m 0s",
+    "startTime": "2026-01-08T00:00:00.000Z"
+  },
+  "connections": {
+    "total": 5,
+    "rooms": [{ "spaceId": "xxx", "connections": 3 }],
+    "roomCount": 2
+  },
+  "parties": { "count": 1 },
+  "process": {
+    "memory": { "rssMB": 64, "heapUsedMB": 32 }
+  },
+  "storage": {
+    "totalGB": 44.96,
+    "usedGB": 4.61,
+    "availableGB": 40.33,
+    "usedPercent": 10,
+    "mountPoint": "/"
+  }
+}
+```
+
+### 11.3 storage 필드 (v2.0.0 추가)
+
+| 필드 | 타입 | 설명 |
+|-----|------|------|
+| `totalGB` | number | 마운트 포인트 총 용량 (GB) |
+| `usedGB` | number | 사용 중인 용량 (GB) |
+| `availableGB` | number | 사용 가능한 용량 (GB) |
+| `usedPercent` | number | 사용률 (%) |
+| `mountPoint` | string | 측정 대상 경로 (/) |
+
+> **데이터 소스**: `df -B1 /` 명령어 기반 (Linux)
+
+### 11.4 사용처
+
+```
+Admin 대시보드 (/admin/dashboard)
+    ↓
+GET /api/admin/oci-metrics
+    ↓
+fetchSocketMetrics() → http://[OCI_IP]:3001/metrics
+```
+
+---
+
 ## 변경 이력
 
 | 날짜 | 변경 |
 |-----|------|
+| 2026-01-09 | /metrics 엔드포인트 v2.0.0 - storage 필드 추가 |
 | 2025-12-15 | 인증 사용자 EXIT 로깅 추가 - auth-* 세션도 Visit API로 로깅 |
 | 2025-12-11 | whisper/party 이벤트 추가 - 귓속말 및 파티 채팅 시스템 지원 |
 | 2025-12-09 | EXIT 이벤트 로깅 추가 - 체류시간 통계 지원 |
