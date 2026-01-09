@@ -215,10 +215,24 @@ export async function getOCIInstanceMetrics(): Promise<OCIInstanceMetrics | OCIM
 
 /**
  * 월별 누적 네트워크 트래픽 조회 (비용 계산용)
+ *
+ * OCI Compute Agent의 NetworksBytesOut:
+ * - 단위: bytes (누적 카운터)
+ * - 각 데이터포인트는 해당 interval 동안 전송된 총 bytes
+ * - rate() 함수 사용 시 bytes/sec 반환
+ *
+ * 계산 방식:
+ * - rate()[1h] = 1시간 동안의 평균 bytes/sec
+ * - rate() * 3600 = 1시간 동안 전송된 총 bytes
  */
 export async function getMonthlyNetworkTraffic(): Promise<{
   bytesOut: number
   bytesOutTB: number
+  debug?: {
+    datapointCount: number
+    rawValues: number[]
+    queryUsed: string
+  }
 } | OCIMonitoringError> {
   const provider = createOCIProvider()
 
@@ -238,13 +252,15 @@ export async function getMonthlyNetworkTraffic(): Promise<{
     const now = new Date()
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
 
-    // OCI 메트릭은 bytes/sec (rate)를 반환
-    // 1시간 간격으로 mean()을 구하고, 시간(3600초)을 곱해서 실제 바이트 계산
+    // rate() 함수 사용 - bytes/sec 반환
+    // 1시간 간격으로 rate를 구하고, 시간(3600초)을 곱해서 실제 바이트 계산
+    const query = `NetworksBytesOut[1h]{resourceId = "${OCI_CONFIG.instanceId}"}.rate()`
+
     const request: oci.monitoring.requests.SummarizeMetricsDataRequest = {
       compartmentId: OCI_CONFIG.compartmentId,
       summarizeMetricsDataDetails: {
         namespace: "oci_computeagent",
-        query: `NetworksBytesOut[1h]{resourceId = "${OCI_CONFIG.instanceId}"}.mean()`,
+        query,
         startTime: monthStart,
         endTime: now,
         resolution: "1h",
@@ -254,20 +270,38 @@ export async function getMonthlyNetworkTraffic(): Promise<{
     const response = await client.summarizeMetricsData(request)
 
     let totalBytesOut = 0
+    const rawValues: number[] = []
     const SECONDS_PER_HOUR = 3600
+
     if (response.items && response.items.length > 0) {
       const datapoints = response.items[0].aggregatedDatapoints
       if (datapoints) {
         for (const dp of datapoints) {
-          // mean (bytes/sec) * 3600초 = 시간당 바이트
-          totalBytesOut += (dp.value ?? 0) * SECONDS_PER_HOUR
+          const rateValue = dp.value ?? 0
+          rawValues.push(rateValue)
+          // rate (bytes/sec) * 3600초 = 시간당 바이트
+          totalBytesOut += rateValue * SECONDS_PER_HOUR
         }
       }
     }
 
+    // 디버그 정보 로깅
+    console.log("[OCI Monitoring] Monthly traffic calculation:", {
+      query,
+      datapointCount: rawValues.length,
+      sampleValues: rawValues.slice(0, 5),
+      totalBytesOut,
+      totalGB: totalBytesOut / (1024 ** 3),
+    })
+
     return {
       bytesOut: totalBytesOut,
       bytesOutTB: totalBytesOut / (1024 ** 4),
+      debug: {
+        datapointCount: rawValues.length,
+        rawValues: rawValues.slice(0, 10), // 처음 10개만
+        queryUsed: query,
+      },
     }
   } catch (error) {
     const err = error as Error

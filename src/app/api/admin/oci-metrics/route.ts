@@ -219,6 +219,8 @@ export async function GET() {
             Math.round((costEstimate.projectedExcessTB + OCI_ALWAYS_FREE_LIMITS.trafficTB) * 100) / 100,
           unit: "TB",
           source: hasMonthlyTraffic ? "oci-api" : "unavailable",
+          // 디버그 정보 (트래픽 계산 검증용)
+          debug: hasMonthlyTraffic && "debug" in monthlyTraffic ? monthlyTraffic.debug : null,
         },
       },
 
