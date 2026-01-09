@@ -67,12 +67,22 @@ interface OCIMetricsData {
       source: string
     }
     storage: {
+      allocatedGB: number
       usedGB: number
-      totalGB: number
-      limit: number
+      availableGB: number
       percent: number
+      limit: number
       unit: string
-      source: string
+      sources: {
+        allocation: string
+        usage: string
+      }
+      bootVolume?: {
+        id: string
+        name: string
+        sizeGB: number
+      } | null
+      mountPoint?: string | null
     }
     traffic: {
       usedTB: number
@@ -195,9 +205,15 @@ function ResourceCard({
             </Text>
           </HStack>
           {source && (
-            <Text size="xs" tone="muted" className="italic">
-              {source === "oci-api" ? "OCI Monitoring API" : source === "unavailable" ? "환경변수 설정 필요" : source}
-            </Text>
+            <HStack gap="xs" align="center" className="mt-1">
+              <div className="size-1.5 rounded-full bg-muted-foreground/50" />
+              <Text size="xs" tone="muted">
+                {source === "oci-api" ? "OCI Monitoring API" :
+                 source === "socket-server-df" ? "서버 df" :
+                 source === "block-volume-api" ? "Block Volume API" :
+                 source === "unavailable" ? "환경변수 설정 필요" : source}
+              </Text>
+            </HStack>
           )}
           {extra}
         </VStack>
@@ -338,7 +354,12 @@ function CostSummaryCard({
       <CardContent>
         <VStack gap="lg">
           <VStack gap="xs">
-            <Text size="sm" tone="muted">현재 추정 비용</Text>
+            <HStack gap="xs" align="center">
+              <Text size="sm" tone="muted">현재 추정 비용</Text>
+              <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                추정치
+              </Badge>
+            </HStack>
             <Text
               weight="bold"
               className={`text-3xl ${
@@ -357,6 +378,10 @@ function CostSummaryCard({
             {trafficSource === "unavailable" && (
               <Text size="xs" tone="muted">OCI API 연동 필요</Text>
             )}
+            <HStack gap="xs" align="center" className="mt-1">
+              <div className="size-1.5 rounded-full bg-muted-foreground/50" />
+              <Text size="xs" tone="muted">한도 기반 계산 (Monitoring API)</Text>
+            </HStack>
           </VStack>
 
           <Divider />
@@ -576,10 +601,27 @@ export function OCIMonitoring() {
                   <ResourceCard
                     title="스토리지"
                     used={data.resources.storage.usedGB}
-                    total={data.resources.storage.totalGB}
+                    total={data.resources.storage.allocatedGB || data.resources.storage.limit}
                     percent={data.resources.storage.percent}
                     unit="GB"
-                    source={data.resources.storage.source}
+                    subtitle={data.resources.storage.bootVolume?.name}
+                    source={data.resources.storage.sources.usage}
+                    extra={
+                      <VStack gap="xs" className="mt-2 pt-2 border-t border-muted">
+                        <HStack justify="between">
+                          <Text size="xs" tone="muted">할당량</Text>
+                          <Text size="xs">{data.resources.storage.allocatedGB || '-'} GB</Text>
+                        </HStack>
+                        <HStack gap="xs" align="center">
+                          <div className="size-1.5 rounded-full bg-muted-foreground/50" />
+                          <Text size="xs" tone="muted">
+                            {data.resources.storage.sources.allocation === "block-volume-api"
+                              ? "Block Volume API"
+                              : "미연동"}
+                          </Text>
+                        </HStack>
+                      </VStack>
+                    }
                   />
                 </GridItem>
                 <GridItem>
