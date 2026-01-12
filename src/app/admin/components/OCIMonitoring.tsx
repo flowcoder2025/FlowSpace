@@ -43,6 +43,8 @@ interface OCIMetricsData {
       usedMB: number
       heapUsedMB: number
     } | null
+    error?: string | null
+    fetchUrl?: string | null
   }>
   connections: {
     socket: { total: number; rooms: number; parties: number }
@@ -231,6 +233,8 @@ function ServerStatusCard({
   status,
   uptime,
   memory,
+  error,
+  fetchUrl,
 }: OCIMetricsData["servers"][0]) {
   const getStatusColor = () => {
     if (status === "running") return "bg-green-500"
@@ -271,6 +275,17 @@ function ServerStatusCard({
               <Text size="sm" tone="muted">메모리</Text>
               <Text size="sm" weight="medium">{memory.usedMB} MB</Text>
             </HStack>
+          )}
+          {error && (
+            <VStack gap="xs" className="mt-2 pt-2 border-t border-destructive/20">
+              <Text size="xs" className="text-destructive font-medium">연결 오류</Text>
+              <Text size="xs" tone="muted" className="break-all">{error}</Text>
+              {fetchUrl && (
+                <Text size="xs" tone="muted" className="break-all">
+                  URL: {fetchUrl}
+                </Text>
+              )}
+            </VStack>
           )}
         </VStack>
       </CardContent>

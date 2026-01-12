@@ -99,13 +99,17 @@ export async function GET() {
     }
 
     // 3. 데이터 수집 (병렬 실행)
-    const [socketMetrics, livekitStatus, ociMetrics, monthlyTraffic, bootVolumeInfo] = await Promise.all([
+    const [socketResult, livekitResult, ociMetrics, monthlyTraffic, bootVolumeInfo] = await Promise.all([
       fetchSocketMetrics(),
       fetchLiveKitHealth(),
       isOCIConfigured() ? getOCIInstanceMetrics() : Promise.resolve(null),
       isOCIConfigured() ? getMonthlyNetworkTraffic() : Promise.resolve(null),
       isOCIConfigured() ? getBootVolumeInfo() : Promise.resolve(null),
     ])
+
+    // 소켓/라이브킷 결과 추출
+    const socketMetrics = socketResult.data
+    const livekitStatus = livekitResult.data
 
     // 4. 현재 날짜 정보
     const now = new Date()
@@ -160,7 +164,7 @@ export async function GET() {
         error: ociMetrics && "error" in ociMetrics ? ociMetrics.message : null,
       },
 
-      // 서버 상태
+      // 서버 상태 (에러 정보 포함)
       servers: [
         {
           type: "socket.io" as const,
@@ -173,12 +177,16 @@ export async function GET() {
                 heapUsedMB: processMemory.heapUsedMB,
               }
             : null,
+          error: socketResult.error || null,
+          fetchUrl: socketResult.url || null,
         },
         {
           type: "livekit" as const,
           url: LIVEKIT_SERVER_URL.replace("https://", "wss://"),
           status: livekitStatus ? ("running" as const) : ("unknown" as const),
           uptime: null,
+          error: livekitResult.error || null,
+          fetchUrl: livekitResult.url || null,
         },
       ],
 
@@ -296,45 +304,62 @@ export async function GET() {
 }
 
 /**
- * Socket.io 서버 메트릭 조회
+ * Socket.io 서버 메트릭 조회 (에러 정보 포함)
  */
-async function fetchSocketMetrics(): Promise<SocketServerMetrics | null> {
+interface FetchResult<T> {
+  data: T | null
+  error?: string
+  url?: string
+}
+
+async function fetchSocketMetrics(): Promise<FetchResult<SocketServerMetrics>> {
+  const url = `${SOCKET_METRICS_URL}/metrics`
   try {
-    const response = await fetch(`${SOCKET_METRICS_URL}/metrics`, {
+    console.log(`[OCI Metrics] Fetching socket metrics from: ${url}`)
+    const response = await fetch(url, {
       cache: "no-store",
       signal: AbortSignal.timeout(5000),
     })
 
     if (!response.ok) {
-      console.warn(`[OCI Metrics] Socket.io metrics failed: ${response.status}`)
-      return null
+      const errorMsg = `HTTP ${response.status} ${response.statusText}`
+      console.warn(`[OCI Metrics] Socket.io metrics failed: ${errorMsg}`)
+      return { data: null, error: errorMsg, url }
     }
 
-    return await response.json()
+    const data = await response.json()
+    console.log(`[OCI Metrics] Socket metrics received: ${data.connections?.total || 0} connections`)
+    return { data, url }
   } catch (error) {
-    console.warn("[OCI Metrics] Socket.io metrics error:", error)
-    return null
+    const errorMsg = error instanceof Error ? error.message : String(error)
+    console.warn(`[OCI Metrics] Socket.io metrics error: ${errorMsg}`)
+    return { data: null, error: errorMsg, url }
   }
 }
 
 /**
- * LiveKit 서버 상태 조회
+ * LiveKit 서버 상태 조회 (에러 정보 포함)
  */
-async function fetchLiveKitHealth(): Promise<{ status: string } | null> {
+async function fetchLiveKitHealth(): Promise<FetchResult<{ status: string }>> {
+  const url = LIVEKIT_HEALTH_URL
   try {
-    const response = await fetch(LIVEKIT_HEALTH_URL, {
+    console.log(`[OCI Metrics] Fetching LiveKit health from: ${url}`)
+    const response = await fetch(url, {
       cache: "no-store",
       signal: AbortSignal.timeout(5000),
     })
 
     // LiveKit은 404를 반환해도 서버가 동작 중
     if (response.ok || response.status === 404) {
-      return { status: "ok" }
+      return { data: { status: "ok" }, url }
     }
 
-    return null
+    const errorMsg = `HTTP ${response.status} ${response.statusText}`
+    console.warn(`[OCI Metrics] LiveKit health failed: ${errorMsg}`)
+    return { data: null, error: errorMsg, url }
   } catch (error) {
-    console.warn("[OCI Metrics] LiveKit health error:", error)
-    return null
+    const errorMsg = error instanceof Error ? error.message : String(error)
+    console.warn(`[OCI Metrics] LiveKit health error: ${errorMsg}`)
+    return { data: null, error: errorMsg, url }
   }
 }
