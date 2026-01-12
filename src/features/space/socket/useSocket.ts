@@ -785,8 +785,44 @@ export function useSocket({
     eventBridge.on(GameEvents.PLAYER_MOVED, handleLocalPlayerMove)
     eventBridge.on(GameEvents.PLAYER_JUMPED, handleLocalPlayerJump)
 
+    // 📊 브라우저/탭 종료 시 즉시 disconnect (EXIT 이벤트 보장)
+    // beforeunload: 데스크탑 브라우저 종료/새로고침/탭 닫기
+    // pagehide: 모바일 Safari에서 beforeunload가 작동하지 않는 경우 대비
+    // visibilitychange: 모바일 앱 전환 시 (hidden 상태로 장시간 유지되면 연결 끊김)
+    const handleBeforeUnload = () => {
+      console.log("[Socket] Browser closing/refreshing, disconnecting...")
+      socket.emit("leave:space")
+      socket.disconnect()
+    }
+
+    const handlePageHide = (event: PageTransitionEvent) => {
+      // persisted가 false면 페이지가 완전히 종료됨
+      if (!event.persisted) {
+        console.log("[Socket] Page hiding (not cached), disconnecting...")
+        socket.emit("leave:space")
+        socket.disconnect()
+      }
+    }
+
+    const handleVisibilityChange = () => {
+      // 모바일에서 앱 전환 후 장시간 hidden 상태면 연결 끊김
+      // 다시 visible 되면 reconnect는 socket.io가 자동 처리
+      if (document.visibilityState === "hidden") {
+        console.log("[Socket] Page hidden, preparing for potential disconnect...")
+        // 바로 disconnect하지 않고, 서버의 ping timeout에 의존
+        // 사용자가 빠르게 돌아오면 연결 유지됨
+      }
+    }
+
+    window.addEventListener("beforeunload", handleBeforeUnload)
+    window.addEventListener("pagehide", handlePageHide)
+    document.addEventListener("visibilitychange", handleVisibilityChange)
+
     // Cleanup
     return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload)
+      window.removeEventListener("pagehide", handlePageHide)
+      document.removeEventListener("visibilitychange", handleVisibilityChange)
       eventBridge.off(GameEvents.GAME_READY, handleGameReady)
       eventBridge.off(GameEvents.PLAYER_MOVED, handleLocalPlayerMove)
       eventBridge.off(GameEvents.PLAYER_JUMPED, handleLocalPlayerJump)

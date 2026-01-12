@@ -341,6 +341,9 @@
 | 2026-01-09 | **공간 기반 통신 설계** - 3.7, 3.8 재정의 (근접/파티존/스포트라이트), 설계 문서 작성 |
 | 2026-01-09 | **문제없음 확인 완료** - 3.12, 3.13, 4.2 검토 후 완료 처리 (36/38, 95%) |
 | 2026-01-09 | **쿼리+인덱스 최적화** - 3.2 (18→10개 쿼리 통합), 4.1 (groupBy 복합 인덱스 추가) |
+| 2026-01-10 | **OCI 배포 정보 백업** - SSH 접속, Docker 체크리스트, 서비스 URL 문서화 |
+| 2026-01-10 | **근접 통신 디버깅 준비** - 관련 파일 목록, 예상 원인, 다음 작업 백업 |
+| 2026-01-12 | **사용량 분석 정확도 개선** - NEXT_PUBLIC_API_URL 환경변수 추가, useSocket.ts beforeunload/pagehide 핸들러 추가 |
 
 ---
 
@@ -383,3 +386,158 @@ npm run socket:dev
 # 전체 개발 서버
 npm run dev:all
 ```
+
+---
+
+## 🔧 OCI 서버 배포 정보 (필수 참조)
+
+> ⚠️ **배포 전 반드시 이 섹션을 읽고 기존 설정을 확인하세요**
+
+### SSH 접속 정보
+
+```bash
+# SSH 키 위치
+~/.ssh/flowspace-oci
+
+# 접속 명령어 (⚠️ 사용자는 ubuntu, opc가 아님!)
+ssh -i ~/.ssh/flowspace-oci ubuntu@144.24.72.143
+```
+
+### Docker 배포 체크리스트
+
+**❌ 하지 말 것:**
+- `--network host` 사용 금지 (Caddy가 서비스 찾지 못함)
+- DATABASE_URL 추측 금지 (반드시 docker-compose.yml 확인)
+- CORS_ORIGINS 추측 금지
+
+**✅ 반드시 할 것:**
+```bash
+# 1. 먼저 기존 설정 확인
+cat /home/ubuntu/flowspace/docker-compose.yml
+
+# 2. 네트워크 확인
+docker network ls
+docker network inspect flowspace_default
+```
+
+### 올바른 컨테이너 실행 명령어
+
+```bash
+docker stop flowspace-socket && docker rm flowspace-socket && \
+docker run -d --name flowspace-socket \
+  --network flowspace_default \
+  --network-alias socket-server \
+  -e NODE_ENV=production \
+  -e PORT=3001 \
+  -e 'DATABASE_URL=postgresql://postgres.dqmnlygfulhxhatyoiql:Whdydgus12%21%40@aws-1-ap-northeast-2.pooler.supabase.com:6543/postgres?pgbouncer=true' \
+  -e 'CORS_ORIGINS=https://space.flow-coder.com,https://flowspace-gamma.vercel.app,http://localhost:3000' \
+  -e 'NEXT_PUBLIC_API_URL=https://space.flow-coder.com' \
+  --restart unless-stopped \
+  flowspace_socket-server:latest
+```
+
+> ⚠️ **필수 환경변수**: `NEXT_PUBLIC_API_URL` 없으면 이벤트 로깅 실패 (사용량 통계 누락)
+
+### 코드 배포 절차
+
+```bash
+# 로컬에서 번들링
+cd C:\Team-jane\flow_metaverse
+npx esbuild server/socket-server.ts --bundle --platform=node --target=node18 --outfile=server/socket-server.bundle.js --external:bufferutil --external:utf-8-validate
+
+# OCI로 업로드
+scp -i ~/.ssh/flowspace-oci server/socket-server.bundle.js ubuntu@144.24.72.143:/home/ubuntu/flowspace/server/socket-server.js
+
+# OCI에서 Docker 재빌드
+ssh -i ~/.ssh/flowspace-oci ubuntu@144.24.72.143 "cd /home/ubuntu/flowspace && docker build -t flowspace_socket-server:latest ./server"
+
+# 컨테이너 재시작 (위의 올바른 명령어 사용)
+```
+
+### 서비스 URL 정리
+
+| 서비스 | URL | 용도 |
+|-------|-----|------|
+| 프론트엔드 | `https://space.flow-coder.com` | Vercel 배포 |
+| Socket 서버 | `https://space-socket.flow-coder.com` | OCI (Caddy 프록시) |
+| LiveKit | `wss://space-livekit.flow-coder.com` | OCI (Caddy 프록시) |
+
+---
+
+## 📡 근접 통신 디버깅 (2026-01-10 작업 예정)
+
+### 현재 상태
+
+- ✅ `@proximity on/off` 명령어 동작함
+- ✅ OCI 서버에 코드 배포 완료
+- ❌ **거리에 따른 통신이 기대대로 동작하지 않음**
+
+---
+
+## 📊 EXIT 이벤트 정확한 카운팅 (2026-01-12 수정 완료)
+
+### 문제 원인 분석
+
+EXIT가 발생해야 하는 케이스:
+
+| 케이스 | 트리거 | 이전 상태 | 수정 후 |
+|-------|-------|---------|--------|
+| 나가기 버튼 | `onExit` callback | ✅ | ✅ |
+| Socket disconnect | 서버 `disconnect` | ⚠️ API URL 미설정 | ✅ NEXT_PUBLIC_API_URL 추가 |
+| 브라우저 종료 | `beforeunload` | ❌ 없음 | ✅ 핸들러 추가 |
+| 탭 닫기 | `beforeunload` | ❌ 없음 | ✅ 핸들러 추가 |
+| 새로고침 | `beforeunload` | ❌ 없음 | ✅ 핸들러 추가 |
+| 다른 페이지 이동 | unmount | ✅ | ✅ |
+| 네트워크 끊김 | `ping timeout` | ✅ | ✅ |
+| 모바일 앱 전환 | `pagehide` | ❌ 없음 | ✅ 핸들러 추가 |
+
+### 수정 내용
+
+**1. OCI 서버 환경변수 추가**
+```bash
+-e 'NEXT_PUBLIC_API_URL=https://space.flow-coder.com'
+```
+
+**2. useSocket.ts에 브라우저 종료 핸들러 추가**
+```typescript
+// beforeunload: 데스크탑 브라우저 종료/새로고침/탭 닫기
+// pagehide: 모바일 Safari 대비
+// visibilitychange: 모바일 앱 전환
+window.addEventListener("beforeunload", handleBeforeUnload)
+window.addEventListener("pagehide", handlePageHide)
+document.addEventListener("visibilitychange", handleVisibilityChange)
+```
+
+### 검증 필요
+
+- [ ] OCI 서버에 새 코드 배포 후 EXIT 로깅 확인
+- [ ] 브라우저 새로고침 시 EXIT 이벤트 기록 확인
+- [ ] Admin 대시보드에서 ENTER/EXIT 수 일치 확인
+
+### 관련 파일 목록
+
+**서버 (socket-server.ts)**:
+- Line 842-849: `proximityStates` Map, `getProximityState()`, `setProximityState()`
+- Line 1133-1134: join:space 시 `proximity:status` 전송
+- Line 2402-2445: `proximity:set` 이벤트 핸들러
+
+**클라이언트**:
+| 파일 | 역할 |
+|-----|------|
+| `src/features/space/socket/useSocket.ts` | `setProximity()`, `proximity:changed` 수신 |
+| `src/features/space/components/SpaceLayout.tsx` | 명령어 파싱 → `setProximity()` 호출 |
+| `src/features/space/livekit/useProximitySubscription.ts` | **LiveKit 구독 관리** (핵심) |
+| `src/features/space/utils/chatParser.ts` | `@proximity` 명령어 파싱 |
+| `src/features/space/socket/types.ts` | 타입 정의 |
+
+### 예상 원인 (확인 필요)
+
+1. `useProximitySubscription.ts`에서 거리 계산 로직 문제?
+2. LiveKit 트랙 구독/해제 타이밍 문제?
+3. 플레이어 위치 동기화 지연?
+
+### 다음 작업
+
+1. `useProximitySubscription.ts` 코드 분석
+2. 거리 계산 로직 확인 (7×7 타일 영역)
+3. LiveKit 구독 상태 디버깅
