@@ -319,6 +319,9 @@ async function fetchSocketMetrics(): Promise<FetchResult<SocketServerMetrics>> {
     const response = await fetch(url, {
       cache: "no-store",
       signal: AbortSignal.timeout(5000),
+      headers: {
+        "User-Agent": "node-fetch", // Cloudflare 규칙 매칭용
+      },
     })
 
     if (!response.ok) {
@@ -347,6 +350,9 @@ async function fetchLiveKitHealth(): Promise<FetchResult<{ status: string }>> {
     const response = await fetch(url, {
       cache: "no-store",
       signal: AbortSignal.timeout(5000),
+      headers: {
+        "User-Agent": "node-fetch", // Cloudflare 규칙 매칭용
+      },
     })
 
     // LiveKit은 404를 반환해도 서버가 동작 중

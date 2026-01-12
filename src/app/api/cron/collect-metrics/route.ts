@@ -162,6 +162,9 @@ async function fetchSocketMetrics(): Promise<SocketServerMetrics | null> {
     const response = await fetch(`${SOCKET_METRICS_URL}/metrics`, {
       cache: "no-store",
       signal: AbortSignal.timeout(5000),
+      headers: {
+        "User-Agent": "node-fetch", // Cloudflare 규칙 매칭용
+      },
     })
 
     if (!response.ok) {
