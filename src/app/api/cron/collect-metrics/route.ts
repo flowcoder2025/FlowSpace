@@ -17,9 +17,9 @@ import {
   isOCIConfigured,
 } from "@/lib/utils/oci-monitoring"
 
-// OCI 서버 내부 URL (서버 사이드 전용)
-const OCI_INTERNAL_IP = process.env.OCI_INTERNAL_IP || "144.24.72.143"
-const SOCKET_INTERNAL_URL = `http://${OCI_INTERNAL_IP}:3001`
+// Socket 서버 공개 URL (Vercel Cron에서 내부 IP 접근 불가)
+const SOCKET_METRICS_URL =
+  process.env.NEXT_PUBLIC_SOCKET_URL || "https://space-socket.flow-coder.com"
 
 // Cron secret for verification (Vercel Cron)
 const CRON_SECRET = process.env.CRON_SECRET
@@ -71,16 +71,35 @@ export async function POST(request: NextRequest) {
     // 4. 이전 스냅샷 조회 (델타 계산용)
     const lastSnapshot = await prisma.resourceSnapshot.findFirst({
       orderBy: { timestamp: "desc" },
-      select: { trafficGB: true },
+      select: { trafficGB: true, timestamp: true },
     })
 
     // 델타 계산 (MB 단위)
-    const trafficDeltaMB = lastSnapshot
-      ? (trafficGB - lastSnapshot.trafficGB) * 1024
-      : 0
+    // 5분 간격 기준 최대 합리적 트래픽: 10GB (= 약 267 Mbps 지속)
+    const MAX_DELTA_MB = 10 * 1024 // 10GB in MB
 
-    // 델타가 음수면 월초 리셋으로 간주
-    const adjustedDeltaMB = trafficDeltaMB < 0 ? trafficGB * 1024 : trafficDeltaMB
+    let trafficDeltaMB = 0
+    let deltaNote = "no_previous"
+
+    if (lastSnapshot) {
+      const rawDelta = (trafficGB - lastSnapshot.trafficGB) * 1024
+
+      if (rawDelta < 0) {
+        // 월초 리셋: 새 달의 누적값만 사용
+        trafficDeltaMB = Math.min(trafficGB * 1024, MAX_DELTA_MB)
+        deltaNote = "month_reset"
+      } else if (rawDelta > MAX_DELTA_MB) {
+        // 비정상적으로 큰 델타: 캡 적용 + 경고
+        console.warn(`[Collect Metrics] Unusually large delta: ${rawDelta.toFixed(2)} MB, capping to ${MAX_DELTA_MB} MB`)
+        trafficDeltaMB = MAX_DELTA_MB
+        deltaNote = "capped"
+      } else {
+        trafficDeltaMB = rawDelta
+        deltaNote = "normal"
+      }
+    }
+
+    const adjustedDeltaMB = trafficDeltaMB
 
     // 5. 스냅샷 저장
     const snapshot = await prisma.resourceSnapshot.create({
@@ -97,7 +116,7 @@ export async function POST(request: NextRequest) {
 
     console.log(`[Collect Metrics] Snapshot saved: ${snapshot.id}`)
     console.log(`  CPU: ${cpuPercent.toFixed(2)}%, Memory: ${memoryPercent.toFixed(2)}%`)
-    console.log(`  Traffic: ${trafficGB.toFixed(3)} GB, Delta: ${adjustedDeltaMB.toFixed(2)} MB`)
+    console.log(`  Traffic: ${trafficGB.toFixed(3)} GB (cumulative), Delta: ${adjustedDeltaMB.toFixed(2)} MB (${deltaNote})`)
     console.log(`  Users: ${concurrentUsers}, Rooms: ${activeRooms}`)
 
     return NextResponse.json({
@@ -140,7 +159,7 @@ interface SocketServerMetrics {
 
 async function fetchSocketMetrics(): Promise<SocketServerMetrics | null> {
   try {
-    const response = await fetch(`${SOCKET_INTERNAL_URL}/metrics`, {
+    const response = await fetch(`${SOCKET_METRICS_URL}/metrics`, {
       cache: "no-store",
       signal: AbortSignal.timeout(5000),
     })

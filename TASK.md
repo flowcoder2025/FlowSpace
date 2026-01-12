@@ -508,11 +508,13 @@ window.addEventListener("pagehide", handlePageHide)
 document.addEventListener("visibilitychange", handleVisibilityChange)
 ```
 
-### 검증 필요
+### 검증 상태 (2026-01-12)
 
-- [ ] OCI 서버에 새 코드 배포 후 EXIT 로깅 확인
-- [ ] 브라우저 새로고침 시 EXIT 이벤트 기록 확인
-- [ ] Admin 대시보드에서 ENTER/EXIT 수 일치 확인
+- [x] OCI 서버에 새 코드 배포 완료 (socket-server.bundle.js)
+- [x] 컨테이너 재시작 완료 (flowspace-socket)
+- [x] Vercel 배포 트리거 (commit c22bfd1)
+- [ ] 브라우저 새로고침 시 EXIT 이벤트 기록 확인 (사용자 테스트 필요)
+- [ ] Admin 대시보드에서 ENTER/EXIT 수 일치 확인 (사용자 테스트 필요)
 
 ### 관련 파일 목록
 

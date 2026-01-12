@@ -29,17 +29,19 @@ import {
   getOCIConfigStatus,
 } from "@/lib/utils/oci-monitoring"
 
-// OCI 서버 URL (클라이언트용)
+// OCI 서버 URL
+const OCI_INTERNAL_IP = process.env.OCI_INTERNAL_IP || "144.24.72.143"
+
+// Socket 서버 URL (공개 HTTPS로 변경 - Vercel에서 내부 IP 접근 불가)
 const SOCKET_SERVER_URL =
   process.env.NEXT_PUBLIC_SOCKET_URL || "https://space-socket.flow-coder.com"
+const SOCKET_METRICS_URL = SOCKET_SERVER_URL // 공개 URL 사용
+
+// LiveKit 서버 URL
 const LIVEKIT_SERVER_URL =
   process.env.NEXT_PUBLIC_LIVEKIT_URL?.replace("wss://", "https://") ||
   "https://space-livekit.flow-coder.com"
-
-// OCI 서버 내부 URL (서버 사이드 전용)
-const OCI_INTERNAL_IP = process.env.OCI_INTERNAL_IP || "144.24.72.143"
-const SOCKET_INTERNAL_URL = `http://${OCI_INTERNAL_IP}:3001`
-const LIVEKIT_INTERNAL_URL = `http://${OCI_INTERNAL_IP}:7880`
+const LIVEKIT_HEALTH_URL = LIVEKIT_SERVER_URL // 공개 URL 사용
 
 // ============================================
 // 타입 정의
@@ -298,7 +300,7 @@ export async function GET() {
  */
 async function fetchSocketMetrics(): Promise<SocketServerMetrics | null> {
   try {
-    const response = await fetch(`${SOCKET_INTERNAL_URL}/metrics`, {
+    const response = await fetch(`${SOCKET_METRICS_URL}/metrics`, {
       cache: "no-store",
       signal: AbortSignal.timeout(5000),
     })
@@ -320,7 +322,7 @@ async function fetchSocketMetrics(): Promise<SocketServerMetrics | null> {
  */
 async function fetchLiveKitHealth(): Promise<{ status: string } | null> {
   try {
-    const response = await fetch(LIVEKIT_INTERNAL_URL, {
+    const response = await fetch(LIVEKIT_HEALTH_URL, {
       cache: "no-store",
       signal: AbortSignal.timeout(5000),
     })

@@ -1,7 +1,19 @@
 {
   "permissions": {
     "allow": [
-      "mcp__sequential-thinking__sequentialthinking"
+      "mcp__sequential-thinking__sequentialthinking",
+      "Bash(npx tsc --noEmit)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push)",
+      "Bash(ssh:*)",
+      "Bash(npm run build:*)",
+      "Bash(vercel domains:*)",
+      "Bash(printf:*)",
+      "Bash(vercel env add:*)",
+      "Bash(scp:*)",
+      "Bash(npx prisma db pull:*)",
+      "Bash(findstr:*)"
     ]
   }
 }

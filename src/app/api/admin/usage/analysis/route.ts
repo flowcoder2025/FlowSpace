@@ -247,7 +247,7 @@ async function getWeeklyAnalysis(
 // ============================================
 // 요약 통계 계산
 // ============================================
-function calculateSummary(records: AnalysisRecord[]): AnalysisResult["summary"] {
+function calculateSummary(records: AnalysisRecord[]): AnalysisResult["summary"] & { dataQuality?: string } {
   if (records.length === 0) {
     return {
       totalUsers: 0,
@@ -259,13 +259,24 @@ function calculateSummary(records: AnalysisRecord[]): AnalysisResult["summary"] 
     }
   }
 
+  const peakConcurrent = Math.max(...records.map((r) => r.concurrentUsers))
+  const totalTrafficGB = records.reduce((sum, r) => sum + r.trafficMB, 0) / 1024
+  const avgTrafficPerUserGB = peakConcurrent > 0 ? totalTrafficGB / peakConcurrent / records.length : 0
+
+  // 데이터 품질 검증: 사용자당 하루 10GB 초과 시 경고
+  let dataQuality: string | undefined
+  if (avgTrafficPerUserGB > 10) {
+    dataQuality = `warning: 사용자당 일평균 ${avgTrafficPerUserGB.toFixed(1)}GB 트래픽 (비정상 가능성)`
+  }
+
   return {
     totalUsers: records.reduce((sum, r) => sum + r.concurrentUsers, 0),
-    peakConcurrent: Math.max(...records.map((r) => r.concurrentUsers)),
+    peakConcurrent,
     totalVideoMinutes: records.reduce((sum, r) => sum + r.videoMinutes, 0),
-    totalTrafficGB: records.reduce((sum, r) => sum + r.trafficMB, 0) / 1024,
+    totalTrafficGB,
     avgCpuPercent: records.reduce((sum, r) => sum + r.cpuPercent, 0) / records.length,
     avgMemoryPercent: records.reduce((sum, r) => sum + r.memoryPercent, 0) / records.length,
+    dataQuality,
   }
 }
 
