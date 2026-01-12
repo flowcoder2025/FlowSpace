@@ -29,19 +29,18 @@ import {
   getOCIConfigStatus,
 } from "@/lib/utils/oci-monitoring"
 
-// OCI 서버 URL
-const OCI_INTERNAL_IP = process.env.OCI_INTERNAL_IP || "144.24.72.143"
-
-// Socket 서버 URL (공개 HTTPS로 변경 - Vercel에서 내부 IP 접근 불가)
+// OCI 서버 URL (클라이언트용 - UI 표시)
 const SOCKET_SERVER_URL =
   process.env.NEXT_PUBLIC_SOCKET_URL || "https://space-socket.flow-coder.com"
-const SOCKET_METRICS_URL = SOCKET_SERVER_URL // 공개 URL 사용
-
-// LiveKit 서버 URL
 const LIVEKIT_SERVER_URL =
   process.env.NEXT_PUBLIC_LIVEKIT_URL?.replace("wss://", "https://") ||
   "https://space-livekit.flow-coder.com"
-const LIVEKIT_HEALTH_URL = LIVEKIT_SERVER_URL // 공개 URL 사용
+
+// OCI 서버 내부 URL (서버 사이드 전용 - Cloudflare 우회)
+// Vercel 서버리스 함수에서 OCI 서버로 직접 연결
+const OCI_INTERNAL_IP = process.env.OCI_INTERNAL_IP || "144.24.72.143"
+const SOCKET_INTERNAL_URL = `http://${OCI_INTERNAL_IP}:3001`
+const LIVEKIT_INTERNAL_URL = `http://${OCI_INTERNAL_IP}:7880`
 
 // ============================================
 // 타입 정의
@@ -304,7 +303,7 @@ export async function GET() {
 }
 
 /**
- * Socket.io 서버 메트릭 조회 (에러 정보 포함)
+ * Socket.io 서버 메트릭 조회 (직접 IP로 접근 - Cloudflare 우회)
  */
 interface FetchResult<T> {
   data: T | null
@@ -313,15 +312,12 @@ interface FetchResult<T> {
 }
 
 async function fetchSocketMetrics(): Promise<FetchResult<SocketServerMetrics>> {
-  const url = `${SOCKET_METRICS_URL}/metrics`
+  const url = `${SOCKET_INTERNAL_URL}/metrics`
   try {
     console.log(`[OCI Metrics] Fetching socket metrics from: ${url}`)
     const response = await fetch(url, {
       cache: "no-store",
       signal: AbortSignal.timeout(5000),
-      headers: {
-        "User-Agent": "node-fetch", // Cloudflare 규칙 매칭용
-      },
     })
 
     if (!response.ok) {
@@ -341,18 +337,15 @@ async function fetchSocketMetrics(): Promise<FetchResult<SocketServerMetrics>> {
 }
 
 /**
- * LiveKit 서버 상태 조회 (에러 정보 포함)
+ * LiveKit 서버 상태 조회 (직접 IP로 접근 - Cloudflare 우회)
  */
 async function fetchLiveKitHealth(): Promise<FetchResult<{ status: string }>> {
-  const url = LIVEKIT_HEALTH_URL
+  const url = LIVEKIT_INTERNAL_URL
   try {
     console.log(`[OCI Metrics] Fetching LiveKit health from: ${url}`)
     const response = await fetch(url, {
       cache: "no-store",
       signal: AbortSignal.timeout(5000),
-      headers: {
-        "User-Agent": "node-fetch", // Cloudflare 규칙 매칭용
-      },
     })
 
     // LiveKit은 404를 반환해도 서버가 동작 중

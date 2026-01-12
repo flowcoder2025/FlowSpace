@@ -17,9 +17,10 @@ import {
   isOCIConfigured,
 } from "@/lib/utils/oci-monitoring"
 
-// Socket 서버 공개 URL (Vercel Cron에서 내부 IP 접근 불가)
-const SOCKET_METRICS_URL =
-  process.env.NEXT_PUBLIC_SOCKET_URL || "https://space-socket.flow-coder.com"
+// OCI 서버 내부 URL (서버 사이드 전용 - Cloudflare 우회)
+// Vercel Cron에서 OCI 서버로 직접 연결
+const OCI_INTERNAL_IP = process.env.OCI_INTERNAL_IP || "144.24.72.143"
+const SOCKET_INTERNAL_URL = `http://${OCI_INTERNAL_IP}:3001`
 
 // Cron secret for verification (Vercel Cron)
 const CRON_SECRET = process.env.CRON_SECRET
@@ -158,13 +159,12 @@ interface SocketServerMetrics {
 }
 
 async function fetchSocketMetrics(): Promise<SocketServerMetrics | null> {
+  const url = `${SOCKET_INTERNAL_URL}/metrics`
   try {
-    const response = await fetch(`${SOCKET_METRICS_URL}/metrics`, {
+    console.log(`[Collect Metrics] Fetching socket metrics from: ${url}`)
+    const response = await fetch(url, {
       cache: "no-store",
       signal: AbortSignal.timeout(5000),
-      headers: {
-        "User-Agent": "node-fetch", // Cloudflare 규칙 매칭용
-      },
     })
 
     if (!response.ok) {
