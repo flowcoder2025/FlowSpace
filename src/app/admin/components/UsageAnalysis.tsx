@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useMemo } from "react"
+import { useEffect, useState, useMemo, useCallback } from "react"
 import {
   Card,
   CardHeader,
@@ -302,29 +302,61 @@ export function UsageAnalysis() {
   const [error, setError] = useState<string | null>(null)
   const [period, setPeriod] = useState<"hourly" | "daily" | "weekly">("daily")
   const [days, setDays] = useState(7)
+  const [resetting, setResetting] = useState(false)
 
   // Fetch data
-  useEffect(() => {
-    async function fetchAnalysis() {
-      setLoading(true)
-      try {
-        const res = await fetch(`/api/admin/usage/analysis?period=${period}&days=${days}`)
-        if (!res.ok) {
-          throw new Error("Failed to fetch analysis data")
-        }
-        const result = await res.json()
-        setData(result)
-        setError(null)
-      } catch (err) {
-        console.error("Error fetching analysis:", err)
-        setError("데이터를 불러올 수 없습니다")
-      } finally {
-        setLoading(false)
+  const fetchAnalysis = useCallback(async () => {
+    setLoading(true)
+    try {
+      const res = await fetch(`/api/admin/usage/analysis?period=${period}&days=${days}`)
+      if (!res.ok) {
+        throw new Error("Failed to fetch analysis data")
       }
+      const result = await res.json()
+      setData(result)
+      setError(null)
+    } catch (err) {
+      console.error("Error fetching analysis:", err)
+      setError("데이터를 불러올 수 없습니다")
+    } finally {
+      setLoading(false)
+    }
+  }, [period, days])
+
+  useEffect(() => {
+    fetchAnalysis()
+  }, [fetchAnalysis])
+
+  // Reset usage data
+  const handleReset = async () => {
+    if (!confirm("모든 사용량 데이터를 초기화하시겠습니까?\n\n이 작업은 되돌릴 수 없습니다.")) {
+      return
     }
 
-    fetchAnalysis()
-  }, [period, days])
+    setResetting(true)
+    try {
+      const res = await fetch("/api/admin/usage/reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "all", confirm: true }),
+      })
+
+      if (!res.ok) {
+        throw new Error("Failed to reset data")
+      }
+
+      const result = await res.json()
+      alert(`초기화 완료!\n\n삭제된 데이터:\n- 일별: ${result.results?.dailyDeleted || 0}개\n- 시간별: ${result.results?.hourlyDeleted || 0}개\n- 스냅샷: ${result.results?.snapshotsDeleted || 0}개`)
+
+      // Refresh data
+      fetchAnalysis()
+    } catch (err) {
+      console.error("Error resetting data:", err)
+      alert("초기화 실패: " + (err instanceof Error ? err.message : "알 수 없는 오류"))
+    } finally {
+      setResetting(false)
+    }
+  }
 
   // Format chart data
   const chartData = useMemo(() => {
@@ -386,6 +418,15 @@ export function UsageAnalysis() {
               <SelectItem value="90">90일</SelectItem>
             </SelectContent>
           </Select>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleReset}
+            disabled={resetting}
+            className="text-red-600 hover:text-red-700 hover:border-red-300"
+          >
+            {resetting ? "초기화 중..." : "데이터 초기화"}
+          </Button>
         </HStack>
       </HStack>
 
