@@ -139,3 +139,50 @@
 - pre-push: 10초 대기 후 진행 (DECISIONS.md 검증 기록 없음 경고)
 
 **커밋**: 3dc9ea2 - "chore: P0 작업 완료 - FlowSubAgent 초기 설정"
+
+## ULW-003: P1 레거시 claude.md 마이그레이션 + DECISIONS.md 초기화
+
+| 항목 | 값 |
+|------|-----|
+| 원문 | P1-1 레거시 claude.md 마이그레이션을 dry-run→실행→검증 순서로 수행하고, P1-2로 DECISIONS.md 템플릿 생성 및 DEC-001/002 기록까지 완료해줘 ulw |
+| 정제문 | P1-1 레거시 claude.md 마이그레이션 (5개) + P1-2 DECISIONS.md 초기화 및 DEC-001/002 기록 |
+| Profile | pro |
+| Tier | high |
+| Codex | on |
+| 시작 | 2026-01-13 21:45 |
+| 종료 | 2026-01-13 21:55 |
+| Result | PASS |
+
+### Steps (0-9)
+
+| # | Agent/Script | Status | Evidence |
+|---|--------------|--------|----------|
+| 0 | docs-scan | ⏭️ SKIP | 연속 세션, 스캔 유효 |
+| 1 | explore | ✅ RUN | find로 claude.md 5개 탐색 |
+| 2 | librarian | ✅ RUN | dry-run 결과 수집, 이동 대상 목록 확인 |
+| 3 | spec-acceptance | ⏭️ SKIP | 마이그레이션 작업은 AC 불필요 |
+| 4 | implementer | ✅ RUN | 파일 이동 5개 + DECISIONS.md 작성 |
+| 5 | runner | ⏭️ SKIP | 코드 변경 없음 (파일 이동/문서만) |
+| 6 | security-license | ⏭️ SKIP | 문서 변경만, 코드 없음 |
+| 7 | verifier | ✅ RUN | 원위치 0개, legacy 5개+README 확인 |
+| 8 | codex-verifier | ⏭️ SKIP | 파일 이동/문서 작업, 기능 검증 불필요 |
+| 9 | doc-manager | ✅ RUN | DECISIONS.md DEC-001/002, RUN_LOG 업데이트 |
+
+### Notes
+
+**P1-1 마이그레이션 결과**:
+| # | 원본 경로 | 이동 후 |
+|---|-----------|---------|
+| 1 | server/claude.md | legacy_claude_md/server__claude.md |
+| 2 | src/components/claude.md | legacy_claude_md/src__components__claude.md |
+| 3 | src/features/claude.md | legacy_claude_md/src__features__claude.md |
+| 4 | src/features/space/CLAUDE.md | legacy_claude_md/src__features__space__CLAUDE.md |
+| 5 | src/lib/claude.md | legacy_claude_md/src__lib__claude.md |
+
+**검증 결과**:
+- 원 위치 레거시 파일: **0개** ✅
+- legacy_claude_md 폴더: **5개 파일 + README.md** ✅
+
+**P1-2 DECISIONS.md 결과**:
+- DEC-001: CLAUDE.md 계층 구조 종료 + docs/03_ops 전환
+- DEC-002: ULW 모드(10-step) + Soft Gate 규칙 확립
