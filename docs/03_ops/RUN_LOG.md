@@ -426,7 +426,7 @@
 
 **SPEC_SNAPSHOT 갱신**:
 - Last Verifier: verifier (ULW-007 SSOT 보강)
-- Last Verdict Commit: 42afc48 (migrate-claude-md SSOT 최종)
+- Last Verdict Commit(ULW-007): 42afc48 (migrate-claude-md SSOT 최종)
 - 변경 이력 추가
 
 **검증 커맨드**: `./scripts/install.sh --migrate-claude-md --dry-run`
