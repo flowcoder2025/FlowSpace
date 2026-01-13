@@ -198,7 +198,6 @@
 | Real-time | Socket.io | 위치/상태 동기화 |
 | Video/Voice | LiveKit | 음성/영상 통화 |
 | UI Panels | react-resizable-panels | 리사이즈 가능 패널 |
-| Drag & Drop | @dnd-kit/core | 드래그 가능 비디오 |
 | Database | Supabase PostgreSQL + Prisma | 데이터 저장 |
 | Auth | NextAuth.js | 인증/권한 |
 | Deploy | Vercel | 호스팅 |
@@ -311,13 +310,13 @@
 - [x] 채팅 관리 (삭제/음소거/강퇴)
 - [x] 관리자 대시보드 확장
 - [x] 가격 페이지 (/pricing)
-- [x] **보안 허점 수정 27/38개 (71%)** - 통계/채팅/인증 강화
+- [x] **보안 허점 수정 36/38개 (95%)** - 통계/채팅/인증 강화 (2026-01-09 업데이트)
 
 ### Phase 7: 인프라 최적화 📋 계획
 - [ ] Oracle Cloud 통합 배포 (OCI.md 참조)
 - [ ] LiveKit Cloud → Self-hosted 전환 (프리티어 한도 초과)
 - [ ] Railway Socket.io → Oracle 마이그레이션
-- [ ] 보류된 보안 이슈 11개 (인프라 의존)
+- [ ] 보류된 보안 이슈 2개 (인프라 의존)
 
 ### Phase 8: 에셋 완성 📋 대기
 - [ ] 48×64 캐릭터 스프라이트 제작 (외부 의존)
@@ -394,4 +393,5 @@
 - v0.4 (2025-12-11): Phase 5 진행 상황 업데이트 (채팅 시스템, 아바타 색상), Phase 6 추가
 - v0.5 (2025-12-16): Phase 4 비디오 이슈 해결 (화면 공유 크롭 문제)
 - v0.6 (2026-01-08): Phase 5-6 완료, Phase 7-8 추가 (인프라/에셋), 보안 허점 수정 71% 반영
+- v0.7 (2026-01-13): 보안 허점 95% 반영 (36/38), 공간 기반 커뮤니케이션 시스템, OCI 모니터링, 사용량 측정 시스템, Cron Jobs (4개) 반영
 

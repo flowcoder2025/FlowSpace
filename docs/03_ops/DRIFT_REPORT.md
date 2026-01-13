@@ -16,7 +16,6 @@
 |----|------|----------|----------|----------|----------|-------|----------|----------|
 | DRIFT-001 | Missing | FR-Template-01 (3종 템플릿) | 에셋 대기 | PRD 7.1-B, 8.3 | Defer | - | LOW | - |
 | DRIFT-002 | Missing | FR-Template-02 (맵+타일셋+오브젝트) | 에셋 대기 | PRD 7.1-B, 8.3 | Defer | - | LOW | - |
-| DRIFT-003 | Mismatch | @dnd-kit/core (PRD 11.2) | package.json에 없음 | PRD 11.2 vs package.json | FixPRD | - | LOW | DEBT-001 |
 | DRIFT-004 | Missing | Phase 7 인프라 최적화 | 계획 상태 | PRD 12 Phase 7 | Defer | - | MEDIUM | - |
 | DRIFT-005 | Missing | Phase 8 에셋 완성 | 대기 상태 | PRD 12 Phase 8 | Defer | - | MEDIUM | - |
 
@@ -91,7 +90,7 @@ DRIFT_REPORT에서 제거 + SPEC_SNAPSHOT 갱신
 
 | ID | 타입 | 설명 | Evidence | Decision | Owner | 해결일 |
 |----|------|------|----------|----------|-------|--------|
-| - | - | (해결된 항목 없음) | - | - | - | - |
+| DRIFT-003 | Mismatch | @dnd-kit/core PRD에서 제거 | PRD 11.2 수정 | FixPRD | - | 2026-01-13 |
 
 ---
 

@@ -535,3 +535,60 @@ Git hooks:    3개 (pre-commit, commit-msg, pre-push)
 - `npm run build`: PASS (ESLint 경고 11개 - P1)
 
 **결론**: FlowSpace repo에서 UNCERTAIN 항목 0개 (모두 PASS)
+
+## ULW-011: 서브에이전트 적용 전 커밋 분석 + 문서 정합성 수정
+
+| 항목 | 값 |
+|------|-----|
+| 원문 | 서브에이전트 적용 전 커밋에서 문서 업데이트 필요한 부분 확인 + 문서 정합성 수정 ulw |
+| 정제문 | Git 히스토리 분석 → 코드↔문서 불일치 식별 → PRD/ROADMAP/DRIFT_REPORT 수정 |
+| Profile | pro |
+| Tier | high |
+| Codex | on |
+| 시작 | 2026-01-14 01:00 |
+| 종료 | 2026-01-14 01:20 |
+| Result | PASS |
+
+### Steps (0-9)
+
+| # | Agent/Script | Status | Evidence |
+|---|--------------|--------|----------|
+| 0 | docs-scan | ⏭️ SKIP | 직전 세션 스캔 유효 |
+| 1 | explore | ✅ RUN | git log 50+ 커밋 분석, API 라우트 44개 확인 |
+| 2 | librarian | ✅ RUN | PRD/ROADMAP/DRIFT_REPORT 비교 |
+| 3 | spec-acceptance | ⏭️ SKIP | 문서 정합성 수정, AC 불필요 |
+| 4 | implementer | ✅ RUN | 6개 문서 수정 |
+| 5 | runner | ✅ RUN | typecheck/build PASS |
+| 6 | security-license | ⏭️ SKIP | 문서 변경만 |
+| 7 | verifier | ✅ RUN | 정합성 확인 |
+| 8 | codex-verifier | ⏭️ SKIP | 문서 갱신만 |
+| 9 | doc-manager | ✅ RUN | RUN_LOG 갱신 |
+
+### Notes
+
+**식별된 문서 불일치 (6개)**:
+
+| # | 문서 | 항목 | 기존 값 | 수정 값 |
+|:-:|------|------|---------|---------|
+| 1 | PRD 라인 314 | 보안 허점 | 27/38 (71%) | 36/38 (95%) |
+| 2 | PRD 라인 320 | 보류 이슈 | 11개 | 2개 |
+| 3 | PRD 라인 201 | @dnd-kit/core | 기술 스택 포함 | 제거 (미구현) |
+| 4 | SPEC_SNAPSHOT 라인 63 | Phase-6 보안 | 71% | 95% |
+| 5 | ROADMAP 라인 15 | API 라우트 | 32개 | 44개 |
+| 6 | DRIFT_REPORT | DRIFT-003 | 현재 목록 | Archive 이동 |
+
+**수정 완료된 문서**:
+- `docs/prd.md` - v0.7 버전 추가
+- `docs/03_ops/SPEC_SNAPSHOT.md` - 보안 비율 수정
+- `docs/ROADMAP.md` - API 라우트 개수 수정
+- `docs/03_ops/DRIFT_REPORT.md` - DRIFT-003 Archive 이동
+
+**신규 기능 (문서 미반영 → 이번 PRD v0.7에 명시)**:
+- 공간 기반 커뮤니케이션 시스템 (근접 통신, 파티 존, 스포트라이트)
+- OCI 모니터링 시스템
+- 사용량 측정 시스템
+- Cron Jobs 4개 (cleanup-sessions, cleanup-messages, collect-metrics, aggregate-usage)
+
+**검증 결과**:
+- typecheck: PASS
+- build: PASS
