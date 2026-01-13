@@ -108,10 +108,11 @@ check_legacy_claude_md() {
     if [[ "$file" == "$PROJECT_ROOT/CLAUDE.md" ]] || [[ "$file" == "$PROJECT_ROOT/claude.md" ]]; then
       continue
     fi
-    # 제외 디렉토리
+    # 제외 디렉토리 (.claude/는 FlowSubAgent 스킬 템플릿)
     if [[ "$file" == *".git/"* ]] || [[ "$file" == *"node_modules/"* ]] || \
        [[ "$file" == *"dist/"* ]] || [[ "$file" == *"build/"* ]] || \
-       [[ "$file" == *".next/"* ]] || [[ "$file" == *"legacy_claude_md/"* ]]; then
+       [[ "$file" == *".next/"* ]] || [[ "$file" == *"legacy_claude_md/"* ]] || \
+       [[ "$file" == *".claude/"* ]]; then
       continue
     fi
     legacy_files+=("$file")
@@ -303,10 +304,11 @@ migrate_claude_md() {
     if [[ "$file" == "$PROJECT_ROOT/CLAUDE.md" ]] || [[ "$file" == "$PROJECT_ROOT/claude.md" ]]; then
       continue
     fi
-    # 제외 디렉토리
+    # 제외 디렉토리 (.claude/는 FlowSubAgent 스킬 템플릿)
     if [[ "$file" == *".git/"* ]] || [[ "$file" == *"node_modules/"* ]] || \
        [[ "$file" == *"dist/"* ]] || [[ "$file" == *"build/"* ]] || \
-       [[ "$file" == *".next/"* ]] || [[ "$file" == *"legacy_claude_md/"* ]]; then
+       [[ "$file" == *".next/"* ]] || [[ "$file" == *"legacy_claude_md/"* ]] || \
+       [[ "$file" == *".claude/"* ]]; then
       continue
     fi
 

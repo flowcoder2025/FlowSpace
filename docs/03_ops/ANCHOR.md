@@ -27,7 +27,8 @@
 
 ## 레거시 docs 상태
 
-- Legacy docs exists: **YES** (3 files)
+- Legacy claude.md: **NO** (0개, 마이그레이션 완료 → [legacy_claude_md](../04_reference/legacy_claude_md/))
+- Legacy docs (기존): **YES** (architecture, checklists 등 - Read-only)
 - 레거시 업데이트 필요 시 → [DOC_DEBT.md](DOC_DEBT.md)에 기록
 
 ## Roadmap / Status

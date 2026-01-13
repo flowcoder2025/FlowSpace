@@ -10,9 +10,9 @@
 | **PRD Version** | v0.6 (2026-01-08) |
 | **Profile** | Pro |
 | **Owner** | Claude (git author) |
-| **Last Verifier** | codex-verifier |
-| **Status** | UNKNOWN |
-| **Last Verdict Commit** | - |
+| **Last Verifier** | verifier (P1 검증) |
+| **Status** | PASS |
+| **Last Verdict Commit** | 4024e8d (P1 마이그레이션) |
 
 ### Status 정의
 
@@ -123,6 +123,7 @@ TAG: feat, fix, refactor, chore, docs, ops
 | 날짜 | 변경 내용 | 담당 |
 |------|----------|------|
 | 2026-01-13 | FlowSpace PRD v0.6 기반 스냅샷 | Claude |
+| 2026-01-13 | P1 마이그레이션 완료, Status→PASS, Commit→4024e8d | Claude |
 
 ---
 

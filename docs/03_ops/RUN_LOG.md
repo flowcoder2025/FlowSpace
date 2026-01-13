@@ -186,3 +186,48 @@
 **P1-2 DECISIONS.md 결과**:
 - DEC-001: CLAUDE.md 계층 구조 종료 + docs/03_ops 전환
 - DEC-002: ULW 모드(10-step) + Soft Gate 규칙 확립
+
+## ULW-004: P2 운영 안정화 - 스크립트/경로/SSOT 정리
+
+| 항목 | 값 |
+|------|-----|
+| 원문 | P2 운영 안정화: migrate 스크립트 정리, legacy 경로 표준 확인, SSOT 근거 연결 ulw |
+| 정제문 | P2-1 install.sh .claude/** exclude 추가, P2-2 legacy 경로 확인, P2-3 SSOT 갱신 |
+| Profile | pro |
+| Tier | high |
+| Codex | on |
+| 시작 | 2026-01-13 22:00 |
+| 종료 | 2026-01-13 22:10 |
+| Result | PASS |
+
+### Steps (0-9)
+
+| # | Agent/Script | Status | Evidence |
+|---|--------------|--------|----------|
+| 0 | docs-scan | ⏭️ SKIP | 연속 세션, 스캔 유효 |
+| 1 | explore | ✅ RUN | install.sh 분석 (588줄) |
+| 2 | librarian | ✅ RUN | exclude 목록 확인, SSOT 문서 점검 |
+| 3 | spec-acceptance | ⏭️ SKIP | 스크립트 수정, AC 불필요 |
+| 4 | implementer | ✅ RUN | install.sh .claude/** exclude 추가 |
+| 5 | runner | ✅ RUN | dry-run 테스트 (대상 0개 확인) |
+| 6 | security-license | ⏭️ SKIP | 스크립트 수정만, 보안 영향 없음 |
+| 7 | verifier | ✅ RUN | ANCHOR/SPEC_SNAPSHOT P1 커밋 연결 확인 |
+| 8 | codex-verifier | ⏭️ SKIP | 운영 안정화 작업, 기능 검증 불필요 |
+| 9 | doc-manager | ✅ RUN | ANCHOR, SPEC_SNAPSHOT, RUN_LOG 갱신 |
+
+### Notes
+
+**P2-1 install.sh 수정**:
+- `.claude/**` exclude 추가 (check_legacy_claude_md, migrate_claude_md 함수)
+- dry-run 테스트: 마이그레이션 대상 0개 (정상)
+
+**P2-2 legacy 경로 확인**:
+- 스크립트: `docs/04_reference/legacy_claude_md`
+- 실제 파일: `docs/04_reference/legacy_claude_md` (5개 + README)
+- ✅ FlowSubAgent 표준 경로와 일치
+
+**P2-3 SSOT 갱신**:
+| 문서 | 변경 |
+|------|------|
+| ANCHOR.md | Legacy claude.md: NO (0개, 마이그레이션 완료) |
+| SPEC_SNAPSHOT.md | Status: PASS, Commit: 4024e8d |
