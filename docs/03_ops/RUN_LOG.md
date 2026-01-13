@@ -2,6 +2,8 @@
 
 > ULW 모드 실행 기록. 각 실행마다 append합니다.
 
+**Repository**: FlowSpace (`Team-jane/flow_metaverse`)
+
 ---
 
 ## 템플릿
@@ -87,9 +89,10 @@
 
 ### Notes
 
-**발견된 레거시 claude.md (4개)**:
+**발견된 레거시 claude.md (5개)** [정정: 초기 4개 → 탐색 후 5개 확인]:
 - src/components/claude.md
 - src/features/claude.md
+- src/features/space/CLAUDE.md (추후 발견)
 - src/lib/claude.md
 - server/claude.md
 
@@ -281,3 +284,55 @@
 - docs/04_reference/ (레거시 보관 영역 - 명시적)
 - legacy_claude_md/ (보조 안전장치)
 - 루트 CLAUDE.md (프로젝트 진입점)
+
+## ULW-006: dry-run 요약 수치 + RUN_LOG 감사성 보강
+
+| 항목 | 값 |
+|------|-----|
+| 원문 | ULW-006으로 '요약 수치(candidates/excluded/to_move)'와 RUN_LOG 감사성(Repo 명시, ULW-001 정리)만 폴리시 보강 예정(동작 변경 최소) ulw |
+| 정제문 | dry-run 요약 수치 추가 (candidates/excluded/to_move) + RUN_LOG 감사성 보강 |
+| Profile | pro |
+| Tier | high |
+| Codex | on |
+| 시작 | 2026-01-13 23:00 |
+| 종료 | 2026-01-13 23:15 |
+| Result | PASS |
+
+### Steps (0-9)
+
+| # | Agent/Script | Status | Evidence |
+|---|--------------|--------|----------|
+| 0 | docs-scan | ⏭️ SKIP | 연속 세션, 스캔 유효 |
+| 1 | explore | ✅ RUN | install.sh 분석, 산술 연산 문제 확인 |
+| 2 | librarian | ⏭️ SKIP | 추가 근거 불필요 |
+| 3 | spec-acceptance | ⏭️ SKIP | 스크립트 개선, AC 불필요 |
+| 4 | implementer | ✅ RUN | install.sh 수정 (요약 수치 + 산술 연산 수정) |
+| 5 | runner | ✅ RUN | dry-run 테스트 PASS, candidates/excluded/to_move 출력 확인 |
+| 6 | security-license | ⏭️ SKIP | 스크립트 수정만, 보안 영향 없음 |
+| 7 | verifier | ✅ RUN | idempotent 확인 (0 changes) |
+| 8 | codex-verifier | ⏭️ SKIP | 운영 스크립트 개선, 기능 검증 불필요 |
+| 9 | doc-manager | ✅ RUN | RUN_LOG 업데이트 (Repo 명시, ULW-001 정정) |
+
+### Notes
+
+**install.sh 수정 내용**:
+1. 요약 수치 변수 추가: `candidates`, `excluded`, `to_move`
+2. 스캔 결과 섹션 추가 (라인 385-389)
+3. 산술 연산 수정: `((var++))` → `var=$((var + 1))` (set -e 호환)
+
+**dry-run 출력 예시**:
+```
+==========================================
+[migrate] 스캔 결과
+==========================================
+  candidates: 5 (node_modules 제외)
+  excluded:   5 (exclude 규칙 적용)
+  to_move:    0 (마이그레이션 대상)
+```
+
+**RUN_LOG 감사성 보강**:
+- Repository 명시 추가 (상단)
+- ULW-001 레거시 파일 수 정정 (4개 → 5개)
+
+**버그 수정**:
+- `((excluded++))` → `excluded=$((excluded + 1))`: bash `set -e` 환경에서 var=0일 때 exit code 1 반환 문제 해결

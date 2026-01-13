@@ -293,6 +293,11 @@ migrate_claude_md() {
   local skipped=0
   local migrated_files=()
 
+  # 요약 수치
+  local candidates=0
+  local excluded=0
+  local to_move=0
+
   echo "[migrate] 레거시 claude.md 마이그레이션 시작..."
   echo ""
   echo "=========================================="
@@ -308,6 +313,9 @@ migrate_claude_md() {
   echo "  - 루트 CLAUDE.md    (프로젝트 진입점)"
   echo ""
 
+  # 전체 candidates 수 계산 (node_modules 제외한 대략적 수치)
+  candidates=$(find "$PROJECT_ROOT" -type f \( -iname "claude.md" -o -iname "CLAUDE.md" \) 2>/dev/null | grep -v "node_modules" | wc -l | tr -d ' ')
+
   # 레거시 폴더 생성
   if [[ "$dry_run" != "true" ]]; then
     mkdir -p "$LEGACY_DIR"
@@ -317,6 +325,7 @@ migrate_claude_md() {
   while IFS= read -r -d '' file; do
     # 루트 제외
     if [[ "$file" == "$PROJECT_ROOT/CLAUDE.md" ]] || [[ "$file" == "$PROJECT_ROOT/claude.md" ]]; then
+      excluded=$((excluded + 1))
       continue
     fi
     # 제외 디렉토리 (FlowSubAgent 표준 exclude)
@@ -327,23 +336,25 @@ migrate_claude_md() {
        [[ "$file" == *"dist/"* ]] || [[ "$file" == *"build/"* ]] || \
        [[ "$file" == *".next/"* ]] || [[ "$file" == *"legacy_claude_md/"* ]] || \
        [[ "$file" == *".claude/"* ]] || [[ "$file" == *"docs/04_reference/"* ]]; then
+      excluded=$((excluded + 1))
       continue
     fi
 
+    to_move=$((to_move + 1))
     local encoded_name
     encoded_name=$(encode_path "$file")
     local target="$LEGACY_DIR/$encoded_name"
 
     if [[ "$dry_run" == "true" ]]; then
       echo "  [dry-run] ${file#$PROJECT_ROOT/} → legacy_claude_md/$encoded_name"
-      ((migrated++))
+      migrated=$((migrated + 1))
       continue
     fi
 
     # 대상 파일 존재 체크
     if [[ -f "$target" ]] && [[ "$force" != "true" ]]; then
       echo "  [skip] $encoded_name (이미 존재, --force로 덮어쓰기)"
-      ((skipped++))
+      skipped=$((skipped + 1))
       continue
     fi
 
@@ -358,7 +369,7 @@ migrate_claude_md() {
     rm -f "$file"
     echo "  [move] ${file#$PROJECT_ROOT/} → legacy_claude_md/$encoded_name"
     migrated_files+=("$encoded_name")
-    ((migrated++))
+    migrated=$((migrated + 1))
   done < <(find "$PROJECT_ROOT" -type f \( -iname "claude.md" -o -iname "CLAUDE.md" \) -print0 2>/dev/null)
 
   echo ""
@@ -369,6 +380,13 @@ migrate_claude_md() {
   fi
 
   # 결과 요약
+  echo ""
+  echo "=========================================="
+  echo "[migrate] 스캔 결과"
+  echo "=========================================="
+  echo "  candidates: $candidates (node_modules 제외)"
+  echo "  excluded:   $excluded (exclude 규칙 적용)"
+  echo "  to_move:    $to_move (마이그레이션 대상)"
   echo ""
   echo "=========================================="
   echo "[migrate] 결과 요약"
