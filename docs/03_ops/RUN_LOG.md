@@ -592,3 +592,52 @@ Git hooks:    3개 (pre-commit, commit-msg, pre-push)
 **검증 결과**:
 - typecheck: PASS
 - build: PASS
+
+## ULW-012: 누락 기능 검증 + PRD Phase 업데이트
+
+| 항목 | 값 |
+|------|-----|
+| 원문 | 누락된 기능들 추가하고, 연관 문서들에도 기술. 하나씩 검증하면서 fix ulw |
+| 정제문 | 서브에이전트 적용 전 구현 기능 검증 → PRD Phase 섹션 업데이트 → 문서 동기화 |
+| Profile | pro |
+| Tier | high |
+| Codex | on |
+| 시작 | 2026-01-14 01:30 |
+| 종료 | 2026-01-14 02:00 |
+| Result | PASS |
+
+### Steps (0-9)
+
+| # | Agent/Script | Status | Evidence |
+|---|--------------|--------|----------|
+| 0 | docs-scan | ⏭️ SKIP | 직전 세션 스캔 유효 |
+| 1 | explore | ✅ RUN | 6개 기능 그룹 코드 확인 |
+| 2 | librarian | ✅ RUN | API + Prisma 스키마 + 훅 검증 |
+| 3 | spec-acceptance | ⏭️ SKIP | 기존 구현 검증, AC 불필요 |
+| 4 | implementer | ✅ RUN | PRD Phase 5/6 업데이트, SPEC_SNAPSHOT 업데이트 |
+| 5 | runner | ✅ RUN | typecheck/build PASS |
+| 6 | security-license | ⏭️ SKIP | 문서 변경만 |
+| 7 | verifier | ✅ RUN | 코드↔문서 정합성 확인 |
+| 8 | codex-verifier | ⏭️ SKIP | 문서 갱신만 |
+| 9 | doc-manager | ✅ RUN | RUN_LOG 갱신 |
+
+### Notes
+
+**검증된 기능 (6개 그룹)**:
+
+| # | 기능 그룹 | 검증 결과 | 주요 파일 |
+|:-:|----------|:--------:|----------|
+| 1 | 공간 기반 커뮤니케이션 | ✅ PASS | zones/, spotlight/, useProximitySubscription.ts |
+| 2 | OCI 모니터링 | ✅ PASS | oci-metrics/, oci-cost.ts, oci-monitoring.ts |
+| 3 | 사용량 측정 | ✅ PASS | usage/analysis/, collect-metrics/ |
+| 4 | Discord Webhook | ✅ PASS | socket-server.ts (sendDiscordAlert) |
+| 5 | Cron Jobs | ✅ PASS | 4개 + vercel.json 스케줄 |
+| 6 | Socket 서버 로깅 | ✅ PASS | JSON 구조화 + ErrorCode 체계 |
+
+**PRD 업데이트 내용**:
+- Phase 5: 공간 기반 커뮤니케이션 (근접/파티존/스포트라이트) 추가
+- Phase 6: 운영 도구 (OCI/사용량/Discord/Cron/로깅) 추가
+
+**검증 결과**:
+- typecheck: PASS
+- build: PASS
