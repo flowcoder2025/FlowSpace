@@ -336,3 +336,60 @@
 
 **버그 수정**:
 - `((excluded++))` → `excluded=$((excluded + 1))`: bash `set -e` 환경에서 var=0일 때 exit code 1 반환 문제 해결
+
+## ULW-007: SSOT 정합성 보완 + 회귀 테스트
+
+| 항목 | 값 |
+|------|-----|
+| 원문 | ULW-006 피드백: candidates 정의 정합성, moved/skipped 출력, 실제 이동 회귀 테스트 ulw |
+| 정제문 | candidates=raw 후보로 수정 + moved/skipped 출력 개선 + 실제 이동 회귀 테스트 |
+| Profile | pro |
+| Tier | high |
+| Codex | on |
+| 시작 | 2026-01-13 23:20 |
+| 종료 | 2026-01-13 23:30 |
+| Result | PASS |
+
+### Steps (0-9)
+
+| # | Agent/Script | Status | Evidence |
+|---|--------------|--------|----------|
+| 0 | docs-scan | ⏭️ SKIP | 연속 세션, 스캔 유효 |
+| 1 | explore | ✅ RUN | install.sh 분석, candidates 정의 확인 |
+| 2 | librarian | ⏭️ SKIP | 추가 근거 불필요 |
+| 3 | spec-acceptance | ⏭️ SKIP | 스크립트 개선, AC 불필요 |
+| 4 | implementer | ✅ RUN | install.sh 수정 (candidates + 출력 개선) |
+| 5 | runner | ✅ RUN | 회귀 테스트 3단계 실행 |
+| 6 | security-license | ⏭️ SKIP | 스크립트 수정만, 보안 영향 없음 |
+| 7 | verifier | ✅ RUN | idempotent 확인 (이동 후 0 changes) |
+| 8 | codex-verifier | ⏭️ SKIP | 운영 스크립트 개선, 기능 검증 불필요 |
+| 9 | doc-manager | ✅ RUN | RUN_LOG 업데이트 |
+
+### Notes
+
+**install.sh 수정 내용**:
+1. candidates 정의 수정: `grep -v node_modules` 제거 → exclude 적용 전 raw 후보
+2. 출력 섹션 분리: "스캔 결과" + "실행 결과"
+3. 실행 결과에 모드 표시: DRY-RUN / APPLY
+
+**회귀 테스트 로그** (3단계):
+```
+[1단계] dry-run 감지 확인
+  candidates: 6 (전체 claude.md 파일)
+  excluded:   5 (exclude 규칙 적용)
+  to_move:    1 (마이그레이션 대상)
+  → test_regression/claude.md 감지됨 ✅
+
+[2단계] 실제 이동 실행
+  모드:    APPLY (실제 변경)
+  moved:   1
+  skipped: 0
+  → test_regression__claude.md 이동됨 ✅
+
+[3단계] idempotent 확인
+  candidates: 5 (전체 claude.md 파일)
+  to_move:    0 (마이그레이션 대상)
+  → 0 changes, idempotent 확인 ✅
+```
+
+**테스트 파일 정리**: test_regression/, test_regression__claude.md 삭제 완료

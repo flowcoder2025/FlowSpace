@@ -313,8 +313,8 @@ migrate_claude_md() {
   echo "  - 루트 CLAUDE.md    (프로젝트 진입점)"
   echo ""
 
-  # 전체 candidates 수 계산 (node_modules 제외한 대략적 수치)
-  candidates=$(find "$PROJECT_ROOT" -type f \( -iname "claude.md" -o -iname "CLAUDE.md" \) 2>/dev/null | grep -v "node_modules" | wc -l | tr -d ' ')
+  # 전체 candidates 수 계산 (exclude 적용 전 raw 후보)
+  candidates=$(find "$PROJECT_ROOT" -type f \( -iname "claude.md" -o -iname "CLAUDE.md" \) 2>/dev/null | wc -l | tr -d ' ')
 
   # 레거시 폴더 생성
   if [[ "$dry_run" != "true" ]]; then
@@ -384,18 +384,20 @@ migrate_claude_md() {
   echo "=========================================="
   echo "[migrate] 스캔 결과"
   echo "=========================================="
-  echo "  candidates: $candidates (node_modules 제외)"
+  echo "  candidates: $candidates (전체 claude.md 파일)"
   echo "  excluded:   $excluded (exclude 규칙 적용)"
   echo "  to_move:    $to_move (마이그레이션 대상)"
   echo ""
   echo "=========================================="
-  echo "[migrate] 결과 요약"
+  echo "[migrate] 실행 결과"
   echo "=========================================="
   if [[ "$dry_run" == "true" ]]; then
-    echo "  모드: DRY-RUN (실제 변경 없음)"
+    echo "  모드:    DRY-RUN (실제 변경 없음)"
+  else
+    echo "  모드:    APPLY (실제 변경)"
   fi
-  echo "  이동됨: $migrated"
-  echo "  스킵됨: $skipped"
+  echo "  moved:   $migrated"
+  echo "  skipped: $skipped"
 
   if [[ ${#migrated_files[@]} -gt 0 ]]; then
     echo ""
