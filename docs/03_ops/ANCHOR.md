@@ -31,6 +31,12 @@
 - Legacy docs (기존): **YES** (architecture, checklists 등 - Read-only)
 - 레거시 업데이트 필요 시 → [DOC_DEBT.md](DOC_DEBT.md)에 기록
 
+## FlowSpace 프로젝트 규칙
+
+> 디자인 토큰, 버튼 규칙, 기술 스택, 개발 프로세스 등 프로젝트별 상세 규칙
+
+→ [FLOWSPACE_RULES.md](../04_reference/legacy_claude_md/FLOWSPACE_RULES.md)
+
 ## Roadmap / Status
 
 ### ✅ Done (현재 릴리즈)
