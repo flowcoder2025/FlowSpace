@@ -97,3 +97,45 @@
 1. P0: SPEC_SNAPSHOT.md 초기화, DRIFT_REPORT.md 초기화, package.json에 typecheck/test 추가
 2. P1: 레거시 claude.md 마이그레이션, DECISIONS.md 초기화
 3. P2: CI Gate 연동, test 스크립트 구현
+
+## ULW-002: P0 작업 실행 (SPEC_SNAPSHOT, DRIFT_REPORT, package.json)
+
+| 항목 | 값 |
+|------|-----|
+| 원문 | (컨텍스트 복원 후 P0 작업 계속 진행) |
+| 정제문 | P0 작업 3개 실행 - SPEC_SNAPSHOT, DRIFT_REPORT 초기화 및 package.json 스크립트 추가 |
+| Profile | pro |
+| Tier | high |
+| Codex | on |
+| 시작 | 2026-01-13 21:30 |
+| 종료 | 2026-01-13 21:40 |
+| Result | PASS |
+
+### Steps (0-9)
+
+| # | Agent/Script | Status | Evidence |
+|---|--------------|--------|----------|
+| 0 | docs-scan | ⏭️ SKIP | 연속 세션, 스캔 유효 |
+| 1 | explore | ✅ RUN | prd.md, package.json 확인 |
+| 2 | librarian | ✅ RUN | PRD v0.6 → SPEC_SNAPSHOT 근거 수집 |
+| 3 | spec-acceptance | ⏭️ SKIP | P0 작업은 AC 불필요 |
+| 4 | implementer | ✅ RUN | SPEC_SNAPSHOT.md, DRIFT_REPORT.md, package.json 수정 |
+| 5 | runner | ✅ RUN | npm run typecheck PASS |
+| 6 | security-license | ⏭️ SKIP | 문서/설정 변경만, 코드 변경 없음 |
+| 7 | verifier | ✅ RUN | Git hooks 정상 작동 확인 (pre-commit PASS) |
+| 8 | codex-verifier | ⏭️ SKIP | P0 설정 작업, 기능 검증 불필요 |
+| 9 | doc-manager | ✅ RUN | RESUME_PACK.md, RUN_LOG.md 업데이트 |
+
+### Notes
+
+**완료된 P0 작업**:
+1. ✅ SPEC_SNAPSHOT.md - FlowSpace PRD v0.6 기반 스냅샷
+2. ✅ DRIFT_REPORT.md - 5개 드리프트 항목 기록 (템플릿, @dnd-kit, Phase 7-8)
+3. ✅ package.json - typecheck/test 스크립트 추가
+
+**Git Hooks 검증**:
+- pre-commit: typecheck PASS, test PASS
+- commit-msg: TAG 형식 경고 (CHORE → 권장: CHORE:)
+- pre-push: 10초 대기 후 진행 (DECISIONS.md 검증 기록 없음 경고)
+
+**커밋**: 3dc9ea2 - "chore: P0 작업 완료 - FlowSubAgent 초기 설정"
