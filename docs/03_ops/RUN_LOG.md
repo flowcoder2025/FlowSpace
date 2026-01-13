@@ -430,3 +430,52 @@
 - 변경 이력 추가
 
 **검증 커맨드**: `./scripts/install.sh --migrate-claude-md --dry-run`
+
+## ULW-009: 전수 점검 + 문서/SSOT 정합성 검증
+
+| 항목 | 값 |
+|------|-----|
+| 원문 | 전수 점검(문제 탐지→정의→개선) + 문서/SSOT 정합성 검증 + 중단 작업 재개 ulw |
+| 정제문 | 품질 체크, SSOT 점검, P0 수정, PAUSED_TASKS 정리 |
+| Profile | pro |
+| Tier | high |
+| Codex | on |
+| 시작 | 2026-01-13 23:50 |
+| 종료 | 2026-01-14 00:10 |
+| Result | PASS |
+
+### Steps (0-9)
+
+| # | Agent/Script | Status | Evidence |
+|---|--------------|--------|----------|
+| 0 | docs-scan | ✅ RUN | 42개 md 파일 확인 |
+| 1 | explore | ✅ RUN | typecheck/build/hooks 점검 |
+| 2 | librarian | ✅ RUN | TODO 4개, ESLint 경고 11개 수집 |
+| 3 | spec-acceptance | ⏭️ SKIP | 점검 작업, AC 불필요 |
+| 4 | implementer | ✅ RUN | OPS-001 수정 (ANCHOR.md PRD 링크) |
+| 5 | runner | ✅ RUN | typecheck PASS, build PASS |
+| 6 | security-license | ⏭️ SKIP | 보안 영향 없음 |
+| 7 | verifier | ✅ RUN | migrate-claude-md 0 changes 확인 |
+| 8 | codex-verifier | ⏭️ SKIP | 점검 작업, 기능 검증 불필요 |
+| 9 | doc-manager | ✅ RUN | ULW-009_LOG, OPS_AUDIT_REPORT, PAUSED_TASKS 생성 |
+
+### Notes
+
+**품질 체크 결과**:
+- typecheck: PASS
+- build: PASS (ESLint 경고 11개 - P1)
+- Git hooks: 3개 설치됨
+- migrate-claude-md: 0 changes (idempotent)
+
+**P0 수정**:
+- OPS-001: ANCHOR.md PRD 링크 (`../../PRD.md` → `../prd.md`)
+
+**생성 문서**:
+- `docs/03_ops/ULW-009_LOG.md` - 실행 로그
+- `docs/03_ops/OPS_AUDIT_REPORT_ULW-009.md` - 이슈 리스트
+- `docs/03_ops/PAUSED_TASKS.md` - 중단 작업 목록
+
+**참조 (FlowSubAgent)**:
+- Ref (FlowSubAgent ULW-006): 263681b
+- UNCERTAIN 사유: 환경(미설치)
+- 주의: FlowSpace SSOT Verdict Commit과 혼용 금지

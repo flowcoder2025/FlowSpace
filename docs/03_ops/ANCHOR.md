@@ -12,7 +12,7 @@
 
 | 문서 | 역할 | 링크 |
 |------|------|------|
-| PRD.md | 요구사항 | [PRD.md](../../PRD.md) |
+| PRD.md | 요구사항 | [prd.md](../prd.md) |
 | AGENTS.md | 에이전트/운영 규칙 | [AGENTS.md](AGENTS.md) |
 | SPEC_SNAPSHOT.md | SSOT 스냅샷 | [SPEC_SNAPSHOT.md](SPEC_SNAPSHOT.md) |
 | DRIFT_REPORT.md | 드리프트 추적 | [DRIFT_REPORT.md](DRIFT_REPORT.md) |
