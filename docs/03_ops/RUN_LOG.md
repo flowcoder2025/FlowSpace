@@ -393,3 +393,40 @@
 ```
 
 **테스트 파일 정리**: test_regression/, test_regression__claude.md 삭제 완료
+
+## ULW-008: SSOT 최종 PASS 갱신
+
+| 항목 | 값 |
+|------|-----|
+| 원문 | ULW-007 최종 PASS 확인 → SSOT 문서 갱신 ulw |
+| 정제문 | SPEC_SNAPSHOT 최종 PASS 갱신 (Commit→42afc48) |
+| Profile | pro |
+| Tier | high |
+| Codex | on |
+| 시작 | 2026-01-13 23:35 |
+| 종료 | 2026-01-13 23:40 |
+| Result | PASS |
+
+### Steps (0-9)
+
+| # | Agent/Script | Status | Evidence |
+|---|--------------|--------|----------|
+| 0 | docs-scan | ⏭️ SKIP | 연속 세션, 스캔 유효 |
+| 1 | explore | ⏭️ SKIP | 갱신 대상 명확 |
+| 2 | librarian | ⏭️ SKIP | 추가 근거 불필요 |
+| 3 | spec-acceptance | ⏭️ SKIP | 문서 갱신만 |
+| 4 | implementer | ✅ RUN | SPEC_SNAPSHOT 메타데이터 + 변경이력 갱신 |
+| 5 | runner | ⏭️ SKIP | 코드 변경 없음 |
+| 6 | security-license | ⏭️ SKIP | 문서 변경만 |
+| 7 | verifier | ✅ RUN | 갱신 내용 확인 |
+| 8 | codex-verifier | ⏭️ SKIP | 문서 갱신만 |
+| 9 | doc-manager | ✅ RUN | RUN_LOG 업데이트 |
+
+### Notes
+
+**SPEC_SNAPSHOT 갱신**:
+- Last Verifier: verifier (ULW-007 SSOT 보강)
+- Last Verdict Commit: 42afc48 (migrate-claude-md SSOT 최종)
+- 변경 이력 추가
+
+**검증 커맨드**: `./scripts/install.sh --migrate-claude-md --dry-run`
