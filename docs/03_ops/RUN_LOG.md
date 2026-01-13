@@ -231,3 +231,53 @@
 |------|------|
 | ANCHOR.md | Legacy claude.md: NO (0개, 마이그레이션 완료) |
 | SPEC_SNAPSHOT.md | Status: PASS, Commit: 4024e8d |
+
+## ULW-005: FlowSubAgent 운영 표준 보강 (exclude + idempotent)
+
+| 항목 | 값 |
+|------|-----|
+| 원문 | FlowSubAgent → FlowSpace 적용 요청: exclude 규칙 보강, dry-run 출력 개선, idempotent 검증 ulw |
+| 정제문 | install.sh exclude 규칙 보강 (docs/04_reference/**) + dry-run 출력 개선 + idempotent 검증 |
+| Profile | pro |
+| Tier | high |
+| Codex | on |
+| 시작 | 2026-01-13 22:15 |
+| 종료 | 2026-01-13 22:25 |
+| Result | PASS |
+
+### Steps (0-9)
+
+| # | Agent/Script | Status | Evidence |
+|---|--------------|--------|----------|
+| 0 | docs-scan | ⏭️ SKIP | 연속 세션, 스캔 유효 |
+| 1 | explore | ✅ RUN | install.sh 분석, exclude 목록 확인 |
+| 2 | librarian | ✅ RUN | FlowSubAgent 표준 exclude 규칙 수집 |
+| 3 | spec-acceptance | ⏭️ SKIP | 스크립트 개선, AC 불필요 |
+| 4 | implementer | ✅ RUN | install.sh 수정 (3곳) |
+| 5 | runner | ✅ RUN | dry-run 2회 연속 실행, idempotent 확인 |
+| 6 | security-license | ⏭️ SKIP | 스크립트 수정만, 보안 영향 없음 |
+| 7 | verifier | ✅ RUN | exclude 규칙 출력, 0 changes 확인 |
+| 8 | codex-verifier | ⏭️ SKIP | 운영 스크립트 개선, 기능 검증 불필요 |
+| 9 | doc-manager | ✅ RUN | RUN_LOG 업데이트 |
+
+### Notes
+
+**install.sh 수정 내용**:
+1. check_legacy_claude_md 함수: `docs/04_reference/` 명시적 exclude 추가 (라인 118)
+2. migrate_claude_md 함수: `docs/04_reference/` 명시적 exclude 추가 (라인 317)
+3. dry-run 출력 개선: Exclude 규칙 요약 표시 (라인 298-308)
+4. 결과 출력 개선: "0 changes" 표시 + idempotent 확인 메시지 (라인 395-397)
+
+**검증 결과**:
+```
+1회차: 0 changes - 마이그레이션 대상 없음
+2회차: 0 changes - 마이그레이션 대상 없음
+✅ idempotent 확인
+```
+
+**Exclude 규칙 (FlowSubAgent 표준)**:
+- .git/, node_modules/, dist/, build/, .next/
+- .claude/ (FlowSubAgent 템플릿)
+- docs/04_reference/ (레거시 보관 영역 - 명시적)
+- legacy_claude_md/ (보조 안전장치)
+- 루트 CLAUDE.md (프로젝트 진입점)

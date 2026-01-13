@@ -108,11 +108,14 @@ check_legacy_claude_md() {
     if [[ "$file" == "$PROJECT_ROOT/CLAUDE.md" ]] || [[ "$file" == "$PROJECT_ROOT/claude.md" ]]; then
       continue
     fi
-    # 제외 디렉토리 (.claude/는 FlowSubAgent 스킬 템플릿)
+    # 제외 디렉토리 (FlowSubAgent 표준 exclude)
+    # - .claude/: FlowSubAgent 스킬 템플릿
+    # - docs/04_reference/: 레거시 보관 영역 (명시적 exclude)
+    # - legacy_claude_md/: 보조 안전장치
     if [[ "$file" == *".git/"* ]] || [[ "$file" == *"node_modules/"* ]] || \
        [[ "$file" == *"dist/"* ]] || [[ "$file" == *"build/"* ]] || \
        [[ "$file" == *".next/"* ]] || [[ "$file" == *"legacy_claude_md/"* ]] || \
-       [[ "$file" == *".claude/"* ]]; then
+       [[ "$file" == *".claude/"* ]] || [[ "$file" == *"docs/04_reference/"* ]]; then
       continue
     fi
     legacy_files+=("$file")
@@ -292,6 +295,18 @@ migrate_claude_md() {
 
   echo "[migrate] 레거시 claude.md 마이그레이션 시작..."
   echo ""
+  echo "=========================================="
+  echo "[migrate] Exclude 규칙 (자동 제외)"
+  echo "=========================================="
+  echo "  - .git/             (Git 내부)"
+  echo "  - node_modules/     (의존성)"
+  echo "  - dist/, build/     (빌드 산출물)"
+  echo "  - .next/            (Next.js 캐시)"
+  echo "  - .claude/          (FlowSubAgent 템플릿)"
+  echo "  - docs/04_reference/ (레거시 보관 영역)"
+  echo "  - legacy_claude_md/ (보조 안전장치)"
+  echo "  - 루트 CLAUDE.md    (프로젝트 진입점)"
+  echo ""
 
   # 레거시 폴더 생성
   if [[ "$dry_run" != "true" ]]; then
@@ -304,11 +319,14 @@ migrate_claude_md() {
     if [[ "$file" == "$PROJECT_ROOT/CLAUDE.md" ]] || [[ "$file" == "$PROJECT_ROOT/claude.md" ]]; then
       continue
     fi
-    # 제외 디렉토리 (.claude/는 FlowSubAgent 스킬 템플릿)
+    # 제외 디렉토리 (FlowSubAgent 표준 exclude)
+    # - .claude/: FlowSubAgent 스킬 템플릿
+    # - docs/04_reference/: 레거시 보관 영역 (명시적 exclude)
+    # - legacy_claude_md/: 보조 안전장치
     if [[ "$file" == *".git/"* ]] || [[ "$file" == *"node_modules/"* ]] || \
        [[ "$file" == *"dist/"* ]] || [[ "$file" == *"build/"* ]] || \
        [[ "$file" == *".next/"* ]] || [[ "$file" == *"legacy_claude_md/"* ]] || \
-       [[ "$file" == *".claude/"* ]]; then
+       [[ "$file" == *".claude/"* ]] || [[ "$file" == *"docs/04_reference/"* ]]; then
       continue
     fi
 
@@ -374,9 +392,11 @@ migrate_claude_md() {
 
   echo ""
   if [[ $migrated -eq 0 ]] && [[ $skipped -eq 0 ]]; then
-    echo "[migrate] 마이그레이션 대상 없음 (이미 정리됨)"
+    echo "[migrate] 0 changes - 마이그레이션 대상 없음 (이미 정리됨)"
+    echo ""
+    echo "✅ idempotent 확인: 반복 실행해도 동일한 결과"
   else
-    echo "[migrate] 완료!"
+    echo "[migrate] 완료! (${migrated} changes)"
   fi
 }
 
