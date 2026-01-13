@@ -1,0 +1,9 @@
+# FlowSubAgent 개인 설정 템플릿
+# 복사하여 사용: cp .claude/config.local.example .claude/config.local
+# 주의: config.local은 gitignore되어 커밋되지 않음
+
+# 티어 설정 (low|default|high)
+CLAUDE_TIER=default
+
+# Codex OFF (비활성화하려면 주석 해제)
+# SKIP_CODEX=1

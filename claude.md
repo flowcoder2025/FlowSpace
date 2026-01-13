@@ -624,3 +624,73 @@ git add . && git commit -m "feat: 작업 내용" && git push
 | 2026-01-08 | 3.6.0 | 계층 구조 확장: OCI.md, DOCS-UPDATE-PLAN.md, ASSET-PIPELINE.md 추가 |
 | 2026-01-08 | 3.7.0 | AI 작업 프로토콜 추가 (0.7절): 계층 구조 확인, TASK.md 실시간 관리, 코드-문서 연동, 검증 프로세스 |
 | 2026-01-09 | 3.8.0 | OCI 배포 완료: OCI.md → /docs/infrastructure/OCI.md 이동, 인프라 작업 유형 추가 |
+| 2026-01-13 | 4.0.0 | FlowSubAgent 통합: 서브에이전트 오케스트레이션 시스템, Pro 프로파일, ULW 모드 |
+
+---
+
+## 9. FlowSubAgent 통합 (서브에이전트 시스템)
+
+> **목적**: Sisyphus 스타일 멀티 에이전트 오케스트레이션으로 품질 향상
+> **참조**: [docs/03_ops/AGENTS.md](docs/03_ops/AGENTS.md)
+
+### 9.1 세션 시작 규칙
+
+**모든 세션/작업 시작 시 반드시 읽을 것:**
+→ [docs/03_ops/ANCHOR.md](docs/03_ops/ANCHOR.md)
+
+### 9.2 SSOT (Single Source of Truth)
+
+| 문서 | 역할 |
+|------|------|
+| [docs/03_ops/ANCHOR.md](docs/03_ops/ANCHOR.md) | **진입점** (세션 시작) |
+| [docs/prd.md](docs/prd.md) | 요구사항 SSOT |
+| [docs/03_ops/AGENTS.md](docs/03_ops/AGENTS.md) | 운영/에이전트 SSOT |
+
+### 9.3 에이전트 완료 조건
+
+- [ ] codex-verifier: **PASS**
+- [ ] doc-manager: 문서 반영 완료
+- [ ] context-keeper: RESUME_PACK.md 갱신
+
+### 9.4 프로파일
+
+| 프로파일 | 에이전트 | 용도 |
+|----------|----------|------|
+| **core** | 4개 | 가벼운 운영 |
+| **pro** | 11개 | Sisyphus 스타일 멀티 에이전트 |
+
+```bash
+./scripts/install.sh --profile pro    # Pro 활성화
+./scripts/install.sh --profile core   # Core로 복귀
+./scripts/install.sh --status         # 현재 상태
+```
+
+### 9.5 ULW 트리거 모드
+
+메시지 **끝**에 `ulw` 토큰이 있을 때만 ULW(Ultra Lightweight Workflow) 프로토콜이 발동됩니다.
+
+| 예시 | 발동 |
+|------|:----:|
+| `로그인 기능 구현해줘 ulw` | ✅ |
+| `버그 수정 (ulw)` | ✅ |
+| `ulw 이건 중간에 있음` | ❌ |
+
+### 9.6 개인 설정 (티어/Codex)
+
+```bash
+# 프리셋 적용
+./scripts/flow preset high     # 풀옵션
+
+# 개별 설정
+./scripts/flow tier high       # 티어 변경
+./scripts/flow codex on        # Codex 활성화
+
+# 상태 확인
+./scripts/flow status
+```
+
+### 9.7 상세 문서
+
+- [docs/03_ops/AGENTS.md](docs/03_ops/AGENTS.md) - 에이전트 역할/권한/커밋 규칙
+- [docs/RESUME_PACK.md](docs/RESUME_PACK.md) - 세션 재개용
+- [docs/03_ops/ANCHOR.md](docs/03_ops/ANCHOR.md) - 세션 시작 진입점

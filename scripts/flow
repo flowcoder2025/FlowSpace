@@ -1,0 +1,678 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+#######################################
+# FlowSubAgent CLI - v1.1
+# 개인 설정 관리 (tier/codex/preset/update)
+#######################################
+
+VERSION="1.1.0"
+UPSTREAM_URL="https://github.com/flowcoder2025/FlowSubAgent.git"
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+CONFIG_FILE="$PROJECT_ROOT/.claude/config.local"
+PRESETS_DIR="$PROJECT_ROOT/.claude/presets"
+AGENTS_DIR="$PROJECT_ROOT/.claude/agents"
+
+# 색상 정의
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+#######################################
+# 유틸리티 함수
+#######################################
+
+print_header() {
+  echo -e "${BLUE}========================================${NC}"
+  echo -e "${BLUE}$1${NC}"
+  echo -e "${BLUE}========================================${NC}"
+}
+
+print_success() {
+  echo -e "${GREEN}✓${NC} $1"
+}
+
+print_warning() {
+  echo -e "${YELLOW}⚠${NC} $1"
+}
+
+print_error() {
+  echo -e "${RED}✗${NC} $1"
+}
+
+# config.local 읽기
+load_config() {
+  if [[ -f "$CONFIG_FILE" ]]; then
+    source "$CONFIG_FILE"
+  fi
+}
+
+# config.local 저장
+save_config() {
+  local tier="${CLAUDE_TIER:-default}"
+  local skip_codex="${SKIP_CODEX:-}"
+
+  mkdir -p "$(dirname "$CONFIG_FILE")"
+
+  cat > "$CONFIG_FILE" << EOF
+# FlowSubAgent 개인 설정 (커밋 금지)
+# 생성: $(date '+%Y-%m-%d %H:%M:%S')
+
+CLAUDE_TIER=$tier
+EOF
+
+  if [[ -n "$skip_codex" ]]; then
+    echo "SKIP_CODEX=$skip_codex" >> "$CONFIG_FILE"
+  fi
+
+  print_success "설정 저장됨: $CONFIG_FILE"
+}
+
+# 현재 프로파일 확인
+get_current_profile() {
+  local pro_count
+  pro_count=$(ls -1 "$AGENTS_DIR"/*.md 2>/dev/null | wc -l)
+
+  if [[ $pro_count -gt 4 ]]; then
+    echo "pro"
+  else
+    echo "core"
+  fi
+}
+
+# Codex CLI 상태 확인
+check_codex() {
+  if ! command -v codex &>/dev/null; then
+    echo "NOT_INSTALLED"
+    return
+  fi
+
+  if codex login status &>/dev/null; then
+    echo "LOGGED_IN"
+  else
+    echo "NOT_LOGGED_IN"
+  fi
+}
+
+# 템플릿 버전 확인 (최신 태그 우선, 없으면 커밋 해시)
+get_template_version() {
+  cd "$PROJECT_ROOT"
+
+  # 태그가 있으면 태그 사용 (가장 최신 태그)
+  local tag
+  tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+
+  if [[ -n "$tag" ]]; then
+    # 태그 이후 커밋이 있으면 태그+커밋 표시
+    local full_desc
+    full_desc=$(git describe --tags 2>/dev/null || echo "$tag")
+    echo "$full_desc"
+  else
+    # 태그 없으면 커밋 해시 (앞 7자리)
+    git rev-parse --short=7 HEAD 2>/dev/null || echo "unknown"
+  fi
+}
+
+# origin이 공식 repo인지 확인
+is_origin_official() {
+  local origin_url
+  origin_url=$(git remote get-url origin 2>/dev/null || echo "")
+
+  # flowcoder2025/FlowSubAgent 포함 여부로 판단
+  if [[ "$origin_url" == *"flowcoder2025/FlowSubAgent"* ]]; then
+    echo "official"
+  elif [[ -z "$origin_url" ]]; then
+    echo "none"
+  else
+    echo "fork"
+  fi
+}
+
+#######################################
+# 명령어: status
+#######################################
+
+cmd_status() {
+  print_header "[flow status] 현재 상태"
+
+  load_config
+
+  # 버전
+  local template_ver
+  template_ver=$(get_template_version)
+  echo -e "Version:      ${BLUE}$template_ver${NC} (CLI v$VERSION)"
+
+  # 프로파일
+  local profile
+  profile=$(get_current_profile)
+  echo -e "Profile:      ${GREEN}$profile${NC}"
+
+  # 티어
+  local tier="${CLAUDE_TIER:-default}"
+  echo -e "Tier:         ${GREEN}$tier${NC}"
+
+  # Codex
+  local skip_codex="${SKIP_CODEX:-}"
+  if [[ "$skip_codex" == "1" ]]; then
+    echo -e "Codex:        ${YELLOW}OFF${NC} (SKIP_CODEX=1)"
+  else
+    echo -e "Codex:        ${GREEN}ON${NC}"
+  fi
+
+  # Codex CLI 상태
+  local codex_status
+  codex_status=$(check_codex)
+  case "$codex_status" in
+    "NOT_INSTALLED")
+      echo -e "Codex CLI:    ${YELLOW}NOT INSTALLED${NC}"
+      ;;
+    "LOGGED_IN")
+      echo -e "Codex CLI:    ${GREEN}LOGGED IN${NC}"
+      ;;
+    "NOT_LOGGED_IN")
+      echo -e "Codex CLI:    ${YELLOW}NOT LOGGED IN${NC}"
+      ;;
+  esac
+
+  # 설정 파일 존재 여부
+  echo ""
+  if [[ -f "$CONFIG_FILE" ]]; then
+    echo -e "Config:       ${GREEN}$CONFIG_FILE${NC}"
+  else
+    echo -e "Config:       ${YELLOW}없음 (기본값 사용)${NC}"
+  fi
+
+  echo ""
+}
+
+#######################################
+# 명령어: tier
+#######################################
+
+cmd_tier() {
+  local level="$1"
+
+  case "$level" in
+    low|default|high)
+      load_config
+      export CLAUDE_TIER="$level"
+      save_config
+
+      print_success "Tier 설정: $level"
+
+      if [[ "$level" == "low" ]]; then
+        print_warning "low 티어: 비용 절감 모드 (sonnet/haiku 중심)"
+        echo "  Codex도 끄시려면: ./scripts/flow codex off"
+      fi
+      ;;
+    *)
+      print_error "유효하지 않은 tier: $level"
+      echo "사용법: ./scripts/flow tier [low|default|high]"
+      exit 1
+      ;;
+  esac
+}
+
+#######################################
+# 명령어: codex
+#######################################
+
+cmd_codex() {
+  local mode="$1"
+
+  load_config
+
+  case "$mode" in
+    on)
+      unset SKIP_CODEX
+      save_config
+      print_success "Codex ON"
+
+      # Codex CLI 상태 확인
+      local codex_status
+      codex_status=$(check_codex)
+      if [[ "$codex_status" == "NOT_INSTALLED" ]]; then
+        print_warning "Codex CLI가 설치되어 있지 않습니다."
+        echo "  설치: https://docs.codex.ai/cli"
+      elif [[ "$codex_status" == "NOT_LOGGED_IN" ]]; then
+        print_warning "Codex CLI 로그인이 필요합니다."
+        echo "  실행: codex login"
+      fi
+      ;;
+    off)
+      export SKIP_CODEX=1
+      save_config
+      print_success "Codex OFF (SKIP_CODEX=1)"
+      print_warning "codex-verifier는 UNCERTAIN 상태로 진행됩니다."
+      echo "  DOC_DEBT에 자동 기록됨"
+      ;;
+    *)
+      print_error "유효하지 않은 모드: $mode"
+      echo "사용법: ./scripts/flow codex [on|off]"
+      exit 1
+      ;;
+  esac
+}
+
+#######################################
+# 명령어: preset
+#######################################
+
+cmd_preset() {
+  local name="$1"
+  local template_file="$PRESETS_DIR/${name}.template"
+
+  if [[ ! -f "$template_file" ]]; then
+    print_error "프리셋을 찾을 수 없음: $name"
+    echo "사용 가능한 프리셋:"
+    ls -1 "$PRESETS_DIR"/*.template 2>/dev/null | xargs -I {} basename {} .template | sed 's/^/  - /'
+    exit 1
+  fi
+
+  cp "$template_file" "$CONFIG_FILE"
+  print_success "프리셋 적용: $name"
+  echo ""
+  echo "적용된 설정:"
+  cat "$CONFIG_FILE" | grep -v "^#" | grep -v "^$" | sed 's/^/  /'
+}
+
+#######################################
+# 명령어: profile
+#######################################
+
+cmd_profile() {
+  local profile="$1"
+
+  case "$profile" in
+    core|pro)
+      bash "$SCRIPT_DIR/install.sh" --profile "$profile"
+      ;;
+    *)
+      print_error "유효하지 않은 프로파일: $profile"
+      echo "사용법: ./scripts/flow profile [core|pro]"
+      exit 1
+      ;;
+  esac
+}
+
+#######################################
+# 명령어: hooks
+#######################################
+
+cmd_hooks() {
+  local subcmd="$1"
+
+  case "$subcmd" in
+    setup)
+      bash "$SCRIPT_DIR/setup_git_hooks.sh"
+      ;;
+    status)
+      print_header "[flow hooks status] Git Hooks 상태"
+
+      local hooks_dir="$PROJECT_ROOT/.git/hooks"
+      local hooks=("pre-commit" "commit-msg" "pre-push")
+
+      for hook in "${hooks[@]}"; do
+        if [[ -f "$hooks_dir/$hook" ]]; then
+          print_success "$hook: 설치됨"
+        else
+          print_warning "$hook: 없음"
+        fi
+      done
+      ;;
+    *)
+      print_error "유효하지 않은 하위 명령: $subcmd"
+      echo "사용법: ./scripts/flow hooks [setup|status]"
+      exit 1
+      ;;
+  esac
+}
+
+#######################################
+# 명령어: apply (dry-run only in v1)
+#######################################
+
+cmd_apply() {
+  print_header "[flow apply] 설정 적용 (dry-run)"
+
+  load_config
+
+  local tier="${CLAUDE_TIER:-default}"
+
+  echo "현재 설정:"
+  echo "  Tier: $tier"
+  echo ""
+
+  # 역할별 모델 매핑 (tier 기준)
+  declare -A model_map
+
+  case "$tier" in
+    low)
+      model_map=(
+        ["main-orchestrator"]="sonnet"
+        ["implementer"]="sonnet"
+        ["doc-manager"]="sonnet"
+        ["runner"]="sonnet"
+        ["verifier"]="sonnet"
+        ["explore"]="haiku"
+        ["librarian"]="haiku"
+        ["context-keeper"]="sonnet"
+        ["security-license"]="sonnet"
+        ["spec-acceptance"]="sonnet"
+        ["codex-verifier"]="sonnet"
+      )
+      ;;
+    high)
+      model_map=(
+        ["main-orchestrator"]="opus"
+        ["implementer"]="opus"
+        ["doc-manager"]="sonnet"
+        ["runner"]="sonnet"
+        ["verifier"]="sonnet"
+        ["explore"]="haiku"
+        ["librarian"]="sonnet"
+        ["context-keeper"]="sonnet"
+        ["security-license"]="sonnet"
+        ["spec-acceptance"]="sonnet"
+        ["codex-verifier"]="opus"
+      )
+      ;;
+    *)
+      # default: 현재 frontmatter 유지
+      echo "default 티어: frontmatter 변경 없음"
+      return
+      ;;
+  esac
+
+  echo "적용될 모델 매핑 (dry-run):"
+  echo ""
+  printf "%-20s %-10s %-30s\n" "역할" "모델" "파일"
+  printf "%-20s %-10s %-30s\n" "----" "----" "----"
+
+  for agent_file in "$AGENTS_DIR"/*.md; do
+    if [[ -f "$agent_file" ]]; then
+      local filename
+      filename=$(basename "$agent_file" .md)
+      local new_model="${model_map[$filename]:-inherit}"
+
+      if [[ "$new_model" != "inherit" ]]; then
+        printf "%-20s %-10s %-30s\n" "$filename" "$new_model" "$agent_file"
+      fi
+    fi
+  done
+
+  echo ""
+  print_warning "이것은 dry-run입니다. 실제 파일은 수정되지 않았습니다."
+  echo ""
+  echo "v2에서 --force 옵션으로 실제 적용 가능 예정"
+  echo ""
+  echo "복구 방법 (apply --force 사용 후):"
+  echo "  git checkout -- .claude/agents/"
+}
+
+#######################################
+# 명령어: update
+#######################################
+
+# 보존 대상 (절대 덮어쓰지 않음)
+PRESERVE_FILES=(
+  ".claude/config.local"
+  "docs/03_ops/RUN_LOG.md"
+  "docs/04_reference/legacy_claude_md"
+  "PRD.md"
+  "docs/DECISIONS.md"
+  "docs/RESUME_PACK.md"
+)
+
+# 업데이트 대상
+UPDATE_TARGETS=(
+  ".claude/agents"
+  ".claude/hooks"
+  ".claude/tools"
+  ".claude/presets"
+  ".claude/state"
+  "docs/03_ops/AGENTS.md"
+  "docs/03_ops/ANCHOR.md"
+  "docs/03_ops/DOC_DEBT.md"
+  "docs/03_ops/DRIFT_REPORT.md"
+  "docs/03_ops/SPEC_SNAPSHOT.md"
+  "scripts"
+  "CLAUDE.md"
+)
+
+cmd_update() {
+  local dry_run=false
+
+  # 인자 파싱
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --dry-run|-n)
+        dry_run=true
+        shift
+        ;;
+      *)
+        print_error "알 수 없는 옵션: $1"
+        echo "사용법: ./scripts/flow update [--dry-run]"
+        exit 1
+        ;;
+    esac
+  done
+
+  print_header "[flow update] 템플릿 업데이트"
+
+  cd "$PROJECT_ROOT"
+
+  # 현재 버전
+  local current_ver
+  current_ver=$(get_template_version)
+  echo -e "현재 버전: ${YELLOW}$current_ver${NC}"
+  echo ""
+
+  # origin 타입 감지
+  local origin_type
+  origin_type=$(is_origin_official)
+
+  # origin이 공식 repo인 경우 (clone 사용자)
+  if [[ "$origin_type" == "official" ]]; then
+    echo -e "${GREEN}✓${NC} origin이 공식 FlowSubAgent입니다."
+    echo ""
+    echo "업데이트 방법:"
+    echo "  git pull origin main"
+    echo ""
+
+    # 최신 버전 확인
+    echo "원격 정보 가져오는 중..."
+    git fetch origin --tags 2>/dev/null || true
+
+    local remote_ver
+    remote_ver=$(git describe --tags --abbrev=0 origin/main 2>/dev/null || \
+                 git rev-parse --short=7 origin/main 2>/dev/null || \
+                 echo "unknown")
+    echo -e "원격 최신:  ${GREEN}$remote_ver${NC}"
+    echo ""
+
+    if [[ "$current_ver" == "$remote_ver" ]]; then
+      print_success "이미 최신 버전입니다."
+    else
+      print_warning "새 버전이 있습니다: $remote_ver"
+      echo "  실행: git pull origin main"
+    fi
+
+  # origin이 포크인 경우
+  elif [[ "$origin_type" == "fork" ]]; then
+    # upstream 확인
+    if ! git remote | grep -q "^upstream$"; then
+      print_warning "origin이 포크입니다. upstream 추가를 권장합니다."
+      echo ""
+      echo "추가 방법 (권장: Upstream Pull):"
+      echo "  git remote add upstream $UPSTREAM_URL"
+      echo "  git fetch upstream"
+      echo "  git checkout main && git pull upstream main"
+      echo ""
+      echo "또는 overlay 방식으로 업데이트하려면:"
+      echo "  아래 파일들을 수동으로 복사하세요."
+      echo ""
+    else
+      # upstream이 이미 있는 경우
+      echo -e "${GREEN}✓${NC} upstream이 설정되어 있습니다."
+      echo ""
+
+      # upstream 최신 정보 가져오기
+      echo "upstream 정보 가져오는 중..."
+      git fetch upstream --tags 2>/dev/null || true
+
+      local remote_ver
+      remote_ver=$(git describe --tags --abbrev=0 upstream/main 2>/dev/null || \
+                   git rev-parse --short=7 upstream/main 2>/dev/null || \
+                   echo "unknown")
+      echo -e "원격 최신:  ${GREEN}$remote_ver${NC}"
+      echo ""
+
+      if [[ "$current_ver" == "$remote_ver" ]]; then
+        print_success "이미 최신 버전입니다."
+      else
+        print_warning "새 버전이 있습니다: $remote_ver"
+        echo "  실행: git checkout main && git pull upstream main"
+      fi
+    fi
+
+  # origin이 없는 경우
+  else
+    print_warning "origin 리모트가 없습니다."
+    echo ""
+    echo "설정 방법:"
+    echo "  git remote add origin $UPSTREAM_URL"
+    echo "  git fetch origin"
+    echo ""
+  fi
+
+  # 보존 대상 표시
+  echo "보존 대상 (절대 덮어쓰지 않음):"
+  for file in "${PRESERVE_FILES[@]}"; do
+    if [[ -e "$PROJECT_ROOT/$file" ]]; then
+      echo -e "  ${GREEN}✓${NC} $file"
+    else
+      echo -e "  ${YELLOW}-${NC} $file (없음)"
+    fi
+  done
+  echo ""
+
+  # 업데이트 대상 표시
+  echo "업데이트 대상:"
+  for target in "${UPDATE_TARGETS[@]}"; do
+    if [[ -e "$PROJECT_ROOT/$target" ]]; then
+      echo -e "  ${BLUE}→${NC} $target"
+    else
+      echo -e "  ${YELLOW}+${NC} $target (신규)"
+    fi
+  done
+  echo ""
+
+  if [[ "$dry_run" == "true" ]]; then
+    print_warning "이것은 dry-run입니다. 파일은 변경되지 않았습니다."
+    echo ""
+    echo "실제 업데이트 방법:"
+    echo ""
+    echo "  [A] Upstream Pull (권장 - 포크/템플릿 사용자):"
+    echo "      git remote add upstream $UPSTREAM_URL"
+    echo "      git fetch upstream"
+    echo "      git checkout main && git pull upstream main"
+    echo ""
+    echo "  [B] Overlay (기존 프로젝트에 주입한 경우):"
+    echo "      v1.1에서 ./scripts/flow update --apply 지원 예정"
+    echo ""
+  else
+    print_warning "v1에서는 dry-run만 지원합니다."
+    echo ""
+    echo "실제 업데이트는 위의 [A] Upstream Pull 방법을 사용하세요."
+    echo ""
+    echo "dry-run 재실행: ./scripts/flow update --dry-run"
+  fi
+}
+
+#######################################
+# 도움말
+#######################################
+
+show_help() {
+  cat << EOF
+FlowSubAgent CLI v$VERSION
+
+사용법: ./scripts/flow <command> [options]
+
+명령어:
+  status              현재 상태 출력 (version, profile, tier, codex)
+  tier <level>        티어 설정 (low|default|high)
+  codex <mode>        Codex on/off (on|off)
+  preset <name>       프리셋 적용 (low|default|high)
+  profile <name>      프로파일 전환 (core|pro)
+  hooks <cmd>         Git hooks 관리 (setup|status)
+  apply               설정 적용 미리보기 (dry-run)
+  update [--dry-run]  템플릿 업데이트 확인/안내
+  help                도움말
+
+예시:
+  ./scripts/flow status
+  ./scripts/flow tier low
+  ./scripts/flow codex off
+  ./scripts/flow preset low
+  ./scripts/flow profile pro
+  ./scripts/flow hooks setup
+  ./scripts/flow apply
+  ./scripts/flow update --dry-run
+
+설정 파일:
+  .claude/config.local (gitignore, 커밋 금지)
+
+EOF
+}
+
+#######################################
+# 메인
+#######################################
+
+main() {
+  local cmd="${1:-help}"
+  shift || true
+
+  case "$cmd" in
+    status)
+      cmd_status
+      ;;
+    tier)
+      cmd_tier "${1:-}"
+      ;;
+    codex)
+      cmd_codex "${1:-}"
+      ;;
+    preset)
+      cmd_preset "${1:-}"
+      ;;
+    profile)
+      cmd_profile "${1:-}"
+      ;;
+    hooks)
+      cmd_hooks "${1:-}"
+      ;;
+    apply)
+      cmd_apply
+      ;;
+    update)
+      cmd_update "$@"
+      ;;
+    help|--help|-h)
+      show_help
+      ;;
+    *)
+      print_error "알 수 없는 명령어: $cmd"
+      show_help
+      exit 1
+      ;;
+  esac
+}
+
+main "$@"

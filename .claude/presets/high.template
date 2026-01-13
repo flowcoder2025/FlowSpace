@@ -1,0 +1,13 @@
+# FlowSubAgent 프리셋: high (풀옵션)
+# 생성: preset template
+
+CLAUDE_TIER=high
+
+# Codex: 기본 ON (설정 생략)
+# SKIP_CODEX=1
+
+# 모델 매핑 (v2에서 적용)
+# MODEL_ORCHESTRATOR=opus
+# MODEL_IMPLEMENTER=opus
+# MODEL_EXPLORE=haiku
+# MODEL_LIBRARIAN=sonnet

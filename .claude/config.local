@@ -1,0 +1,4 @@
+# FlowSubAgent 개인 설정 (커밋 금지)
+# 생성: 2026-01-13 21:12:23
+
+CLAUDE_TIER=high

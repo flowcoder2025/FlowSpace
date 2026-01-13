@@ -1,0 +1,11 @@
+# FlowSubAgent 프리셋: low (비용 절감)
+# 생성: preset template
+
+CLAUDE_TIER=low
+SKIP_CODEX=1
+
+# 모델 매핑 (v2에서 적용)
+# MODEL_ORCHESTRATOR=sonnet
+# MODEL_IMPLEMENTER=sonnet
+# MODEL_EXPLORE=haiku
+# MODEL_LIBRARIAN=haiku

@@ -1,0 +1,9 @@
+# FlowSubAgent 프리셋: default (기본값)
+# 생성: preset template
+
+CLAUDE_TIER=default
+
+# Codex: 기본 ON (설정 생략)
+# SKIP_CODEX=1
+
+# 모델 매핑: frontmatter 기본값 사용
