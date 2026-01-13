@@ -14,7 +14,11 @@
 
 | ID | 타입 | PRD 항목 | 실제 상태 | Evidence | Decision | Owner | 우선순위 | DOC_DEBT |
 |----|------|----------|----------|----------|----------|-------|----------|----------|
-| - | - | (드리프트 없음) | - | - | - | - | - | - |
+| DRIFT-001 | Missing | FR-Template-01 (3종 템플릿) | 에셋 대기 | PRD 7.1-B, 8.3 | Defer | - | LOW | - |
+| DRIFT-002 | Missing | FR-Template-02 (맵+타일셋+오브젝트) | 에셋 대기 | PRD 7.1-B, 8.3 | Defer | - | LOW | - |
+| DRIFT-003 | Mismatch | @dnd-kit/core (PRD 11.2) | package.json에 없음 | PRD 11.2 vs package.json | FixPRD | - | LOW | DEBT-001 |
+| DRIFT-004 | Missing | Phase 7 인프라 최적화 | 계획 상태 | PRD 12 Phase 7 | Defer | - | MEDIUM | - |
+| DRIFT-005 | Missing | Phase 8 에셋 완성 | 대기 상태 | PRD 12 Phase 8 | Defer | - | MEDIUM | - |
 
 ### 컬럼 설명
 
@@ -24,7 +28,7 @@
 | **Decision** | 해결 방향 (코드 수정 / PRD 수정 / 보류) |
 | **Owner** | 담당자 (`git log -1 --format='%an'` 또는 지정) |
 
-> 현재 드리프트 없음 (정상 상태)
+> 마지막 갱신: 2026-01-13
 
 ---
 
@@ -95,7 +99,7 @@ DRIFT_REPORT에서 제거 + SPEC_SNAPSHOT 갱신
 
 - [DOC_DEBT.md](DOC_DEBT.md) - 문서 부채 추적
 - [SPEC_SNAPSHOT.md](SPEC_SNAPSHOT.md) - SSOT 스냅샷
-- [PRD.md](../../PRD.md) - 요구사항 SSOT
+- [PRD.md](../prd.md) - 요구사항 SSOT
 
 ---
 

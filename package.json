@@ -7,6 +7,8 @@
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "echo \"Tests not configured yet\" && exit 0",
     "socket:dev": "cross-env NODE_ENV=development tsx server/socket-server.ts",
     "socket:start": "node --no-warnings --import tsx server/socket-server.ts",
     "livekit:dev": "node scripts/livekit-dev.js",
