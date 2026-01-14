@@ -428,25 +428,44 @@ export function VideoTile({
   // 🔊 볼륨/음소거 상태를 오디오 요소에 적용
   // 📌 전역 출력 볼륨(globalOutputVolume)과 개별 볼륨을 곱함
   // 📌 track.audioTrack dependency 추가: 트랙 변경 후에도 볼륨이 즉시 적용되도록 함
+  // 🔊 LiveKit RemoteAudioTrack.setVolume() API 사용 (Web Audio API GainNode 기반)
   useEffect(() => {
-    const audio = audioRef.current
-    if (!audio || isLocal) return
-
-    // srcObject가 없으면 볼륨 설정이 무의미
-    if (!audio.srcObject) {
-      if (IS_DEV) {
-        console.log("[VideoTile] Volume effect skipped - no srcObject for:", track.participantName)
-      }
-      return
-    }
+    if (isLocal) return
 
     // 개별 볼륨 * 전역 볼륨 (둘 다 0-1 범위로 변환)
     const effectiveVolume = (volume * globalOutputVolume) / 100
     const newVolume = isMuted ? 0 : effectiveVolume
+
+    // 🔊 LiveKit RemoteAudioTrack.setVolume() 사용 (권장 방식)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const liveKitTrack = (track as any).liveKitAudioTrack
+    if (liveKitTrack?.setVolume) {
+      liveKitTrack.setVolume(newVolume)
+      if (IS_DEV) {
+        console.log("[VideoTile] LiveKit setVolume() applied for:", track.participantName, {
+          volume,
+          globalOutputVolume,
+          isMuted,
+          effectiveVolume,
+          appliedVolume: newVolume,
+        })
+      }
+      return
+    }
+
+    // 폴백: HTMLAudioElement.volume 사용
+    const audio = audioRef.current
+    if (!audio || !audio.srcObject) {
+      if (IS_DEV) {
+        console.log("[VideoTile] Volume effect skipped - no audio source for:", track.participantName)
+      }
+      return
+    }
+
     audio.volume = newVolume
 
     if (IS_DEV) {
-      console.log("[VideoTile] Volume applied for:", track.participantName, {
+      console.log("[VideoTile] HTMLAudio volume applied for:", track.participantName, {
         volume,
         globalOutputVolume,
         isMuted,
@@ -454,7 +473,7 @@ export function VideoTile({
         appliedVolume: newVolume,
       })
     }
-  }, [volume, isMuted, isLocal, globalOutputVolume, track.participantName, track.audioTrack])
+  }, [volume, isMuted, isLocal, globalOutputVolume, track.participantName, track.audioTrack, track])
 
   // Fullscreen change detection
   useEffect(() => {

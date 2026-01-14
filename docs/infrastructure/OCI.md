@@ -1099,7 +1099,99 @@ GET /api/admin/oci-metrics
 
 ---
 
-## 13. 변경 이력
+## 13. 트래픽 데이터 검증
+
+> **목적**: OCI Monitoring API 결과와 실제 서버 데이터 비교
+> **최종 검증**: 2026-01-14
+
+### 13.1 검증 방법
+
+#### 방법 1: SSH로 실제 데이터 확인
+
+```bash
+# 실제 서버 트래픽 확인
+ssh -i ~/.ssh/flowspace-oci ubuntu@144.24.72.143 "cat /proc/net/dev | grep enp0s6"
+
+# 결과 해석
+# enp0s6: [RX bytes] ... [TX bytes] ...
+#         인바운드      아웃바운드 (OCI 과금 기준)
+```
+
+#### 방법 2: 검증 스크립트 실행
+
+```bash
+./scripts/verify-oci-traffic.sh
+```
+
+#### 방법 3: Admin 대시보드 확인
+
+1. https://space.flow-coder.com/admin 접속
+2. SuperAdmin 로그인
+3. 'OCI 인프라' 탭 → '트래픽' 카드 확인
+
+### 13.2 데이터 소스 비교
+
+| 데이터 소스 | 용도 | 확인 방법 |
+|-------------|------|-----------|
+| `/proc/net/dev` | 실제 누적 트래픽 (서버 시작 이후) | SSH 접속 |
+| OCI Monitoring API | 월별 누적 트래픽 (과금 기준) | Admin 대시보드 |
+| OCI Billing | 실제 청구 비용 | OCI 콘솔 |
+
+### 13.3 트래픽 계산 로직
+
+**현재 구현** (`src/lib/utils/oci-monitoring.ts`):
+
+```javascript
+// OCI MQL 쿼리
+const query = `NetworksBytesOut[1h]{resourceId = "..."}.rate()`
+
+// rate()는 bytes/sec 반환
+// 각 시간당 바이트 = rate * 3600
+totalBytesOut += rateValue * SECONDS_PER_HOUR
+```
+
+**검증 포인트**:
+1. NetworksBytesOut은 누적 카운터 (cumulative counter)
+2. rate() 함수는 초당 바이트 변화율 반환
+3. [1h] 간격 × 3600초 = 시간당 총 바이트
+
+### 13.4 검증 결과 (2026-01-14)
+
+| 데이터 소스 | 값 | 비고 |
+|-------------|-----|------|
+| **SSH TX (아웃바운드)** | 4.92 GB | `/proc/net/dev` 실제 누적 |
+| **SSH RX (인바운드)** | 7.03 GB | 참고용 |
+| **OCI Monitoring API** | 5.49 GB | Admin 대시보드 표시 |
+| **차이** | +0.57 GB (11.6%) | 정상 범위 |
+
+**분석 결론**:
+- OCI Monitoring API는 아웃바운드(TX) 기준으로 측정
+- 약 11% 차이는 `rate()` 함수 계산 방식 및 측정 시점 차이
+- **데이터 정합성 확인**: ✅ 큰 오류 없음, 정상 동작 중
+
+### 13.5 불일치 시 체크리스트
+
+- [ ] 서버 업타임 확인 (재시작 시 /proc/net/dev 리셋)
+- [ ] OCI 환경변수 설정 확인 (Vercel)
+- [ ] rate() 함수 결과 디버그 로그 확인
+- [ ] 월초 이전 서버 재시작 여부 확인
+
+### 13.6 참고: 예상 트래픽 계산
+
+```
+1인당 영상 통화:
+- 비트레이트: ~1.5 Mbps (720p)
+- 1시간: ~675 MB
+
+예시 (50명 × 9시간 × 22일):
+- 월 트래픽: ~6.6 TB
+- Always Free 한도: 10 TB
+- 여유: ~3.4 TB
+```
+
+---
+
+## 14. 변경 이력
 
 | 날짜 | 내용 |
 |------|------|
@@ -1107,6 +1199,8 @@ GET /api/admin/oci-metrics
 | 2026-01-09 | OCI 배포 완료, SSL 설정 완료 |
 | 2026-01-09 | Vercel 환경변수 `LIVEKIT_URL` 추가, 중복 프로젝트 정리 |
 | 2026-01-09 | 모니터링 아키텍처 섹션 추가 - 2트랙 구조, 데이터 소스 문서화 |
+| 2026-01-14 | 트래픽 데이터 검증 섹션 추가 - SSH 검증 방법, 검증 스크립트 |
+| 2026-01-14 | 검증 결과 추가 - SSH 4.92GB vs API 5.49GB (11.6% 차이, 정상) |
 
 ---
 

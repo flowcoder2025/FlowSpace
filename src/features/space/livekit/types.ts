@@ -33,4 +33,7 @@ export interface ParticipantTrack {
   revision?: number
   /** 🎨 아바타 색상 (VideoTile 플레이스홀더에서 캐릭터 스프라이트 표시용) */
   avatarColor?: string
+  /** 🔊 LiveKit RemoteAudioTrack 참조 (개별 볼륨 조절용 setVolume() API) */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  liveKitAudioTrack?: any  // RemoteAudioTrack from livekit-client
 }

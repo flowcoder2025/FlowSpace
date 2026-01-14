@@ -765,6 +765,8 @@ export function LiveKitMediaInternalProvider({ children }: { children: ReactNode
                 if (!entry.audioTrack) {
                   entry.audioTrack = track.mediaStreamTrack
                 }
+                // 🔊 LiveKit RemoteAudioTrack 저장 (개별 볼륨 조절용)
+                entry.liveKitAudioTrack = track
                 entry.isAudioMuted = isMuted
               }
               break
