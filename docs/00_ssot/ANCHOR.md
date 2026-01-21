@@ -93,11 +93,11 @@ npm run flow:finish
 # 현황 확인
 cat docs/00_ssot/COVERAGE_MATRIX.md
 
-# 검증 (개발 중)
-specctl verify --level=soft
+# 검증 (개발 중) - PowerShell
+powershell -ExecutionPolicy Bypass -File scripts/specctl.ps1 verify --level=soft
 
 # 검증 (완료 시)
-specctl verify --level=strict
+powershell -ExecutionPolicy Bypass -File scripts/specctl.ps1 verify --level=strict
 
 # 전체 워크플로우
 npm run flow:finish
@@ -105,16 +105,24 @@ npm run flow:finish
 
 ---
 
+## 도구 역할 분리
+
+| 도구 | 용도 | 명령어 |
+|------|------|--------|
+| **specctl** (로컬) | 검증/스냅샷/컴파일 | `scripts/specctl.ps1` |
+| **create-docops** (npm) | 설치/상태확인 | `npx create-docops` |
+
+> **참고**: specctl은 커스텀 Evidence 형식(백틱 지원)을 사용합니다.
+> create-docops verify는 표준 형식만 지원하므로 검증에는 specctl을 사용하세요.
+
+---
+
 ## 설치 방법
 
-### npm CLI (권장)
+### 최초 설치 (npm)
 
 ```bash
-# DocOps 설치
 npx create-docops
-
-# 업데이트
-npx create-docops --update
 ```
 
 ### Skill 기반 (Claude Code)
@@ -127,37 +135,24 @@ npx create-docops --update
 
 ---
 
-## 자동화 (v3.2.0+)
+## 자동화
 
-DocOps는 설치 시 자동 검증을 설정합니다:
+### pre-commit hook
 
-| 시점 | 동작 | 설정 |
-|------|------|------|
-| **git commit** | pre-commit hook으로 verify 실행 | `.git/hooks/pre-commit` |
-| **npm run dev** | predev script로 verify 실행 | `package.json` (선택) |
-| **npm run build** | prebuild script로 verify 실행 | `package.json` (선택) |
+git commit 시 `specctl verify --quiet` 자동 실행:
+- 드리프트 발견 시 경고 출력 (차단 안 함)
+- COVERAGE_MATRIX.md, DRIFT_REPORT.md 자동 staging
 
-### 설정 변경
-
-`.docopsrc.json`의 `automation` 섹션:
+### 설정 (`.docopsrc.json`)
 
 ```json
 {
   "automation": {
-    "onFailure": "warn",  // "strict" 또는 "warn"
-    "hooks": {
-      "preCommit": true,
-      "preDev": false,
-      "preBuild": false
-    }
+    "onFailure": "warn",
+    "hooks": { "preCommit": true }
   }
 }
 ```
-
-### 드리프트 발견 시 동작
-
-- **warn**: 경고만 출력하고 계속 진행
-- **strict**: 커밋/빌드 차단 (드리프트 해결 필요)
 
 ---
 

@@ -245,31 +245,44 @@ done
 | Phase 4 | specctl 성능 분석 | ✅ 완료 | 2026-01-21 |
 | Phase 5 | specctl 성능 최적화 | ✅ 완료 | 2026-01-21 |
 | Phase 6 | BROKEN_EVIDENCE 수정 | ✅ 완료 | 2026-01-21 |
-| Phase 7 | DocOps 도구 정리 | ⏳ 논의필요 | - |
+| Phase 7 | DocOps 도구 정리 | ✅ 완료 | 2026-01-21 |
 
 ---
 
-## Phase 7: DocOps 도구 정리 ⏳
+## Phase 7: DocOps 도구 정리 ✅
 
-> specctl vs create-docops 중복 문제 해결 필요
+> specctl vs create-docops 역할 분리 완료
 
 ### P7.1 발견된 문제
 
-| 문제 | 설명 |
+| 문제 | 원인 | 해결 |
+|------|------|------|
+| 도구 중복 | 두 도구가 동일 기능 수행 | 역할 분리 |
+| create-docops verify 0개 | 커스텀 Evidence 형식 미지원 | specctl 검증 전담 |
+| pre-commit unstaged | verify 후 파일 변경 | 자동 git add 추가 |
+
+### P7.2 결정 사항
+
+| 항목 | 결정 | 이유 |
+|------|------|------|
+| **specctl** | ✅ 유지 | 커스텀 Evidence 형식 지원 (백틱 등) |
+| **create-docops** | 설치/status만 | 표준 형식만 지원 → 검증 불가 |
+| **pre-commit hook** | specctl 사용 | + 자동 git add로 unstaged 문제 해결 |
+
+### P7.3 변경 내용
+
+| 파일 | 변경 |
 |------|------|
-| 도구 중복 | `specctl`(로컬)과 `create-docops`(공식) 동일 기능 |
-| pre-commit 이슈 | verify 후 COVERAGE_MATRIX.md 변경이 unstaged로 남음 |
-| 유지보수 부담 | 두 도구 동기화 필요 |
+| `.git/hooks/pre-commit` | create-docops → specctl 변경 |
+| `scripts/specctl.ps1` | `--quiet` 옵션 추가 |
+| `docs/00_ssot/ANCHOR.md` | 도구 역할 분리 문서화 |
 
-### P7.2 결정 필요 사항
+### P7.4 도구 역할
 
-1. **specctl 처리**: 삭제 vs 유지 vs 공식에 기여
-2. **pre-commit hook**: 자동 git add vs --no-write 옵션 vs 비활성화
-
-### P7.3 참조
-
-- 핸드오프: `docs/00_ssot/HANDOFF_2026-01-21_DOCOPS_CLEANUP.md`
-- FlowSubAgent: https://github.com/flowcoder2025/FlowSubAgent.git
+| 도구 | 역할 | 명령어 |
+|------|------|--------|
+| **specctl** | 검증/스냅샷/컴파일 | `scripts/specctl.ps1` |
+| **create-docops** | 설치/상태 확인 | `npx create-docops` |
 
 ---
 
@@ -293,3 +306,4 @@ done
 | 2026-01-21 | Phase 5 완료 - specctl v0.3.0 성능 최적화 (Associative array + 캐시) |
 | 2026-01-21 | Phase 6 완료 - BROKEN_EVIDENCE 33개 → 0개 (specctl 버그 수정 + SPEC Evidence 수정) |
 | 2026-01-21 | Phase 7 추가 - DocOps 도구 중복 문제 발견 (specctl vs create-docops) |
+| 2026-01-21 | Phase 7 완료 - 역할 분리 (specctl=검증, create-docops=설치), pre-commit hook 수정 |

@@ -769,30 +769,32 @@ function Cmd-Verify {
         [string]$Level = "soft",
         [switch]$Cache,
         [switch]$Full,
-        [switch]$DebugDump
+        [switch]$DebugDump,
+        [switch]$Quiet
     )
 
-    Print-Header "[specctl verify] 문서-코드 검증 v$VERSION"
-
-    Write-Host "검증 레벨: $Level" -ForegroundColor Cyan
-    Write-Host ""
+    if (-not $Quiet) {
+        Print-Header "[specctl verify] 문서-코드 검증 v$VERSION"
+        Write-Host "검증 레벨: $Level" -ForegroundColor Cyan
+        Write-Host ""
+    }
 
     # 1. Evidence 추출
-    Print-Info "Evidence 추출 중..."
+    if (-not $Quiet) { Print-Info "Evidence 추출 중..." }
     $evidenceFile = Join-Path $TMP_DIR "evidences.txt"
     Extract-Evidences -OutputFile $evidenceFile
     $evidenceCount = if (Test-Path $evidenceFile) { (Get-Content $evidenceFile | Measure-Object -Line).Lines } else { 0 }
-    Print-Success "Evidence: ${evidenceCount}개"
+    if (-not $Quiet) { Print-Success "Evidence: ${evidenceCount}개" }
 
     # 2. Contract 목록 추출
-    Print-Info "Contract 목록 추출 중..."
+    if (-not $Quiet) { Print-Info "Contract 목록 추출 중..." }
     $contractsFile = Join-Path $TMP_DIR "contracts.txt"
     Extract-Contracts -OutputFile $contractsFile
     $contractCount = if (Test-Path $contractsFile) { (Get-Content $contractsFile | Measure-Object -Line).Lines } else { 0 }
-    Print-Success "Contract: ${contractCount}개"
+    if (-not $Quiet) { Print-Success "Contract: ${contractCount}개" }
 
     # 3. Snapshot 파싱 + Hash 인덱싱
-    Print-Info "Snapshot 파싱 중..."
+    if (-not $Quiet) { Print-Info "Snapshot 파싱 중..." }
     $snapshotFile = Join-Path $SSOT_DIR "SPEC_SNAPSHOT.md"
     $snapshotRoutes = @()
 
@@ -810,11 +812,13 @@ function Cmd-Verify {
             }
         }
     }
-    Print-Success "Snapshot 항목: $($snapshotRoutes.Count)개"
+    if (-not $Quiet) { Print-Success "Snapshot 항목: $($snapshotRoutes.Count)개" }
 
-    Write-Host ""
-    Print-Info "검증 수행 중..."
-    Write-Host ""
+    if (-not $Quiet) {
+        Write-Host ""
+        Print-Info "검증 수행 중..."
+        Write-Host ""
+    }
 
     # 4. 검증 수행
     $syncCount = 0
@@ -944,13 +948,15 @@ function Cmd-Verify {
     }
 
     # 결과 출력
-    Write-Host "검증 결과:"
-    Write-Host "  SYNC:            $syncCount" -ForegroundColor Green
-    Write-Host "  MISSING_DOC:     $missingCount" -ForegroundColor Yellow
-    Write-Host "  HALLUCINATION:   $halluCount" -ForegroundColor Red
-    Write-Host "  BROKEN_EVIDENCE: $brokenCount" -ForegroundColor Red
-    Write-Host "  SNAPSHOT_GAP:    $gapCount" -ForegroundColor Cyan
-    Write-Host ""
+    if (-not $Quiet) {
+        Write-Host "검증 결과:"
+        Write-Host "  SYNC:            $syncCount" -ForegroundColor Green
+        Write-Host "  MISSING_DOC:     $missingCount" -ForegroundColor Yellow
+        Write-Host "  HALLUCINATION:   $halluCount" -ForegroundColor Red
+        Write-Host "  BROKEN_EVIDENCE: $brokenCount" -ForegroundColor Red
+        Write-Host "  SNAPSHOT_GAP:    $gapCount" -ForegroundColor Cyan
+        Write-Host ""
+    }
 
     # 파일 저장
     $details | Out-File -FilePath $detailsFile -Encoding utf8
@@ -958,43 +964,51 @@ function Cmd-Verify {
 
     # COVERAGE_MATRIX 갱신
     Update-CoverageMatrix -SyncCount $syncCount -MissingCount $missingCount -HalluCount $halluCount -BrokenCount $brokenCount -GapCount $gapCount -DetailsFile $detailsFile -Level $Level
-    Print-Success "COVERAGE_MATRIX.md 갱신됨"
+    if (-not $Quiet) { Print-Success "COVERAGE_MATRIX.md 갱신됨" }
 
     # DRIFT_REPORT 갱신
     Update-DriftReport -DriftsFile $driftsFile
-    Print-Success "DRIFT_REPORT.md 갱신됨"
+    if (-not $Quiet) { Print-Success "DRIFT_REPORT.md 갱신됨" }
 
     # 디버그 덤프
-    if ($DebugDump) {
+    if ($DebugDump -and -not $Quiet) {
         Print-Info "CONTRACT_INDEX.md 생성됨 (디버그용)"
     }
 
-    Write-Host ""
+    if (-not $Quiet) { Write-Host "" }
 
     # 레벨별 처리
     if ($Level -eq "strict") {
         if ($missingCount -gt 0 -or $halluCount -gt 0 -or $brokenCount -gt 0) {
-            Print-Error "strict 검증 실패!"
-            Write-Host "  MISSING_DOC, HALLUCINATION, BROKEN_EVIDENCE가 0이어야 함"
+            if (-not $Quiet) {
+                Print-Error "strict 검증 실패!"
+                Write-Host "  MISSING_DOC, HALLUCINATION, BROKEN_EVIDENCE가 0이어야 함"
+            }
             exit 1
         }
         else {
-            Print-Success "strict 검증 통과"
-            if ($gapCount -gt 0) {
-                Print-Warning "SNAPSHOT_GAP $gapCount개 - 자동화 범위 확장 필요"
+            if (-not $Quiet) {
+                Print-Success "strict 검증 통과"
+                if ($gapCount -gt 0) {
+                    Print-Warning "SNAPSHOT_GAP $gapCount개 - 자동화 범위 확장 필요"
+                }
             }
         }
     }
     else {
-        Print-Success "soft 검증 완료 (경고만 기록)"
-        if ($missingCount -gt 0 -or $halluCount -gt 0 -or $brokenCount -gt 0) {
-            Print-Warning "드리프트 발견: DRIFT_REPORT.md 확인"
+        if (-not $Quiet) {
+            Print-Success "soft 검증 완료 (경고만 기록)"
+            if ($missingCount -gt 0 -or $halluCount -gt 0 -or $brokenCount -gt 0) {
+                Print-Warning "드리프트 발견: DRIFT_REPORT.md 확인"
+            }
         }
     }
 
-    Write-Host ""
-    Print-Info "COVERAGE_MATRIX: $SSOT_DIR\COVERAGE_MATRIX.md"
-    Print-Info "DRIFT_REPORT: $SSOT_DIR\DRIFT_REPORT.md"
+    if (-not $Quiet) {
+        Write-Host ""
+        Print-Info "COVERAGE_MATRIX: $SSOT_DIR\COVERAGE_MATRIX.md"
+        Print-Info "DRIFT_REPORT: $SSOT_DIR\DRIFT_REPORT.md"
+    }
 }
 
 #######################################
@@ -1251,8 +1265,8 @@ specctl - DocOps CLI v$VERSION
 명령어:
   snapshot [-Suggest|-Apply] [-Type TYPE]
                         코드 인벤토리 추출
-  verify [-Level soft|strict] [-Cache|-Full] [-DebugDump]
-                        문서-코드 검증
+  verify [-Level soft|strict] [-Cache|-Full] [-DebugDump] [-Quiet]
+                        문서-코드 검증 (-Quiet: 출력 최소화)
   update                diff 기반 Contract 업데이트 제안
   compile               산출물 생성 (DevSpec/Manual)
   status                현재 상태 확인
@@ -1300,7 +1314,8 @@ switch ($command) {
         $cache = $args -contains "-Cache" -or $args -contains "--cache"
         $full = $args -contains "-Full" -or $args -contains "--full"
         $debugDump = $args -contains "-DebugDump" -or $args -contains "--debug-dump"
-        Cmd-Verify -Level $level -Cache:$cache -Full:$full -DebugDump:$debugDump
+        $quiet = $args -contains "-Quiet" -or $args -contains "--quiet"
+        Cmd-Verify -Level $level -Cache:$cache -Full:$full -DebugDump:$debugDump -Quiet:$quiet
     }
     "update" { Cmd-Update }
     "compile" { Cmd-Compile }
