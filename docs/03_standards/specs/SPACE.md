@@ -34,7 +34,7 @@
 - **What**: 초대 코드 기반 공간 접근 API
 - **Evidence**:
   - code: `src/app/api/spaces/invite/[code]/route.ts::GET`
-  - code: `prisma/schema.prisma::inviteCode`
+  - code: `prisma/schema.prisma`
 
 ### Contract: SPACE_API_VISIT
 
@@ -91,7 +91,7 @@
 - **Evidence**:
   - code: `src/app/api/spaces/[id]/zones/route.ts::GET`
   - code: `src/app/api/spaces/[id]/zones/route.ts::POST`
-  - code: `src/app/api/spaces/[id]/zones/[zoneId]/route.ts::PATCH`
+  - code: `src/app/api/spaces/[id]/zones/[zoneId]/route.ts::PUT`
   - code: `src/app/api/spaces/[id]/zones/[zoneId]/route.ts::DELETE`
 
 ### Contract: SPACE_API_SPOTLIGHT

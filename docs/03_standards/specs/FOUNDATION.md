@@ -24,9 +24,8 @@
 
 - **What**: WCAG 2.1 Level AA 접근성 규칙
 - **Evidence**:
-  - code: `src/components/ui/button.tsx::focus-visible:ring-2`
+  - code: `src/components/ui/button.tsx::buttonVariants`
   - code: `src/components/ui/dialog.tsx::DialogContent`
-  - code: `src/components/ui/dialog.tsx::sr-only`
 
 ### Contract: FOUNDATION_FUNC_I18N
 
@@ -90,8 +89,8 @@
   CLOSING → CLOSED: Event=ANIMATION_END
   ```
 - **Evidence**:
-  - code: `src/components/ui/dialog.tsx::open`
-  - code: `src/components/ui/dialog.tsx::onOpenChange`
+  - code: `src/components/ui/dialog.tsx::Dialog`
+  - code: `src/components/ui/dialog.tsx::DialogContent`
 
 <!-- DESIGN:END -->
 

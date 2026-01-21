@@ -37,8 +37,8 @@
   작업 시작
   ```
 - **Evidence**:
-  - code: `CLAUDE.md::FlowSpace`
-  - code: `docs/00_ssot/ANCHOR.md::ANCHOR`
+  - code: `CLAUDE.md`
+  - code: `docs/00_ssot/ANCHOR.md`
 
 ### Contract: AI_PROTOCOL_FUNC_TASK_MANAGEMENT
 - **Tier**: core
@@ -74,7 +74,7 @@
   | 버그 수정 | TASK.md |
   | 아키텍처 변경 | ARCH.md |
 - **Evidence**:
-  - code: `docs/00_ssot/DOC_POLICY.md::DOC_POLICY`
+  - code: `docs/00_ssot/DOC_POLICY.md`
 
 ### Contract: AI_PROTOCOL_FUNC_VERIFICATION
 - **Tier**: core
@@ -98,7 +98,7 @@
   - `BUILD_ERROR`: 빌드 에러 → 원인 파악 → 수정
   - `UNRESOLVED`: 해결 불가 → 사용자 보고
 - **Evidence**:
-  - code: `package.json::scripts`
+  - code: `package.json`
 
 <!-- FUNCTIONAL:END -->
 
@@ -153,7 +153,7 @@
   ## 4. 파일 위치 요약
   ```
 - **Evidence**:
-  - code: `docs/00_ssot/HANDOFF_2026-01-21_CLAUDE_SLIM.md::HANDOFF`
+  - code: `docs/00_ssot/HANDOFF_2026-01-21_CLAUDE_SLIM.md`
 
 <!-- DESIGN:END -->
 

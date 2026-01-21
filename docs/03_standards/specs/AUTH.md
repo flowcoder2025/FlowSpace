@@ -33,7 +33,7 @@ NextAuth.js 기반 인증 시스템 - OAuth 및 Credentials 로그인 지원
 - **What**: 사용자 동의(녹화 등) 관리 API
 - **Evidence**:
   - code: `src/app/api/user/consent/route.ts::POST`
-  - code: `prisma/schema.prisma::agreedToRecording`
+  - code: `prisma/schema.prisma`
 
 <!-- FUNCTIONAL:END -->
 

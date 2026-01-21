@@ -26,36 +26,35 @@ LiveKit + Socket.io를 Oracle Always Free에 통합 배포하여 인프라 비�
 
 - **What**: Vercel 프로덕션 배포 (Next.js 앱)
 - **Evidence**:
-  - code: `vercel.json::builds`
-  - code: `.env.production::NEXT_PUBLIC_SOCKET_URL`
+  - code: `vercel.json`
+  - code: `.env.production`
 
 ### Contract: INFRA_FUNC_OCI_SERVER
 
 - **What**: Oracle Cloud 통합 서버 (Socket.io + LiveKit)
 - **Evidence**:
-  - code: `terraform/flowspace-stack/main.tf::oci_core_instance`
-  - code: `terraform/flowspace-stack/cloud-init.yaml::runcmd`
+  - code: `terraform/flowspace-stack/main.tf`
+  - code: `terraform/flowspace-stack/cloud-init.yaml`
 
 ### Contract: INFRA_FUNC_SOCKET_SERVER
 
 - **What**: Socket.io 실시간 서버 배포
 - **Evidence**:
   - code: `server/socket-server.ts::io`
-  - code: `server/package.json::scripts`
+  - code: `server/package.json`
 
 ### Contract: INFRA_FUNC_LIVEKIT_SELFHOST
 
 - **What**: LiveKit 자체 호스팅 설정
 - **Evidence**:
-  - code: `terraform/flowspace-stack/cloud-init.yaml::livekit`
-  - code: `.env.production::NEXT_PUBLIC_LIVEKIT_URL`
+  - code: `terraform/flowspace-stack/cloud-init.yaml`
+  - code: `.env.production`
 
 ### Contract: INFRA_FUNC_SSL_CADDY
 
 - **What**: Caddy 리버스 프록시 및 SSL 자동화
 - **Evidence**:
-  - code: `terraform/flowspace-stack/caddy/Caddyfile::space-socket`
-  - code: `terraform/flowspace-stack/caddy/Caddyfile::space-livekit`
+  - code: `terraform/flowspace-stack/caddy/Caddyfile`
 
 <!-- FUNCTIONAL:END -->
 

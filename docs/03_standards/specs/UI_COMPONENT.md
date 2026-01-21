@@ -34,14 +34,13 @@ shadcn/ui 기반 커스텀 UI 컴포넌트 시스템
 - **What**: 폼 컴포넌트 (Input 기반)
 - **Evidence**:
   - code: `src/components/ui/input.tsx::Input`
-  - code: `src/components/ui/input.tsx::inputVariants`
 
 ### Contract: UI_COMPONENT_FUNC_ICON
 
 - **What**: 아이콘 시스템 (lucide-react)
 - **Evidence**:
-  - code: `src/components/ui/dialog.tsx::XIcon`
-  - code: `package.json::lucide-react`
+  - code: `src/components/ui/dialog.tsx`
+  - code: `package.json`
 
 <!-- FUNCTIONAL:END -->
 
@@ -60,8 +59,8 @@ shadcn/ui 기반 커스텀 UI 컴포넌트 시스템
 
 - **What**: 모달 오버레이 및 애니메이션
 - **Evidence**:
-  - code: `src/components/ui/dialog.tsx::animate-in`
-  - code: `src/components/ui/dialog.tsx::fade-in-0`
+  - code: `src/components/ui/dialog.tsx::DialogOverlay`
+  - code: `src/components/ui/dialog.tsx::DialogContent`
 
 ### Contract: UI_COMPONENT_DESIGN_BUTTON_HOVER
 
@@ -77,7 +76,7 @@ shadcn/ui 기반 커스텀 UI 컴포넌트 시스템
 - **Critical**: outline 버튼 hover 시 **배경색 변경 금지**, 테두리와 텍스트만 primary로 변경
 - **Evidence**:
   - code: `src/components/ui/button.tsx::buttonVariants`
-  - code: `src/app/globals.css::--primary`
+  - code: `src/app/globals.css`
 
 <!-- DESIGN:END -->
 

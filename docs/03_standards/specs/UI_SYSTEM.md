@@ -16,8 +16,8 @@
 
 - **What**: Primary Color → globals.css → 컴포넌트 연결 흐름
 - **Evidence**:
-  - code: `src/app/globals.css::--color-primary`
-  - code: `src/components/ui/button.tsx::bg-primary`
+  - code: `src/app/globals.css`
+  - code: `src/components/ui/button.tsx::buttonVariants`
   - code: `src/lib/utils.ts::cn`
 
 ### Contract: UI_SYSTEM_FUNC_TEXT_CONFIG

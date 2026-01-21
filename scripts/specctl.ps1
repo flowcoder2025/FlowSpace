@@ -78,12 +78,13 @@ function Get-TimestampString {
 #######################################
 
 # 파일 내용 캐시하여 반환 (I/O 최소화)
+# Note: -LiteralPath 사용하여 [id] 등 특수문자 경로 지원
 function Get-CachedFileContent {
     param([string]$FilePath)
 
     if (-not $script:FileCache.ContainsKey($FilePath)) {
-        if (Test-Path $FilePath) {
-            $script:FileCache[$FilePath] = Get-Content $FilePath -Raw -ErrorAction SilentlyContinue
+        if (Test-Path -LiteralPath $FilePath) {
+            $script:FileCache[$FilePath] = Get-Content -LiteralPath $FilePath -Raw -ErrorAction SilentlyContinue
         }
         else {
             $script:FileCache[$FilePath] = ""
@@ -424,8 +425,8 @@ function Validate-Evidence {
 
     $fullPath = Join-Path $ProjectRoot $filePath
 
-    # 파일 존재 확인
-    if (-not (Test-Path $fullPath)) {
+    # 파일 존재 확인 (-LiteralPath로 [id] 등 특수문자 경로 지원)
+    if (-not (Test-Path -LiteralPath $fullPath)) {
         return "FILE_NOT_FOUND"
     }
 
@@ -447,7 +448,12 @@ function Validate-Evidence {
         }
         else {
             # code, type, ui 심볼 검색 (캐시 기반)
-            $pattern = "(function|const|let|var|class|type|interface|enum|export)\s+$symbol|$symbol\s*[=:(]"
+            # 패턴 1: 일반 선언 (function/const/let/var/class/type/interface/enum/export + 심볼)
+            # 패턴 2: 심볼 + 할당/호출 (심볼=, 심볼:, 심볼()
+            # 패턴 3: destructuring export { GET, POST }
+            # 패턴 4: Prisma 필드 (심볼 + 공백 + 타입)
+            # 패턴 5: 마크다운 헤딩 (# 심볼)
+            $pattern = "(function|const|let|var|class|type|interface|enum|export)\s+(\w+\s+)*$symbol|$symbol\s*[=:(,}]|^\s*$symbol\s+\w|^#+\s+$symbol"
             if (Test-CachedPattern -Pattern $pattern -FilePath $fullPath) {
                 return "VALID"
             }

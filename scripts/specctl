@@ -621,8 +621,12 @@ validate_evidence() {
         fi
       fi
     else
-      # code, type, ui의 경우 심볼 직접 검색 (단순화된 패턴)
-      if cached_grep "(function|const|let|var|class|type|interface|enum|export)[[:space:]]+$symbol|$symbol[[:space:]]*[=:(]" "$full_path"; then
+      # code, type, ui의 경우 심볼 직접 검색 (확장된 패턴)
+      # 패턴 1: 일반 선언 (function/const/let/var/class/type/interface/enum/export + 심볼)
+      # 패턴 2: 심볼 + 할당/호출 (심볼=, 심볼:, 심볼(, 심볼,, 심볼})
+      # 패턴 3: Prisma 필드 (심볼 + 공백 + 타입)
+      # 패턴 4: 마크다운 헤딩 (# 심볼)
+      if cached_grep "(function|const|let|var|class|type|interface|enum|export)[[:space:]]+([[:alnum:]_]+[[:space:]]+)*$symbol|$symbol[[:space:]]*[=:(,}]|^[[:space:]]*$symbol[[:space:]]+[[:alpha:]]|^#+[[:space:]]+$symbol" "$full_path"; then
         echo "VALID"
       else
         echo "SYMBOL_NOT_FOUND"
