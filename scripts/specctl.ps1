@@ -310,7 +310,7 @@ function Scan-APIRoutes {
             $specKey = Get-SpecKey -Route $route
 
             # 메서드 추출
-            $content = Get-Content $file -Raw -ErrorAction SilentlyContinue
+            $content = Get-Content -LiteralPath $file -Raw -ErrorAction SilentlyContinue
             $methods = @()
             if ($content -match "export.*GET|req\.method.*GET") { $methods += "GET" }
             if ($content -match "export.*POST|req\.method.*POST") { $methods += "POST" }
@@ -335,7 +335,7 @@ function Scan-APIRoutes {
             $relFile = $file.Replace("$ProjectRoot\", "").Replace("\", "/")
             $specKey = Get-SpecKey -Route $route
 
-            $content = Get-Content $file -Raw -ErrorAction SilentlyContinue
+            $content = Get-Content -LiteralPath $file -Raw -ErrorAction SilentlyContinue
             $methods = @()
             if ($content -match "export.*function GET|export const GET|export async function GET") { $methods += "GET" }
             if ($content -match "export.*function POST|export const POST|export async function POST") { $methods += "POST" }
