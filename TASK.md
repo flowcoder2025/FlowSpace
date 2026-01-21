@@ -92,13 +92,13 @@
 
 ### P3.2 마무리
 
-- [ ] git commit
-- [ ] git push
+- [x] git commit
+- [x] git push
 
 ### P3.3 완료 기준
 
 - [x] SYNC: 68, 나머지: 0
-- [ ] git push 완료
+- [x] git push 완료
 
 ---
 
