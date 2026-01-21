@@ -15,7 +15,13 @@
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
     "db:seed": "prisma db seed",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "flow:finish": "bash scripts/flow-finish || powershell -ExecutionPolicy Bypass -File scripts/flow-finish.ps1",
+    "flow:finish:docs": "bash scripts/flow-finish --docs-only || powershell -ExecutionPolicy Bypass -File scripts/flow-finish.ps1 -DocsOnly",
+    "specctl": "bash scripts/specctl || powershell -ExecutionPolicy Bypass -File scripts/specctl.ps1",
+    "specctl:status": "bash scripts/specctl status || powershell -ExecutionPolicy Bypass -File scripts/specctl.ps1 status",
+    "specctl:verify": "bash scripts/specctl verify --level=soft || powershell -ExecutionPolicy Bypass -File scripts/specctl.ps1 verify -Level soft",
+    "specctl:verify:strict": "bash scripts/specctl verify --level=strict || powershell -ExecutionPolicy Bypass -File scripts/specctl.ps1 verify -Level strict"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

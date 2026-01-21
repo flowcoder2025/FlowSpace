@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "version": "3.2.0",
+  "description": "DocOps 프로젝트 설정 파일",
+
+  "automation": {
+    "onFailure": "warn",
+    "hooks": {
+      "preCommit": true,
+      "preDev": false,
+      "preBuild": false
+    },
+    "setupCompleted": false
+  },
+
+  "specKeyMapping": {
+    "patterns": [
+      { "match": "/api/auth/*", "specKey": "AUTH" },
+      { "match": "/auth/*", "specKey": "AUTH" },
+      { "match": "/login", "specKey": "AUTH" },
+      { "match": "/logout", "specKey": "AUTH" },
+      { "match": "/register", "specKey": "AUTH" },
+      { "match": "/signup", "specKey": "AUTH" },
+      { "match": "/api/user/*", "specKey": "USER" },
+      { "match": "/api/users/*", "specKey": "USER" },
+      { "match": "/user/*", "specKey": "USER" },
+      { "match": "/users/*", "specKey": "USER" },
+      { "match": "/api/chat/*", "specKey": "CHAT" },
+      { "match": "/chat/*", "specKey": "CHAT" },
+      { "match": "/api/billing/*", "specKey": "BILLING" },
+      { "match": "/billing/*", "specKey": "BILLING" },
+      { "match": "/payment/*", "specKey": "BILLING" },
+      { "match": "/dashboard*", "specKey": "DASHBOARD" },
+      { "match": "/settings*", "specKey": "SETTINGS" },
+      { "match": "/api/*", "specKey": "API" }
+    ],
+    "default": "UNCLASSIFIED"
+  },
+
+  "verify": {
+    "defaultLevel": "soft",
+    "strictRequiresLevel2": ["core"],
+    "ignorePaths": [
+      "node_modules/**",
+      ".git/**",
+      "dist/**",
+      "build/**"
+    ]
+  },
+
+  "paths": {
+    "ssotDir": "docs/00_ssot",
+    "specsDir": "docs/03_standards/specs",
+    "devspecDir": "docs/03_standards/devspec",
+    "manualsDir": "docs/03_standards/manuals",
+    "cacheDir": ".docops"
+  },
+
+  "cache": {
+    "enabled": true,
+    "maxAge": 86400,
+    "hashAlgorithm": "sha256"
+  },
+
+  "evidence": {
+    "requireMinimum": 1,
+    "allowedTypes": ["code", "type", "ui", "test", "e2e"],
+    "fallbackLineRange": true
+  }
+}

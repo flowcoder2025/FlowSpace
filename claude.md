@@ -624,3 +624,36 @@ git add . && git commit -m "feat: 작업 내용" && git push
 | 2026-01-08 | 3.6.0 | 계층 구조 확장: OCI.md, DOCS-UPDATE-PLAN.md, ASSET-PIPELINE.md 추가 |
 | 2026-01-08 | 3.7.0 | AI 작업 프로토콜 추가 (0.7절): 계층 구조 확인, TASK.md 실시간 관리, 코드-문서 연동, 검증 프로세스 |
 | 2026-01-09 | 3.8.0 | OCI 배포 완료: OCI.md → /docs/infrastructure/OCI.md 이동, 인프라 작업 유형 추가 |
+
+
+## DocOps
+
+> 문서 기반 SSOT 관리 시스템 - 할루시네이션/드리프트 0% 목표
+
+### 핵심 원칙
+
+1. **Evidence 없는 Contract는 존재할 수 없다**
+2. **Snapshot(코드) ↔ Contract(문서) 매핑**으로 드리프트 탐지
+
+### DocOps Skills
+
+| Skill | 용도 | 시점 |
+|-------|------|------|
+| `/docops-init` | 프로젝트에 DocOps 적용 | 최초 1회 |
+| `/docops-verify` | 드리프트 검증 | **세션 시작 시 필수** |
+| `/docops-finish` | 작업 완료 워크플로우 | 작업 완료 시 |
+| `/docops-status` | 현재 상태 확인 | 수시 |
+
+### 세션 워크플로우
+
+```
+1. /docops-verify      ← 세션 시작 (드리프트 확인)
+2. 작업 수행...
+3. /docops-finish      ← 작업 완료 (검증 + 커밋 + 푸시)
+```
+
+### 상세 문서
+
+- [docs/00_ssot/ANCHOR.md](docs/00_ssot/ANCHOR.md) - DocOps 진입점
+- [docs/00_ssot/DOC_POLICY.md](docs/00_ssot/DOC_POLICY.md) - 규칙 정의
+- [docs/00_ssot/DOCOPS_SPEC_V3.2.md](docs/00_ssot/DOCOPS_SPEC_V3.2.md) - 전체 스펙

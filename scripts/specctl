@@ -1,0 +1,1295 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+#######################################
+# specctl - DocOps CLI v0.2.0
+# 문서-코드 동기화 및 검증 도구
+# 실제 구현 버전
+#######################################
+
+VERSION="0.2.0"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+
+# 경로 정의
+SSOT_DIR="$PROJECT_ROOT/docs/00_ssot"
+SPECS_DIR="$PROJECT_ROOT/docs/03_standards/specs"
+DEVSPEC_DIR="$PROJECT_ROOT/docs/03_standards/devspec"
+MANUALS_DIR="$PROJECT_ROOT/docs/03_standards/manuals"
+
+# 임시 파일
+TMP_DIR="${TMPDIR:-/tmp}/specctl_$$"
+mkdir -p "$TMP_DIR"
+trap "rm -rf $TMP_DIR" EXIT
+
+# 색상 정의
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+MAGENTA='\033[0;35m'
+NC='\033[0m'
+
+#######################################
+# 유틸리티 함수
+#######################################
+
+print_header() {
+  echo -e "${BLUE}========================================${NC}"
+  echo -e "${BLUE}$1${NC}"
+  echo -e "${BLUE}========================================${NC}"
+}
+
+print_success() {
+  echo -e "${GREEN}✓${NC} $1"
+}
+
+print_warning() {
+  echo -e "${YELLOW}⚠${NC} $1"
+}
+
+print_error() {
+  echo -e "${RED}✗${NC} $1"
+}
+
+print_info() {
+  echo -e "${CYAN}ℹ${NC} $1"
+}
+
+# 날짜 포맷
+get_date() {
+  date +"%Y-%m-%d"
+}
+
+get_timestamp() {
+  date +"%Y-%m-%d %H:%M:%S"
+}
+
+#######################################
+# 라우트 스캔 함수
+#######################################
+
+# 파일 경로를 라우트로 변환
+file_to_route() {
+  local file="$1"
+  local base_dir="$2"
+
+  # 기본 디렉토리 제거
+  local route="${file#$base_dir}"
+
+  # 확장자 제거
+  route="${route%.tsx}"
+  route="${route%.ts}"
+  route="${route%.jsx}"
+  route="${route%.js}"
+
+  # index 제거
+  route="${route%/index}"
+  route="${route%index}"
+
+  # 빈 문자열이면 루트
+  [[ -z "$route" ]] && route="/"
+
+  # [param] → :param 변환
+  route=$(echo "$route" | sed 's/\[\.\.\.([^]]*)\]/*\1/g')  # [...slug] → *slug
+  route=$(echo "$route" | sed 's/\[\([^]]*\)\]/:\1/g')      # [id] → :id
+
+  # (group) 제거 (라우트 그룹)
+  route=$(echo "$route" | sed 's/([^)]*)//g')
+
+  # 중복 슬래시 정리
+  route=$(echo "$route" | sed 's|//|/|g')
+
+  # 앞에 / 보장
+  [[ "$route" != /* ]] && route="/$route"
+
+  echo "$route"
+}
+
+# SPEC_KEY 자동 분류
+classify_spec_key() {
+  local route="$1"
+
+  case "$route" in
+    /api/auth/*|/auth/*)
+      echo "AUTH"
+      ;;
+    /api/user/*|/api/users/*|/user/*|/users/*)
+      echo "USER"
+      ;;
+    /api/chat/*|/chat/*)
+      echo "CHAT"
+      ;;
+    /api/billing/*|/billing/*|/payment/*)
+      echo "BILLING"
+      ;;
+    /api/*)
+      echo "API"
+      ;;
+    /login|/logout|/register|/signup)
+      echo "AUTH"
+      ;;
+    /dashboard*)
+      echo "DASHBOARD"
+      ;;
+    /settings*)
+      echo "SETTINGS"
+      ;;
+    *)
+      echo "UNCLASSIFIED"
+      ;;
+  esac
+}
+
+# UI 라우트 스캔
+scan_ui_routes() {
+  local output_file="$1"
+
+  echo "| Route | File | SPEC_KEY |" > "$output_file"
+  echo "|-------|------|----------|" >> "$output_file"
+
+  local found=0
+
+  # Next.js Pages Router
+  for base in "pages" "src/pages"; do
+    local dir="$PROJECT_ROOT/$base"
+    [[ ! -d "$dir" ]] && continue
+
+    # API 제외한 페이지 파일 검색
+    while IFS= read -r -d '' file; do
+      # api 디렉토리 제외
+      [[ "$file" == *"/api/"* ]] && continue
+      # _app, _document 등 제외
+      [[ "$(basename "$file")" == _* ]] && continue
+
+      local route=$(file_to_route "$file" "$dir")
+      local rel_file="${file#$PROJECT_ROOT/}"
+      local spec_key=$(classify_spec_key "$route")
+
+      echo "| $route | $rel_file | $spec_key |" >> "$output_file"
+      ((found++))
+    done < <(find "$dir" -type f \( -name "*.tsx" -o -name "*.ts" -o -name "*.jsx" -o -name "*.js" \) -print0 2>/dev/null)
+  done
+
+  # Next.js App Router
+  for base in "app" "src/app"; do
+    local dir="$PROJECT_ROOT/$base"
+    [[ ! -d "$dir" ]] && continue
+
+    # page.tsx 파일만 검색
+    while IFS= read -r -d '' file; do
+      # api 디렉토리 제외
+      [[ "$file" == *"/api/"* ]] && continue
+
+      local route=$(file_to_route "$(dirname "$file")" "$dir")
+      local rel_file="${file#$PROJECT_ROOT/}"
+      local spec_key=$(classify_spec_key "$route")
+
+      echo "| $route | $rel_file | $spec_key |" >> "$output_file"
+      ((found++))
+    done < <(find "$dir" -type f -name "page.tsx" -o -name "page.ts" -o -name "page.jsx" -o -name "page.js" -print0 2>/dev/null)
+  done
+
+  echo "$found"
+}
+
+# API 라우트 스캔
+scan_api_routes() {
+  local output_file="$1"
+
+  echo "| Route | File | SPEC_KEY | Method |" > "$output_file"
+  echo "|-------|------|----------|--------|" >> "$output_file"
+
+  local found=0
+
+  # Next.js Pages Router API
+  for base in "pages/api" "src/pages/api"; do
+    local dir="$PROJECT_ROOT/$base"
+    [[ ! -d "$dir" ]] && continue
+
+    while IFS= read -r -d '' file; do
+      local route="/api$(file_to_route "$file" "$dir")"
+      local rel_file="${file#$PROJECT_ROOT/}"
+      local spec_key=$(classify_spec_key "$route")
+
+      # 메서드 추출 시도
+      local methods=""
+      if grep -q "export.*GET\|req\.method.*GET" "$file" 2>/dev/null; then
+        methods="${methods}GET,"
+      fi
+      if grep -q "export.*POST\|req\.method.*POST" "$file" 2>/dev/null; then
+        methods="${methods}POST,"
+      fi
+      if grep -q "export.*PUT\|req\.method.*PUT" "$file" 2>/dev/null; then
+        methods="${methods}PUT,"
+      fi
+      if grep -q "export.*DELETE\|req\.method.*DELETE" "$file" 2>/dev/null; then
+        methods="${methods}DELETE,"
+      fi
+      methods="${methods%,}"
+      [[ -z "$methods" ]] && methods="ALL"
+
+      echo "| $route | $rel_file | $spec_key | $methods |" >> "$output_file"
+      ((found++))
+    done < <(find "$dir" -type f \( -name "*.ts" -o -name "*.js" \) -print0 2>/dev/null)
+  done
+
+  # Next.js App Router API
+  for base in "app/api" "src/app/api"; do
+    local dir="$PROJECT_ROOT/$base"
+    [[ ! -d "$dir" ]] && continue
+
+    while IFS= read -r -d '' file; do
+      local route="/api$(file_to_route "$(dirname "$file")" "$dir")"
+      local rel_file="${file#$PROJECT_ROOT/}"
+      local spec_key=$(classify_spec_key "$route")
+
+      # route.ts에서 export된 메서드 추출
+      local methods=""
+      if grep -q "export.*function GET\|export const GET\|export async function GET" "$file" 2>/dev/null; then
+        methods="${methods}GET,"
+      fi
+      if grep -q "export.*function POST\|export const POST\|export async function POST" "$file" 2>/dev/null; then
+        methods="${methods}POST,"
+      fi
+      if grep -q "export.*function PUT\|export const PUT\|export async function PUT" "$file" 2>/dev/null; then
+        methods="${methods}PUT,"
+      fi
+      if grep -q "export.*function DELETE\|export const DELETE\|export async function DELETE" "$file" 2>/dev/null; then
+        methods="${methods}DELETE,"
+      fi
+      methods="${methods%,}"
+      [[ -z "$methods" ]] && methods="ALL"
+
+      echo "| $route | $rel_file | $spec_key | $methods |" >> "$output_file"
+      ((found++))
+    done < <(find "$dir" -type f \( -name "route.ts" -o -name "route.js" \) -print0 2>/dev/null)
+  done
+
+  # Express 스타일 (src/routes, src/api, routes/)
+  for base in "src/routes" "src/api" "routes" "api"; do
+    local dir="$PROJECT_ROOT/$base"
+    [[ ! -d "$dir" ]] && continue
+
+    while IFS= read -r -d '' file; do
+      local route=$(file_to_route "$file" "$dir")
+      [[ "$route" != /api* ]] && route="/api$route"
+      local rel_file="${file#$PROJECT_ROOT/}"
+      local spec_key=$(classify_spec_key "$route")
+
+      echo "| $route | $rel_file | $spec_key | - |" >> "$output_file"
+      ((found++))
+    done < <(find "$dir" -type f \( -name "*.ts" -o -name "*.js" \) ! -name "index.*" -print0 2>/dev/null)
+  done
+
+  echo "$found"
+}
+
+#######################################
+# 명령어: snapshot
+#######################################
+
+cmd_snapshot() {
+  local mode="full"
+  local type_filter=""
+  local output_format="markdown"
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --suggest)
+        mode="suggest"
+        shift
+        ;;
+      --apply)
+        mode="apply"
+        shift
+        ;;
+      --type=*)
+        type_filter="${1#*=}"
+        shift
+        ;;
+      --json)
+        output_format="json"
+        shift
+        ;;
+      *)
+        print_error "알 수 없는 옵션: $1"
+        exit 1
+        ;;
+    esac
+  done
+
+  print_header "[specctl snapshot] 코드 인벤토리 추출 v$VERSION"
+  echo ""
+
+  local ui_file="$TMP_DIR/ui_routes.md"
+  local api_file="$TMP_DIR/api_routes.md"
+
+  # UI 라우트 스캔
+  if [[ -z "$type_filter" || "$type_filter" == "ui-routes" ]]; then
+    print_info "UI 라우트 스캔 중..."
+    local ui_count=$(scan_ui_routes "$ui_file")
+    print_success "UI 라우트: ${ui_count}개 발견"
+  fi
+
+  # API 라우트 스캔
+  if [[ -z "$type_filter" || "$type_filter" == "api-routes" ]]; then
+    print_info "API 라우트 스캔 중..."
+    local api_count=$(scan_api_routes "$api_file")
+    print_success "API 라우트: ${api_count}개 발견"
+  fi
+
+  echo ""
+
+  case "$mode" in
+    suggest)
+      print_info "모드: suggest (후보 제안)"
+      echo ""
+
+      if [[ -f "$ui_file" ]]; then
+        echo -e "${MAGENTA}=== UI 라우트 후보 ===${NC}"
+        cat "$ui_file"
+        echo ""
+      fi
+
+      if [[ -f "$api_file" ]]; then
+        echo -e "${MAGENTA}=== API 라우트 후보 ===${NC}"
+        cat "$api_file"
+        echo ""
+      fi
+
+      print_info "적용하려면: specctl snapshot --apply"
+      ;;
+
+    apply|full)
+      print_info "SPEC_SNAPSHOT.md 갱신 중..."
+
+      local snapshot_file="$SSOT_DIR/SPEC_SNAPSHOT.md"
+      local today=$(get_date)
+
+      cat > "$snapshot_file" << EOF
+# SPEC_SNAPSHOT - 코드 인벤토리
+
+> 자동 생성: specctl snapshot ($(get_timestamp))
+
+---
+
+## 스캔 정보
+
+| 항목 | 값 |
+|------|-----|
+| **생성일** | $today |
+| **도구** | specctl v$VERSION |
+| **프로젝트** | $(basename "$PROJECT_ROOT") |
+
+---
+
+## UI 라우트
+
+EOF
+
+      if [[ -f "$ui_file" ]]; then
+        cat "$ui_file" >> "$snapshot_file"
+      else
+        echo "(스캔된 UI 라우트 없음)" >> "$snapshot_file"
+      fi
+
+      cat >> "$snapshot_file" << EOF
+
+---
+
+## API 라우트
+
+EOF
+
+      if [[ -f "$api_file" ]]; then
+        cat "$api_file" >> "$snapshot_file"
+      else
+        echo "(스캔된 API 라우트 없음)" >> "$snapshot_file"
+      fi
+
+      cat >> "$snapshot_file" << EOF
+
+---
+
+## 이벤트 타입
+
+> 자동화 미구현 - 수동 관리
+
+| Event | File | SPEC_KEY |
+|-------|------|----------|
+| (수동 추가 필요) | - | - |
+
+---
+
+## 상태 목록
+
+> 자동화 미구현 - 수동 관리
+
+| State | File | SPEC_KEY |
+|-------|------|----------|
+| (수동 추가 필요) | - | - |
+
+---
+
+> **참고**: UI/API 라우트는 자동 스캔됨. 이벤트/상태는 수동 관리 필요.
+EOF
+
+      print_success "SPEC_SNAPSHOT.md 갱신 완료"
+      print_info "위치: $snapshot_file"
+
+      # UNCLASSIFIED 항목 DOC_DEBT에 추가
+      local unclassified_count=0
+      if [[ -f "$ui_file" ]]; then
+        unclassified_count=$((unclassified_count + $(grep -c "UNCLASSIFIED" "$ui_file" || echo 0)))
+      fi
+      if [[ -f "$api_file" ]]; then
+        unclassified_count=$((unclassified_count + $(grep -c "UNCLASSIFIED" "$api_file" || echo 0)))
+      fi
+
+      if [[ $unclassified_count -gt 0 ]]; then
+        print_warning "UNCLASSIFIED 항목: ${unclassified_count}개 → DOC_DEBT 확인 필요"
+      fi
+      ;;
+  esac
+
+  echo ""
+}
+
+#######################################
+# Evidence 검증 함수
+#######################################
+
+# Evidence 파싱 (specs/*.md에서 추출)
+extract_evidences() {
+  local output_file="$1"
+
+  > "$output_file"
+
+  [[ ! -d "$SPECS_DIR" ]] && return
+
+  while IFS= read -r -d '' spec_file; do
+    local spec_key=$(basename "$spec_file" .md)
+    local current_contract=""
+
+    while IFS= read -r line; do
+      # Contract ID 추출
+      if [[ "$line" =~ ^###[[:space:]]*Contract:[[:space:]]*(.+)$ ]]; then
+        current_contract="${BASH_REMATCH[1]}"
+        current_contract=$(echo "$current_contract" | xargs)  # trim
+      fi
+
+      # Evidence 추출 (code:, type:, ui:, test:, e2e:)
+      if [[ "$line" =~ ^[[:space:]]*-[[:space:]]*(code|type|ui|test|e2e):[[:space:]]*\`?([^\`]+)\`?$ ]]; then
+        local ev_type="${BASH_REMATCH[1]}"
+        local ev_value="${BASH_REMATCH[2]}"
+        ev_value=$(echo "$ev_value" | xargs)  # trim
+
+        echo "$spec_key|$current_contract|$ev_type|$ev_value" >> "$output_file"
+      fi
+    done < "$spec_file"
+  done < <(find "$SPECS_DIR" -name "*.md" -print0 2>/dev/null)
+}
+
+# 단일 Evidence 검증
+validate_evidence() {
+  local ev_type="$1"
+  local ev_value="$2"
+
+  # 경로와 심볼 분리
+  local file_path=""
+  local symbol=""
+
+  if [[ "$ev_value" == *"::"* ]]; then
+    file_path="${ev_value%%::*}"
+    symbol="${ev_value#*::}"
+  elif [[ "$ev_value" == *"#L"* ]]; then
+    # 라인 범위 폴백
+    file_path="${ev_value%%#*}"
+    symbol=""
+  else
+    file_path="$ev_value"
+    symbol=""
+  fi
+
+  local full_path="$PROJECT_ROOT/$file_path"
+
+  # 파일 존재 확인
+  if [[ ! -f "$full_path" ]]; then
+    echo "FILE_NOT_FOUND"
+    return
+  fi
+
+  # 심볼 존재 확인
+  if [[ -n "$symbol" ]]; then
+    # 테스트 selector의 경우 따옴표 내용 검색
+    if [[ "$ev_type" == "test" || "$ev_type" == "e2e" ]]; then
+      # describe("...") 또는 it("...") 내부 문자열 추출
+      local search_string=$(echo "$symbol" | grep -oP '(?<=["'"'"'])[^"'"'"']+(?=["'"'"'])' | head -1)
+      if [[ -n "$search_string" ]]; then
+        if grep -q "$search_string" "$full_path" 2>/dev/null; then
+          echo "VALID"
+        else
+          echo "SYMBOL_NOT_FOUND"
+        fi
+      else
+        # 단순 문자열 검색
+        if grep -q "$symbol" "$full_path" 2>/dev/null; then
+          echo "VALID"
+        else
+          echo "SYMBOL_NOT_FOUND"
+        fi
+      fi
+    else
+      # code, type, ui의 경우 심볼 직접 검색
+      if grep -qE "(function|const|let|var|class|type|interface|enum|export)[[:space:]]+$symbol|$symbol[[:space:]]*[=:(]" "$full_path" 2>/dev/null; then
+        echo "VALID"
+      else
+        echo "SYMBOL_NOT_FOUND"
+      fi
+    fi
+  else
+    # 심볼 없이 파일만 확인
+    echo "VALID"
+  fi
+}
+
+#######################################
+# 명령어: verify
+#######################################
+
+# Contract 목록 추출
+extract_contracts() {
+  local output_file="$1"
+
+  > "$output_file"
+
+  [[ ! -d "$SPECS_DIR" ]] && return
+
+  while IFS= read -r -d '' spec_file; do
+    local spec_key=$(basename "$spec_file" .md)
+
+    grep -E "^###[[:space:]]*Contract:" "$spec_file" 2>/dev/null | while read -r line; do
+      local contract_id=$(echo "$line" | sed 's/^###[[:space:]]*Contract:[[:space:]]*//' | xargs)
+      echo "$spec_key|$contract_id" >> "$output_file"
+    done
+  done < <(find "$SPECS_DIR" -name "*.md" -print0 2>/dev/null)
+}
+
+# COVERAGE_MATRIX 갱신
+update_coverage_matrix() {
+  local sync_count="$1"
+  local missing_count="$2"
+  local hallu_count="$3"
+  local broken_count="$4"
+  local gap_count="$5"
+  local details_file="$6"
+  local level="$7"
+
+  local matrix_file="$SSOT_DIR/COVERAGE_MATRIX.md"
+  local today=$(get_date)
+  local total=$((sync_count + missing_count + hallu_count + broken_count + gap_count))
+
+  cat > "$matrix_file" << EOF
+# COVERAGE_MATRIX - 문서 커버리지 현황
+
+> 코드(Snapshot) ↔ 문서(Contract) 매핑 상태를 한 눈에 확인
+
+---
+
+## 상태 범례
+
+| 상태 | 의미 | 조치 |
+|------|------|------|
+| SYNC | 코드O 문서O 증거O | 없음 |
+| MISSING_DOC | 코드O 문서X | Contract 추가 필요 |
+| HALLUCINATION | 코드X 문서O | Contract 삭제 또는 코드 추가 |
+| BROKEN_EVIDENCE | 증거 링크 깨짐 | Evidence 수정 |
+| SNAPSHOT_GAP | 자동화 범위 밖 | 점진적 확장 |
+
+---
+
+## 요약
+
+| 항목 | 값 |
+|------|-----|
+| **마지막 검증** | $today |
+| **검증 레벨** | $level |
+| **총 항목** | $total |
+| **SYNC** | $sync_count |
+| **MISSING_DOC** | $missing_count |
+| **HALLUCINATION** | $hallu_count |
+| **BROKEN_EVIDENCE** | $broken_count |
+| **SNAPSHOT_GAP** | $gap_count |
+
+---
+
+## 전체 매트릭스
+
+| SPEC_KEY | Contract ID | Code (Snapshot) | Doc (Contract) | Evidence | Status |
+|----------|-------------|:---------------:|:--------------:|:--------:|--------|
+EOF
+
+  if [[ -f "$details_file" ]]; then
+    cat "$details_file" >> "$matrix_file"
+  fi
+
+  cat >> "$matrix_file" << EOF
+
+---
+
+## 히스토리
+
+| 날짜 | SYNC | MISSING | HALLU | BROKEN | GAP | 변화 |
+|------|:----:|:-------:|:-----:|:------:|:---:|------|
+| $today | $sync_count | $missing_count | $hallu_count | $broken_count | $gap_count | specctl verify |
+
+---
+
+> **자동 생성**: \`specctl verify\` 실행 시 갱신됨
+EOF
+}
+
+# DRIFT_REPORT 갱신
+update_drift_report() {
+  local drifts_file="$1"
+
+  local report_file="$SSOT_DIR/DRIFT_REPORT.md"
+  local today=$(get_date)
+  local timestamp=$(get_timestamp)
+
+  cat > "$report_file" << EOF
+# DRIFT_REPORT - 드리프트 기록
+
+> 검증 실패 항목 추적
+
+---
+
+## Active (해결 필요)
+
+| ID | Type | Item | Detected | Status |
+|----|------|------|----------|--------|
+EOF
+
+  local drift_id=1
+  if [[ -f "$drifts_file" && -s "$drifts_file" ]]; then
+    while IFS='|' read -r dtype item; do
+      printf "| DRIFT-%03d | %s | %s | %s | OPEN |\n" "$drift_id" "$dtype" "$item" "$today" >> "$report_file"
+      ((drift_id++))
+    done < "$drifts_file"
+  else
+    echo "| - | - | (드리프트 없음) | - | - |" >> "$report_file"
+  fi
+
+  cat >> "$report_file" << EOF
+
+---
+
+## Resolved (최근 30일)
+
+| ID | Type | Item | Resolved | How |
+|----|------|------|----------|-----|
+| - | - | - | - | - |
+
+---
+
+## Archive
+
+> 30일 지난 항목은 docs/05_archive/drift_history/로 이동
+
+---
+
+> **자동 생성**: $timestamp
+EOF
+}
+
+cmd_verify() {
+  local level="soft"
+  local cache=false
+  local debug_dump=false
+  local fix=false
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --level=*)
+        level="${1#*=}"
+        shift
+        ;;
+      --cache)
+        cache=true
+        shift
+        ;;
+      --full)
+        cache=false
+        shift
+        ;;
+      --debug-dump)
+        debug_dump=true
+        shift
+        ;;
+      --fix)
+        fix=true
+        shift
+        ;;
+      *)
+        print_error "알 수 없는 옵션: $1"
+        exit 1
+        ;;
+    esac
+  done
+
+  print_header "[specctl verify] 문서-코드 검증 v$VERSION"
+
+  echo -e "검증 레벨: ${CYAN}$level${NC}"
+  echo ""
+
+  # 1. Evidence 추출
+  print_info "Evidence 추출 중..."
+  local evidence_file="$TMP_DIR/evidences.txt"
+  extract_evidences "$evidence_file"
+  local evidence_count=$(wc -l < "$evidence_file" 2>/dev/null || echo 0)
+  print_success "Evidence: ${evidence_count}개"
+
+  # 2. Contract 목록 추출
+  print_info "Contract 목록 추출 중..."
+  local contracts_file="$TMP_DIR/contracts.txt"
+  extract_contracts "$contracts_file"
+  local contract_count=$(wc -l < "$contracts_file" 2>/dev/null || echo 0)
+  print_success "Contract: ${contract_count}개"
+
+  # 3. Snapshot 파싱 (간단 버전 - 실제 라우트 목록)
+  print_info "Snapshot 파싱 중..."
+  local snapshot_file="$SSOT_DIR/SPEC_SNAPSHOT.md"
+  local snapshot_routes="$TMP_DIR/snapshot_routes.txt"
+  > "$snapshot_routes"
+
+  if [[ -f "$snapshot_file" ]]; then
+    # 테이블에서 라우트 추출
+    grep -E "^\|[[:space:]]*/[^|]*\|" "$snapshot_file" 2>/dev/null | \
+      sed 's/^|[[:space:]]*//' | cut -d'|' -f1 | xargs -I{} echo {} >> "$snapshot_routes" 2>/dev/null || true
+  fi
+  local snapshot_count=$(wc -l < "$snapshot_routes" 2>/dev/null || echo 0)
+  print_success "Snapshot 항목: ${snapshot_count}개"
+
+  echo ""
+  print_info "검증 수행 중..."
+  echo ""
+
+  # 4. Evidence 검증
+  local sync_count=0
+  local missing_count=0
+  local hallu_count=0
+  local broken_count=0
+  local gap_count=0
+
+  local details_file="$TMP_DIR/matrix_details.txt"
+  local drifts_file="$TMP_DIR/drifts.txt"
+  > "$details_file"
+  > "$drifts_file"
+
+  # Contract별 검증
+  if [[ -f "$contracts_file" && -s "$contracts_file" ]]; then
+    while IFS='|' read -r spec_key contract_id; do
+      local has_evidence=false
+      local evidence_valid=true
+      local in_snapshot=false
+
+      # 해당 Contract의 Evidence 검증
+      if [[ -f "$evidence_file" ]]; then
+        while IFS='|' read -r ev_spec ev_contract ev_type ev_value; do
+          if [[ "$ev_spec" == "$spec_key" && "$ev_contract" == "$contract_id" ]]; then
+            has_evidence=true
+
+            local result=$(validate_evidence "$ev_type" "$ev_value")
+            if [[ "$result" != "VALID" ]]; then
+              evidence_valid=false
+            fi
+          fi
+        done < "$evidence_file"
+      fi
+
+      # Snapshot 매칭 (간단 버전 - Contract ID에서 라우트 유추)
+      # AUTH_FUNC_LOGIN → /api/auth/login 또는 /login
+      local route_guess=$(echo "$contract_id" | tr '[:upper:]' '[:lower:]' | sed 's/_func_/\//g' | sed 's/_design_/\//g' | sed 's/_/\//g')
+      if grep -qi "$route_guess\|$(echo "$spec_key" | tr '[:upper:]' '[:lower:]')" "$snapshot_routes" 2>/dev/null; then
+        in_snapshot=true
+      fi
+
+      # 상태 판정
+      local status=""
+      if [[ "$has_evidence" == "true" && "$evidence_valid" == "true" ]]; then
+        if [[ "$in_snapshot" == "true" ]]; then
+          status="SYNC"
+          sync_count=$((sync_count + 1))
+        else
+          # Evidence는 유효하지만 Snapshot에 없음 → SNAPSHOT_GAP (자동화 범위 밖)
+          status="SNAPSHOT_GAP"
+          gap_count=$((gap_count + 1))
+        fi
+      elif [[ "$has_evidence" == "true" && "$evidence_valid" == "false" ]]; then
+        status="BROKEN_EVIDENCE"
+        broken_count=$((broken_count + 1))
+        echo "BROKEN_EVIDENCE|$contract_id" >> "$drifts_file"
+      elif [[ "$has_evidence" == "false" ]]; then
+        # Evidence 없는 Contract → SNAPSHOT_GAP (아직 완성 안됨)
+        status="SNAPSHOT_GAP"
+        gap_count=$((gap_count + 1))
+      fi
+
+      # 매트릭스 상세 추가
+      local code_mark="-"
+      local doc_mark="O"
+      local ev_mark="-"
+      [[ "$in_snapshot" == "true" ]] && code_mark="O"
+      [[ "$has_evidence" == "true" && "$evidence_valid" == "true" ]] && ev_mark="O"
+      [[ "$has_evidence" == "true" && "$evidence_valid" == "false" ]] && ev_mark="X"
+
+      echo "| $spec_key | $contract_id | $code_mark | $doc_mark | $ev_mark | $status |" >> "$details_file"
+
+    done < "$contracts_file"
+  fi
+
+  # Snapshot에는 있지만 Contract가 없는 항목 (MISSING_DOC)
+  if [[ -f "$snapshot_routes" && -s "$snapshot_routes" ]]; then
+    while IFS= read -r route; do
+      [[ -z "$route" ]] && continue
+
+      # 해당 라우트에 대한 Contract가 있는지 확인
+      local has_contract=false
+      local route_lower=$(echo "$route" | tr '[:upper:]' '[:lower:]')
+
+      if [[ -f "$contracts_file" ]]; then
+        while IFS='|' read -r spec_key contract_id; do
+          local contract_lower=$(echo "$contract_id" | tr '[:upper:]' '[:lower:]' | sed 's/_/\//g')
+          if [[ "$route_lower" == *"$contract_lower"* || "$contract_lower" == *"${route_lower#/}"* ]]; then
+            has_contract=true
+            break
+          fi
+        done < "$contracts_file"
+      fi
+
+      if [[ "$has_contract" == "false" ]]; then
+        local spec_key=$(classify_spec_key "$route")
+        missing_count=$((missing_count + 1))
+        echo "| $spec_key | (없음) | O | X | - | MISSING_DOC |" >> "$details_file"
+        echo "MISSING_DOC|$route" >> "$drifts_file"
+      fi
+    done < "$snapshot_routes"
+  fi
+
+  # 5. 결과 출력
+  echo "검증 결과:"
+  echo -e "  SYNC:            ${GREEN}$sync_count${NC}"
+  echo -e "  MISSING_DOC:     ${YELLOW}$missing_count${NC}"
+  echo -e "  HALLUCINATION:   ${RED}$hallu_count${NC}"
+  echo -e "  BROKEN_EVIDENCE: ${RED}$broken_count${NC}"
+  echo -e "  SNAPSHOT_GAP:    ${CYAN}$gap_count${NC}"
+  echo ""
+
+  # 6. COVERAGE_MATRIX 갱신
+  update_coverage_matrix "$sync_count" "$missing_count" "$hallu_count" "$broken_count" "$gap_count" "$details_file" "$level"
+  print_success "COVERAGE_MATRIX.md 갱신됨"
+
+  # 7. DRIFT_REPORT 갱신
+  update_drift_report "$drifts_file"
+  print_success "DRIFT_REPORT.md 갱신됨"
+
+  # 8. CONTRACT_INDEX.md (디버그 모드)
+  if [[ "$debug_dump" == "true" ]]; then
+    local index_file="$SSOT_DIR/CONTRACT_INDEX.md"
+    cat > "$index_file" << EOF
+# CONTRACT_INDEX (Debug)
+
+> specctl verify --debug-dump로 생성됨
+
+## Evidence 목록
+
+| SPEC_KEY | Contract | Type | Value |
+|----------|----------|------|-------|
+EOF
+    if [[ -f "$evidence_file" ]]; then
+      while IFS='|' read -r spec_key contract ev_type ev_value; do
+        echo "| $spec_key | $contract | $ev_type | \`$ev_value\` |" >> "$index_file"
+      done < "$evidence_file"
+    fi
+    print_info "CONTRACT_INDEX.md 생성됨 (디버그용)"
+  fi
+
+  echo ""
+
+  # 9. 레벨별 처리
+  if [[ "$level" == "strict" ]]; then
+    if [[ $missing_count -gt 0 || $hallu_count -gt 0 || $broken_count -gt 0 ]]; then
+      print_error "strict 검증 실패!"
+      echo "  MISSING_DOC, HALLUCINATION, BROKEN_EVIDENCE가 0이어야 함"
+      echo ""
+      echo "  현재 상태:"
+      [[ $missing_count -gt 0 ]] && echo "    - MISSING_DOC: $missing_count개"
+      [[ $hallu_count -gt 0 ]] && echo "    - HALLUCINATION: $hallu_count개"
+      [[ $broken_count -gt 0 ]] && echo "    - BROKEN_EVIDENCE: $broken_count개"
+      echo ""
+      echo "  해결 방법:"
+      echo "    - DRIFT_REPORT.md 확인: $SSOT_DIR/DRIFT_REPORT.md"
+      echo "    - soft 모드로 먼저 확인: specctl verify --level=soft"
+      exit 1
+    else
+      print_success "strict 검증 통과"
+      if [[ $gap_count -gt 0 ]]; then
+        print_warning "SNAPSHOT_GAP $gap_count개 - 자동화 범위 확장 필요"
+      fi
+    fi
+  else
+    print_success "soft 검증 완료 (경고만 기록)"
+    if [[ $missing_count -gt 0 || $hallu_count -gt 0 || $broken_count -gt 0 ]]; then
+      print_warning "드리프트 발견: DRIFT_REPORT.md 확인"
+    fi
+  fi
+
+  echo ""
+  print_info "COVERAGE_MATRIX: $SSOT_DIR/COVERAGE_MATRIX.md"
+  print_info "DRIFT_REPORT: $SSOT_DIR/DRIFT_REPORT.md"
+}
+
+#######################################
+# 명령어: update
+#######################################
+
+cmd_update() {
+  print_header "[specctl update] Contract 업데이트 v$VERSION"
+  echo ""
+
+  # git diff 기반 변경 파일 감지
+  print_info "변경된 파일 감지 중..."
+
+  local changed_files="$TMP_DIR/changed_files.txt"
+
+  if git rev-parse --is-inside-work-tree > /dev/null 2>&1; then
+    # staged + unstaged 변경
+    git diff --name-only HEAD 2>/dev/null > "$changed_files" || true
+    git diff --name-only --cached 2>/dev/null >> "$changed_files" || true
+
+    # untracked 파일
+    git ls-files --others --exclude-standard 2>/dev/null >> "$changed_files" || true
+
+    # 중복 제거 및 소스 파일만 필터
+    sort -u "$changed_files" | grep -E '\.(ts|tsx|js|jsx)$' > "$TMP_DIR/source_changes.txt" 2>/dev/null || true
+
+    local change_count=$(wc -l < "$TMP_DIR/source_changes.txt" 2>/dev/null || echo 0)
+
+    if [[ $change_count -gt 0 ]]; then
+      print_success "변경된 소스 파일: ${change_count}개"
+      echo ""
+
+      echo "영향받는 SPEC_KEY 분석:"
+      local affected_specs="$TMP_DIR/affected_specs.txt"
+      > "$affected_specs"
+
+      while IFS= read -r file; do
+        [[ -z "$file" ]] && continue
+
+        # 파일 경로에서 SPEC_KEY 유추
+        local spec_key="UNCLASSIFIED"
+        if [[ "$file" == *"/auth/"* || "$file" == *"/login"* || "$file" == *"/logout"* ]]; then
+          spec_key="AUTH"
+        elif [[ "$file" == *"/user/"* || "$file" == *"/users/"* ]]; then
+          spec_key="USER"
+        elif [[ "$file" == *"/chat/"* ]]; then
+          spec_key="CHAT"
+        elif [[ "$file" == *"/api/"* ]]; then
+          spec_key="API"
+        fi
+
+        echo "$spec_key" >> "$affected_specs"
+        echo "  - $file → $spec_key"
+      done < "$TMP_DIR/source_changes.txt"
+
+      echo ""
+
+      # 고유 SPEC_KEY 추출
+      local unique_specs=$(sort -u "$affected_specs" | tr '\n' ', ' | sed 's/,$//')
+      print_info "영향받는 SPEC: $unique_specs"
+      echo ""
+
+      print_warning "위 SPEC 문서의 Contract/Evidence 검토 필요"
+      print_info "문서 위치: $SPECS_DIR/"
+    else
+      print_success "변경된 소스 파일 없음"
+    fi
+  else
+    print_warning "Git 저장소가 아닙니다. 수동 검토 필요."
+  fi
+
+  echo ""
+  print_info "Contract 수동 편집: $SPECS_DIR/<SPEC_KEY>.md"
+}
+
+#######################################
+# 명령어: compile
+#######################################
+
+cmd_compile() {
+  print_header "[specctl compile] 산출물 생성 v$VERSION"
+  echo ""
+
+  local today=$(get_date)
+  local timestamp=$(get_timestamp)
+
+  # DevSpec 생성
+  print_info "DEV_SPEC_LATEST.md 생성 중..."
+
+  mkdir -p "$DEVSPEC_DIR"
+  local devspec_file="$DEVSPEC_DIR/DEV_SPEC_LATEST.md"
+
+  cat > "$devspec_file" << EOF
+# 개발 사양서 (DEV_SPEC)
+
+> 자동 생성: specctl compile ($timestamp)
+
+---
+
+## 목차
+
+EOF
+
+  # specs/*.md 목록
+  local spec_count=0
+  if [[ -d "$SPECS_DIR" ]]; then
+    while IFS= read -r -d '' spec_file; do
+      local spec_name=$(basename "$spec_file" .md)
+      echo "- [$spec_name](#$spec_name)" >> "$devspec_file"
+      spec_count=$((spec_count + 1))
+    done < <(find "$SPECS_DIR" -name "*.md" -print0 2>/dev/null | sort -z)
+  fi
+
+  echo "" >> "$devspec_file"
+  echo "---" >> "$devspec_file"
+  echo "" >> "$devspec_file"
+
+  # 각 spec 내용 병합
+  if [[ -d "$SPECS_DIR" ]]; then
+    while IFS= read -r -d '' spec_file; do
+      local spec_name=$(basename "$spec_file" .md)
+      echo "## $spec_name" >> "$devspec_file"
+      echo "" >> "$devspec_file"
+
+      # 기능 요소만 추출 (FUNCTIONAL:BEGIN ~ FUNCTIONAL:END)
+      sed -n '/<!-- FUNCTIONAL:BEGIN -->/,/<!-- FUNCTIONAL:END -->/p' "$spec_file" 2>/dev/null | \
+        grep -v "FUNCTIONAL:BEGIN\|FUNCTIONAL:END" >> "$devspec_file" || true
+
+      echo "" >> "$devspec_file"
+      echo "---" >> "$devspec_file"
+      echo "" >> "$devspec_file"
+    done < <(find "$SPECS_DIR" -name "*.md" -print0 2>/dev/null | sort -z)
+  fi
+
+  cat >> "$devspec_file" << EOF
+
+---
+
+> **자동 생성**: $timestamp
+> **Spec 문서 수**: $spec_count
+EOF
+
+  print_success "DEV_SPEC_LATEST.md 생성 완료"
+
+  # User Manual 생성
+  print_info "USER_MANUAL_LATEST.md 생성 중..."
+
+  mkdir -p "$MANUALS_DIR"
+  local manual_file="$MANUALS_DIR/USER_MANUAL_LATEST.md"
+
+  cat > "$manual_file" << EOF
+# 사용자 매뉴얼
+
+> 자동 생성: specctl compile ($timestamp)
+
+---
+
+## 목차
+
+EOF
+
+  # specs/*.md 목록 (디자인 요소 기준)
+  if [[ -d "$SPECS_DIR" ]]; then
+    while IFS= read -r -d '' spec_file; do
+      local spec_name=$(basename "$spec_file" .md)
+      echo "- [$spec_name](#$spec_name)" >> "$manual_file"
+    done < <(find "$SPECS_DIR" -name "*.md" -print0 2>/dev/null | sort -z)
+  fi
+
+  echo "" >> "$manual_file"
+  echo "---" >> "$manual_file"
+  echo "" >> "$manual_file"
+
+  # 각 spec의 디자인 요소 병합
+  if [[ -d "$SPECS_DIR" ]]; then
+    while IFS= read -r -d '' spec_file; do
+      local spec_name=$(basename "$spec_file" .md)
+      echo "## $spec_name" >> "$manual_file"
+      echo "" >> "$manual_file"
+
+      # 디자인 요소만 추출 (DESIGN:BEGIN ~ DESIGN:END)
+      sed -n '/<!-- DESIGN:BEGIN -->/,/<!-- DESIGN:END -->/p' "$spec_file" 2>/dev/null | \
+        grep -v "DESIGN:BEGIN\|DESIGN:END" >> "$manual_file" || true
+
+      echo "" >> "$manual_file"
+      echo "---" >> "$manual_file"
+      echo "" >> "$manual_file"
+    done < <(find "$SPECS_DIR" -name "*.md" -print0 2>/dev/null | sort -z)
+  fi
+
+  cat >> "$manual_file" << EOF
+
+---
+
+> **자동 생성**: $timestamp
+EOF
+
+  print_success "USER_MANUAL_LATEST.md 생성 완료"
+
+  echo ""
+  print_info "DevSpec: $devspec_file"
+  print_info "Manual: $manual_file"
+}
+
+#######################################
+# 명령어: status
+#######################################
+
+cmd_status() {
+  print_header "[specctl status] 현재 상태 v$VERSION"
+  echo ""
+
+  echo -e "Version:        ${BLUE}$VERSION${NC}"
+  echo -e "Project:        ${BLUE}$(basename "$PROJECT_ROOT")${NC}"
+  echo ""
+
+  # SSOT 파일 존재 여부
+  echo "SSOT 파일:"
+  local files=("ANCHOR.md" "DOC_POLICY.md" "COVERAGE_MATRIX.md" "SPEC_SNAPSHOT.md" "DRIFT_REPORT.md" "DOC_DEBT.md")
+  for file in "${files[@]}"; do
+    if [[ -f "$SSOT_DIR/$file" ]]; then
+      print_success "$file"
+    else
+      print_warning "$file (없음)"
+    fi
+  done
+  echo ""
+
+  # Spec 문서 수
+  local spec_count=0
+  if [[ -d "$SPECS_DIR" ]]; then
+    spec_count=$(find "$SPECS_DIR" -name "*.md" 2>/dev/null | wc -l)
+  fi
+  echo -e "Spec 문서:      ${GREEN}$spec_count${NC}개"
+
+  # Contract 수
+  local contract_count=0
+  if [[ -d "$SPECS_DIR" ]]; then
+    contract_count=$(grep -r "^### Contract:" "$SPECS_DIR" 2>/dev/null | wc -l || echo 0)
+  fi
+  echo -e "Contract:       ${GREEN}$contract_count${NC}개"
+
+  # 마지막 검증 정보
+  if [[ -f "$SSOT_DIR/COVERAGE_MATRIX.md" ]]; then
+    local last_verify=$(grep -E "^\| \*\*마지막 검증\*\*" "$SSOT_DIR/COVERAGE_MATRIX.md" 2>/dev/null | head -1 | cut -d'|' -f3 | xargs)
+    [[ -n "$last_verify" ]] && echo -e "마지막 검증:   ${CYAN}$last_verify${NC}"
+  fi
+
+  echo ""
+  print_info "ANCHOR: $SSOT_DIR/ANCHOR.md"
+  print_info "Specs: $SPECS_DIR/"
+}
+
+#######################################
+# 도움말
+#######################################
+
+show_help() {
+  cat << EOF
+specctl - DocOps CLI v$VERSION
+
+사용법: specctl <command> [options]
+
+명령어:
+  snapshot [--suggest|--apply] [--type=TYPE]
+                        코드 인벤토리 추출
+  verify [--level=soft|strict] [--cache|--full] [--debug-dump]
+                        문서-코드 검증
+  update                diff 기반 Contract 업데이트 제안
+  compile               산출물 생성 (DevSpec/Manual)
+  status                현재 상태 확인
+  help                  도움말
+
+옵션:
+  snapshot:
+    --suggest           후보 인벤토리 제안 (적용 안함)
+    --apply             후보를 SPEC_SNAPSHOT.md에 적용
+    --type=TYPE         특정 유형만 (ui-routes|api-routes)
+    (기본값)             --apply와 동일
+
+  verify:
+    --level=soft        경고만 (기본값)
+    --level=strict      실패 시 차단
+    --cache             (예약: 변경된 항목만 검증)
+    --full              전체 검증 (기본값)
+    --debug-dump        CONTRACT_INDEX.md 생성
+
+예시:
+  specctl snapshot --suggest    # 후보만 확인
+  specctl snapshot              # SPEC_SNAPSHOT.md 갱신
+  specctl verify --level=soft   # 경고만
+  specctl verify --level=strict # 드리프트 시 실패
+  specctl update                # 변경 파일 기반 제안
+  specctl compile               # DevSpec/Manual 생성
+  specctl status                # 현재 상태
+
+워크플로우:
+  1. specctl snapshot       # 코드 인벤토리 갱신
+  2. specctl verify         # 검증
+  3. specctl compile        # 산출물 생성
+  4. npm run flow:finish    # 전체 워크플로우
+
+EOF
+}
+
+#######################################
+# 메인
+#######################################
+
+main() {
+  local cmd="${1:-help}"
+  shift || true
+
+  case "$cmd" in
+    snapshot)
+      cmd_snapshot "$@"
+      ;;
+    verify)
+      cmd_verify "$@"
+      ;;
+    update)
+      cmd_update "$@"
+      ;;
+    compile)
+      cmd_compile "$@"
+      ;;
+    status)
+      cmd_status
+      ;;
+    help|--help|-h)
+      show_help
+      ;;
+    --version|-v)
+      echo "specctl v$VERSION"
+      ;;
+    *)
+      print_error "알 수 없는 명령어: $cmd"
+      show_help
+      exit 1
+      ;;
+  esac
+}
+
+main "$@"
