@@ -16,6 +16,8 @@ import { SpaceEventType } from "@prisma/client"
 
 // Cron secret for verification
 const CRON_SECRET = process.env.CRON_SECRET
+// 명시적 우회 플래그 (개발 환경에서만 CRON_AUTH_BYPASS=true로 설정)
+const BYPASS_CRON_AUTH = process.env.CRON_AUTH_BYPASS === "true"
 
 // ============================================
 // POST /api/cron/aggregate-usage
@@ -25,10 +27,8 @@ export async function POST(request: NextRequest) {
     // 1. Cron 인증 검증
     const authHeader = request.headers.get("authorization")
 
-    if (CRON_SECRET && authHeader !== `Bearer ${CRON_SECRET}`) {
-      if (process.env.NODE_ENV !== "development") {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-      }
+    if (!BYPASS_CRON_AUTH && (!CRON_SECRET || authHeader !== `Bearer ${CRON_SECRET}`)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     const now = new Date()

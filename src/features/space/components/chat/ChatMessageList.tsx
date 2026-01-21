@@ -15,6 +15,7 @@
  */
 import { useRef, useState, useEffect, useCallback, useImperativeHandle, forwardRef, useMemo, memo } from "react"
 import { cn } from "@/lib/utils"
+import { sanitizeMessage } from "@/lib/sanitize"
 import type { ChatMessage, ReactionType, MessageReaction, ReplyTo, ChatFontSize } from "../../types/space.types"
 import { CHAT_FONT_SIZES } from "../../types/space.types"
 import type { PlayerPosition } from "../../socket/types"
@@ -115,7 +116,9 @@ interface LinkifiedContentProps {
 }
 
 function LinkifiedContent({ content, className }: LinkifiedContentProps) {
-  const segments = useMemo(() => parseContentWithUrls(content), [content])
+  // 🛡️ XSS 방지: 렌더링 전 sanitize
+  const sanitizedContent = useMemo(() => sanitizeMessage(content), [content])
+  const segments = useMemo(() => parseContentWithUrls(sanitizedContent), [sanitizedContent])
 
   return (
     <span className={className}>

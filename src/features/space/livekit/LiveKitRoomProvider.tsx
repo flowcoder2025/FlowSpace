@@ -13,8 +13,14 @@
  */
 
 import { useState, useEffect, useCallback, useMemo, ReactNode } from "react"
-import { LiveKitRoom } from "@livekit/components-react"
+import dynamic from "next/dynamic"
 import { RoomOptions } from "livekit-client"
+
+// 📦 번들 최적화: LiveKitRoom을 dynamic import로 코드 분할
+const LiveKitRoom = dynamic(
+  () => import("@livekit/components-react").then((mod) => mod.LiveKitRoom),
+  { ssr: false }
+)
 import { LiveKitMediaInternalProvider } from "./LiveKitMediaContext"
 import { useAudioSettings } from "../hooks/useAudioSettings"
 import { useVideoSettings } from "../hooks/useVideoSettings"

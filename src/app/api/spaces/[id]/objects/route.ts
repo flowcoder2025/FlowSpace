@@ -7,15 +7,18 @@
  */
 
 import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { SenderType, Prisma } from "@prisma/client"
-
-// ============================================
-// Configuration
-// ============================================
-const IS_DEV = process.env.NODE_ENV === "development"
-const DEV_TEST_USER_ID = "test-user-dev-001"
+import { canManageSpace } from "@/lib/space-auth"
+import {
+  IS_DEV,
+  getUserIdFromSession,
+  validateId,
+  invalidIdResponse,
+  unauthorizedResponse,
+  forbiddenResponse,
+  notFoundResponse,
+} from "@/lib/api-helpers"
 
 // ============================================
 // Types
@@ -40,66 +43,14 @@ interface DeleteObjectBody {
 }
 
 // ============================================
-// Helper Functions
-// ============================================
-async function getUserId(): Promise<string | null> {
-  const session = await auth()
-
-  if (session?.user?.id) {
-    return session.user.id
-  }
-
-  if (IS_DEV) {
-    console.warn("[Objects API] Using dev test user - not for production!")
-    return DEV_TEST_USER_ID
-  }
-
-  return null
-}
-
-/**
- * 공간 접근 권한 확인 (Owner 또는 Staff)
- */
-async function checkSpaceAccess(
-  spaceId: string,
-  userId: string
-): Promise<{ allowed: boolean; isOwner: boolean }> {
-  const space = await prisma.space.findUnique({
-    where: { id: spaceId, deletedAt: null },
-    select: { ownerId: true },
-  })
-
-  if (!space) {
-    return { allowed: false, isOwner: false }
-  }
-
-  const isOwner = space.ownerId === userId
-
-  if (isOwner) {
-    return { allowed: true, isOwner: true }
-  }
-
-  // Staff 권한 확인
-  const membership = await prisma.spaceMember.findFirst({
-    where: {
-      spaceId,
-      userId,
-      role: { in: ["OWNER", "STAFF"] },
-    },
-  })
-
-  return { allowed: !!membership, isOwner: false }
-}
-
-// ============================================
 // GET /api/spaces/[id]/objects - 맵 오브젝트 목록 조회
 // ============================================
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
     const { id: spaceId } = await params
 
-    if (!spaceId || spaceId.length > 100) {
-      return NextResponse.json({ error: "Invalid space ID" }, { status: 400 })
+    if (!validateId(spaceId)) {
+      return invalidIdResponse("space ID")
     }
 
     // 공간 존재 여부 확인
@@ -109,7 +60,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     })
 
     if (!space) {
-      return NextResponse.json({ error: "Space not found" }, { status: 404 })
+      return notFoundResponse("Space")
     }
 
     // 맵 오브젝트 조회
@@ -139,20 +90,20 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
     const { id: spaceId } = await params
 
-    if (!spaceId || spaceId.length > 100) {
-      return NextResponse.json({ error: "Invalid space ID" }, { status: 400 })
+    if (!validateId(spaceId)) {
+      return invalidIdResponse("space ID")
     }
 
     // 인증 확인
-    const userId = await getUserId()
+    const userId = await getUserIdFromSession(true)
     if (!userId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return unauthorizedResponse()
     }
 
-    // 접근 권한 확인
-    const { allowed } = await checkSpaceAccess(spaceId, userId)
+    // 접근 권한 확인 (space-auth.ts의 통합 함수 사용)
+    const allowed = await canManageSpace(userId, spaceId)
     if (!allowed) {
-      return NextResponse.json({ error: "Forbidden - Only owner or staff can place objects" }, { status: 403 })
+      return forbiddenResponse("Only owner or staff can place objects")
     }
 
     // Request body 파싱
@@ -219,20 +170,20 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
     const { id: spaceId } = await params
 
-    if (!spaceId || spaceId.length > 100) {
-      return NextResponse.json({ error: "Invalid space ID" }, { status: 400 })
+    if (!validateId(spaceId)) {
+      return invalidIdResponse("space ID")
     }
 
     // 인증 확인
-    const userId = await getUserId()
+    const userId = await getUserIdFromSession(true)
     if (!userId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return unauthorizedResponse()
     }
 
     // 접근 권한 확인
-    const { allowed } = await checkSpaceAccess(spaceId, userId)
+    const allowed = await canManageSpace(userId, spaceId)
     if (!allowed) {
-      return NextResponse.json({ error: "Forbidden - Only owner or staff can delete objects" }, { status: 403 })
+      return forbiddenResponse("Only owner or staff can delete objects")
     }
 
     // Request body 파싱
@@ -288,20 +239,20 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
     const { id: spaceId } = await params
 
-    if (!spaceId || spaceId.length > 100) {
-      return NextResponse.json({ error: "Invalid space ID" }, { status: 400 })
+    if (!validateId(spaceId)) {
+      return invalidIdResponse("space ID")
     }
 
     // 인증 확인
-    const userId = await getUserId()
+    const userId = await getUserIdFromSession(true)
     if (!userId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return unauthorizedResponse()
     }
 
     // 접근 권한 확인
-    const { allowed } = await checkSpaceAccess(spaceId, userId)
+    const allowed = await canManageSpace(userId, spaceId)
     if (!allowed) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+      return forbiddenResponse()
     }
 
     // Request body 파싱

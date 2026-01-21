@@ -8,10 +8,17 @@
  */
 
 import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { SpaceRole } from "@prisma/client"
-import { isSuperAdmin } from "@/lib/space-auth"
+import { isSuperAdmin, canManageSpace } from "@/lib/space-auth"
+import {
+  getUserIdFromSession,
+  validateId,
+  invalidIdResponse,
+  unauthorizedResponse,
+  forbiddenResponse,
+  notFoundResponse,
+} from "@/lib/api-helpers"
 
 // ============================================
 // Types
@@ -37,37 +44,10 @@ interface RemoveMemberBody {
 // ============================================
 // Helper Functions
 // ============================================
-async function getUserId(): Promise<string | null> {
-  const session = await auth()
-  return session?.user?.id ?? null
-}
 
-async function canManageMembers(spaceId: string, userId: string): Promise<boolean> {
-  // 1. SuperAdmin은 모든 공간의 멤버 관리 가능
-  if (await isSuperAdmin(userId)) {
-    return true
-  }
-
-  // 2. 공간 소유자 확인 (DB의 ownerId)
-  const space = await prisma.space.findUnique({
-    where: { id: spaceId, deletedAt: null },
-    select: { ownerId: true },
-  })
-  if (space?.ownerId === userId) {
-    return true
-  }
-
-  // 3. SpaceMember에서 OWNER 역할 확인 (복수 OWNER 지원)
-  const ownerMembership = await prisma.spaceMember.findFirst({
-    where: {
-      spaceId,
-      userId,
-      role: SpaceRole.OWNER,
-    },
-  })
-  return !!ownerMembership
-}
-
+/**
+ * 사용자가 공간의 OWNER인지 확인
+ */
 async function isSpaceOwner(spaceId: string, userId: string): Promise<boolean> {
   // DB의 ownerId 확인
   const space = await prisma.space.findUnique({
@@ -100,23 +80,20 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const includePresence = searchParams.get("includePresence") === "true"
 
     // ID 형식 검증
-    if (!spaceId || spaceId.length > 100) {
-      return NextResponse.json(
-        { error: "Invalid space ID" },
-        { status: 400 }
-      )
+    if (!validateId(spaceId)) {
+      return invalidIdResponse("space ID")
     }
 
     // 인증 확인
-    const userId = await getUserId()
+    const userId = await getUserIdFromSession()
     if (!userId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return unauthorizedResponse()
     }
 
-    // OWNER 또는 SuperAdmin 권한 확인
-    const canManage = await canManageMembers(spaceId, userId)
+    // OWNER 또는 SuperAdmin 권한 확인 (space-auth.ts 사용)
+    const canManage = await canManageSpace(userId, spaceId)
     if (!canManage) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+      return forbiddenResponse()
     }
 
     // 공간 정보 조회 (원본 소유자 정보 포함)
@@ -137,7 +114,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     })
 
     if (!space) {
-      return NextResponse.json({ error: "Space not found" }, { status: 404 })
+      return notFoundResponse("Space")
     }
 
     // 멤버 목록 조회 (전체 또는 역할별 필터)
@@ -279,17 +256,14 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const { id: spaceId } = await params
 
     // ID 형식 검증
-    if (!spaceId || spaceId.length > 100) {
-      return NextResponse.json(
-        { error: "Invalid space ID" },
-        { status: 400 }
-      )
+    if (!validateId(spaceId)) {
+      return invalidIdResponse("space ID")
     }
 
     // 인증 확인
-    const userId = await getUserId()
+    const userId = await getUserIdFromSession()
     if (!userId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return unauthorizedResponse()
     }
 
     // Request body 파싱
@@ -311,7 +285,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     // 모든 역할 임명은 OWNER 또는 SuperAdmin
     if (!userIsSuperAdmin && !userIsOwner) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+      return forbiddenResponse()
     }
 
     // 자기 자신을 스태프로 추가하는 것 방지 (SuperAdmin은 예외)
@@ -431,17 +405,14 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const { id: spaceId } = await params
 
     // ID 형식 검증
-    if (!spaceId || spaceId.length > 100) {
-      return NextResponse.json(
-        { error: "Invalid space ID" },
-        { status: 400 }
-      )
+    if (!validateId(spaceId)) {
+      return invalidIdResponse("space ID")
     }
 
     // 인증 확인
-    const userId = await getUserId()
+    const userId = await getUserIdFromSession()
     if (!userId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return unauthorizedResponse()
     }
 
     // Request body 파싱
@@ -468,7 +439,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     // 기본 권한 검증: OWNER 또는 SuperAdmin만 역할 변경 가능
     if (!userIsSuperAdmin && !userIsOwner) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+      return forbiddenResponse()
     }
 
     // 📊 Phase 3.14: 자기 자신 역할 변경 방지 (SuperAdmin은 예외)
@@ -606,23 +577,20 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     const { id: spaceId } = await params
 
     // ID 형식 검증
-    if (!spaceId || spaceId.length > 100) {
-      return NextResponse.json(
-        { error: "Invalid space ID" },
-        { status: 400 }
-      )
+    if (!validateId(spaceId)) {
+      return invalidIdResponse("space ID")
     }
 
     // 인증 확인
-    const userId = await getUserId()
+    const userId = await getUserIdFromSession()
     if (!userId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return unauthorizedResponse()
     }
 
-    // OWNER 또는 SuperAdmin 권한 확인
-    const canManage = await canManageMembers(spaceId, userId)
+    // OWNER 또는 SuperAdmin 권한 확인 (space-auth.ts 사용)
+    const canManage = await canManageSpace(userId, spaceId)
     if (!canManage) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+      return forbiddenResponse()
     }
 
     // Request body 파싱
@@ -655,10 +623,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     })
 
     if (!member) {
-      return NextResponse.json(
-        { error: "Member not found" },
-        { status: 404 }
-      )
+      return notFoundResponse("Member")
     }
 
     // OWNER는 삭제 불가 (SuperAdmin도 불가 - 안전장치)

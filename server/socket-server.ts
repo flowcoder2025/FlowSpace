@@ -144,6 +144,33 @@ const ErrorCodes = {
 type ErrorCode = keyof typeof ErrorCodes
 type LogLevel = "info" | "warn" | "error"
 
+// ============================================
+// 🛡️ XSS 방지: 서버 측 메시지 sanitize (HTML 태그 제거)
+// ============================================
+function sanitizeMessageContent(content: string): string {
+  // 1. HTML 태그 제거
+  let text = content.replace(/<[^>]*>/g, "")
+
+  // 2. HTML 엔티티 디코딩
+  text = text
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#x27;/g, "'")
+    .replace(/&#x2F;/g, "/")
+
+  // 3. 위험 문자 이스케이프
+  const escapeMap: Record<string, string> = {
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#x27;",
+  }
+  return text.replace(/[&<>"']/g, (char) => escapeMap[char] || char)
+}
+
 interface LogContext {
   sessionId?: string
   spaceId?: string
@@ -1261,7 +1288,7 @@ io.on("connection", (socket) => {
         id: tempId,
         senderId: playerId,
         senderNickname: nickname || "Unknown",
-        content: content.trim(),
+        content: sanitizeMessageContent(content.trim()),
         timestamp: now,
         type: "message",
         ...(replyTo && { replyTo }),
@@ -1278,7 +1305,7 @@ io.on("connection", (socket) => {
           senderId,
           senderType,
           senderName: nickname || "Unknown",
-          content: content.trim(),
+          content: sanitizeMessageContent(content.trim()),
           type: "MESSAGE",
         },
       }).then((savedMessage) => {
@@ -1378,7 +1405,7 @@ io.on("connection", (socket) => {
       id: tempId,
       senderId: playerId,
       senderNickname: nickname || "Unknown",
-      content: content.trim(),
+      content: sanitizeMessageContent(content.trim()),
       timestamp: Date.now(),
       type: "whisper",
       targetId: targetPlayerId,
@@ -1409,7 +1436,7 @@ io.on("connection", (socket) => {
         senderId,
         senderType,
         senderName: nickname || "Unknown",
-        content: content.trim(),
+        content: sanitizeMessageContent(content.trim()),
         type: "WHISPER",
         targetId: targetPlayerId,  // 귓속말 대상 ID (targetName은 클라이언트에서 관리)
       },
@@ -1528,7 +1555,7 @@ io.on("connection", (socket) => {
       id: tempId,
       senderId: playerId,
       senderNickname: nickname || "Unknown",
-      content: content.trim(),
+      content: sanitizeMessageContent(content.trim()),
       timestamp: now,
       type: "party",
       partyId,
@@ -1548,7 +1575,7 @@ io.on("connection", (socket) => {
         senderId,
         senderType,
         senderName: nickname || "Unknown",
-        content: content.trim(),
+        content: sanitizeMessageContent(content.trim()),
         type: "PARTY",
         targetId: partyId, // 파티 ID를 targetId로 저장
       },

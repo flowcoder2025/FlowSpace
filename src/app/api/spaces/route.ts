@@ -6,18 +6,13 @@
  */
 
 import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { createSpaceOwner, canCreateSpace } from "@/lib/space-auth"
 import { SpaceAccessType, SpaceStatus, TemplateKey } from "@prisma/client"
-
-// ============================================
-// Configuration
-// ============================================
-const IS_DEV = process.env.NODE_ENV === "development"
-
-// 개발환경 테스트용 사용자 ID (seed.ts의 TEST_USER_ID와 동일)
-const DEV_TEST_USER_ID = "test-user-dev-001"
+import {
+  IS_DEV,
+  getUserIdFromSession,
+} from "@/lib/api-helpers"
 
 // ============================================
 // Types
@@ -39,18 +34,8 @@ interface CreateSpaceBody {
 export async function POST(request: NextRequest) {
   try {
     // 1. 인증 확인
-    const session = await auth()
-    let ownerId: string
-
-    if (session?.user?.id) {
-      // 인증된 사용자
-      ownerId = session.user.id
-    } else if (IS_DEV) {
-      // 개발 환경에서만 테스트 사용자 허용
-      console.warn("[Spaces API] Using dev test user - not for production!")
-      ownerId = DEV_TEST_USER_ID
-    } else {
-      // 운영 환경에서는 인증 필수
+    const ownerId = await getUserIdFromSession(true) // 개발 환경에서 테스트 사용자 허용
+    if (!ownerId) {
       return NextResponse.json(
         { error: "Unauthorized" },
         { status: 401 }

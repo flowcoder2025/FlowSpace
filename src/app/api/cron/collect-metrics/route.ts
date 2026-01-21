@@ -19,11 +19,18 @@ import {
 
 // OCI 서버 내부 URL (서버 사이드 전용 - Cloudflare 우회)
 // Vercel Cron에서 OCI 서버로 직접 연결
-const OCI_INTERNAL_IP = process.env.OCI_INTERNAL_IP || "144.24.72.143"
-const SOCKET_INTERNAL_URL = `http://${OCI_INTERNAL_IP}:3001`
+const OCI_INTERNAL_IP = process.env.OCI_INTERNAL_IP
+const SOCKET_INTERNAL_URL = OCI_INTERNAL_IP ? `http://${OCI_INTERNAL_IP}:3001` : null
+
+// OCI_INTERNAL_IP 미설정 시 경고
+if (!OCI_INTERNAL_IP) {
+  console.warn("[Config] OCI_INTERNAL_IP not set - Socket metrics collection disabled")
+}
 
 // Cron secret for verification (Vercel Cron)
 const CRON_SECRET = process.env.CRON_SECRET
+// 명시적 우회 플래그 (개발 환경에서만 CRON_AUTH_BYPASS=true로 설정)
+const BYPASS_CRON_AUTH = process.env.CRON_AUTH_BYPASS === "true"
 
 // ============================================
 // POST /api/cron/collect-metrics
@@ -33,15 +40,11 @@ export async function POST(request: NextRequest) {
     // 1. Cron 인증 검증 (Vercel Cron 또는 수동 호출)
     const authHeader = request.headers.get("authorization")
 
-    if (CRON_SECRET && authHeader !== `Bearer ${CRON_SECRET}`) {
-      // 개발 환경에서는 경고만
-      if (process.env.NODE_ENV !== "development") {
-        return NextResponse.json(
-          { error: "Unauthorized" },
-          { status: 401 }
-        )
-      }
-      console.warn("[Collect Metrics] Running without CRON_SECRET in development")
+    if (!BYPASS_CRON_AUTH && (!CRON_SECRET || authHeader !== `Bearer ${CRON_SECRET}`)) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      )
     }
 
     // 2. 메트릭 수집 (병렬 실행)
@@ -159,6 +162,11 @@ interface SocketServerMetrics {
 }
 
 async function fetchSocketMetrics(): Promise<SocketServerMetrics | null> {
+  if (!SOCKET_INTERNAL_URL) {
+    console.warn("[Collect Metrics] Socket metrics skipped - OCI_INTERNAL_IP not configured")
+    return null
+  }
+
   const url = `${SOCKET_INTERNAL_URL}/metrics`
   try {
     console.log(`[Collect Metrics] Fetching socket metrics from: ${url}`)

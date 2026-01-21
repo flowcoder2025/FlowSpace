@@ -38,9 +38,14 @@ const LIVEKIT_SERVER_URL =
 
 // OCI 서버 내부 URL (서버 사이드 전용 - Cloudflare 우회)
 // Vercel 서버리스 함수에서 OCI 서버로 직접 연결
-const OCI_INTERNAL_IP = process.env.OCI_INTERNAL_IP || "144.24.72.143"
-const SOCKET_INTERNAL_URL = `http://${OCI_INTERNAL_IP}:3001`
-const LIVEKIT_INTERNAL_URL = `http://${OCI_INTERNAL_IP}:7880`
+const OCI_INTERNAL_IP = process.env.OCI_INTERNAL_IP
+const SOCKET_INTERNAL_URL = OCI_INTERNAL_IP ? `http://${OCI_INTERNAL_IP}:3001` : null
+const LIVEKIT_INTERNAL_URL = OCI_INTERNAL_IP ? `http://${OCI_INTERNAL_IP}:7880` : null
+
+// OCI_INTERNAL_IP 미설정 시 경고 (한 번만 출력)
+if (!OCI_INTERNAL_IP) {
+  console.warn("[Config] OCI_INTERNAL_IP not set - Direct server access disabled")
+}
 
 // ============================================
 // 타입 정의
@@ -152,7 +157,7 @@ export async function GET() {
     // 응답 구성
     const response = {
       timestamp: Date.now(),
-      serverIP: OCI_INTERNAL_IP,
+      serverConfigured: !!OCI_INTERNAL_IP,
 
       // OCI API 연동 상태
       ociStatus: {
@@ -312,6 +317,10 @@ interface FetchResult<T> {
 }
 
 async function fetchSocketMetrics(): Promise<FetchResult<SocketServerMetrics>> {
+  if (!SOCKET_INTERNAL_URL) {
+    return { data: null, error: "OCI_INTERNAL_IP not configured", url: undefined }
+  }
+
   const url = `${SOCKET_INTERNAL_URL}/metrics`
   try {
     console.log(`[OCI Metrics] Fetching socket metrics from: ${url}`)
@@ -340,6 +349,10 @@ async function fetchSocketMetrics(): Promise<FetchResult<SocketServerMetrics>> {
  * LiveKit 서버 상태 조회 (직접 IP로 접근 - Cloudflare 우회)
  */
 async function fetchLiveKitHealth(): Promise<FetchResult<{ status: string }>> {
+  if (!LIVEKIT_INTERNAL_URL) {
+    return { data: null, error: "OCI_INTERNAL_IP not configured", url: undefined }
+  }
+
   const url = LIVEKIT_INTERNAL_URL
   try {
     console.log(`[OCI Metrics] Fetching LiveKit health from: ${url}`)

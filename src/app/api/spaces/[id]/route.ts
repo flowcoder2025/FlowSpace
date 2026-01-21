@@ -7,17 +7,15 @@
  */
 
 import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { SpaceAccessType, SpaceStatus } from "@prisma/client"
-
-// ============================================
-// Configuration
-// ============================================
-const IS_DEV = process.env.NODE_ENV === "development"
-
-// 개발환경 테스트용 사용자 ID (seed.ts의 TEST_USER_ID와 동일)
-const DEV_TEST_USER_ID = "test-user-dev-001"
+import {
+  IS_DEV,
+  getUserIdFromSession,
+  validateId,
+  invalidIdResponse,
+  unauthorizedResponse,
+} from "@/lib/api-helpers"
 
 // ============================================
 // Types
@@ -36,24 +34,6 @@ interface UpdateSpaceBody {
 
 interface RouteParams {
   params: Promise<{ id: string }>
-}
-
-// ============================================
-// Helper Functions
-// ============================================
-async function getUserId(): Promise<string | null> {
-  const session = await auth()
-
-  if (session?.user?.id) {
-    return session.user.id
-  }
-
-  if (IS_DEV) {
-    console.warn("[Spaces API] Using dev test user - not for production!")
-    return DEV_TEST_USER_ID
-  }
-
-  return null
 }
 
 /**
@@ -75,11 +55,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const { id } = await params
 
     // ID 형식 검증
-    if (!id || id.length > 100) {
-      return NextResponse.json(
-        { error: "Invalid space ID" },
-        { status: 400 }
-      )
+    if (!validateId(id)) {
+      return invalidIdResponse("space ID")
     }
 
     const space = await prisma.space.findUnique({
@@ -122,22 +99,16 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
     // 1. 인증 확인
-    const userId = await getUserId()
+    const userId = await getUserIdFromSession(true)
     if (!userId) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      )
+      return unauthorizedResponse()
     }
 
     const { id } = await params
 
     // 2. ID 형식 검증
-    if (!id || id.length > 100) {
-      return NextResponse.json(
-        { error: "Invalid space ID" },
-        { status: 400 }
-      )
+    if (!validateId(id)) {
+      return invalidIdResponse("space ID")
     }
 
     // 3. Request body 파싱
@@ -219,22 +190,16 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
     // 1. 인증 확인
-    const userId = await getUserId()
+    const userId = await getUserIdFromSession(true)
     if (!userId) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      )
+      return unauthorizedResponse()
     }
 
     const { id } = await params
 
     // 2. ID 형식 검증
-    if (!id || id.length > 100) {
-      return NextResponse.json(
-        { error: "Invalid space ID" },
-        { status: 400 }
-      )
+    if (!validateId(id)) {
+      return invalidIdResponse("space ID")
     }
 
     // 3. 공간 조회

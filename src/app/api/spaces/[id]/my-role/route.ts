@@ -5,18 +5,15 @@
  */
 
 import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { SpaceRole } from "@prisma/client"
 import { isSuperAdmin } from "@/lib/space-auth"
-
-// ============================================
-// Configuration
-// ============================================
-const IS_DEV = process.env.NODE_ENV === "development"
-
-// 개발환경 테스트용 사용자 ID
-const DEV_TEST_USER_ID = "test-user-dev-001"
+import {
+  getUserIdFromSession,
+  validateId,
+  invalidIdResponse,
+  notFoundResponse,
+} from "@/lib/api-helpers"
 
 // ============================================
 // Types
@@ -36,24 +33,6 @@ interface RoleResponse {
 }
 
 // ============================================
-// Helper Functions
-// ============================================
-async function getUserId(): Promise<string | null> {
-  const session = await auth()
-
-  if (session?.user?.id) {
-    return session.user.id
-  }
-
-  if (IS_DEV) {
-    console.warn("[My Role API] Using dev test user - not for production!")
-    return DEV_TEST_USER_ID
-  }
-
-  return null
-}
-
-// ============================================
 // GET /api/spaces/[id]/my-role - 현재 사용자의 역할 조회
 // ============================================
 export async function GET(request: NextRequest, { params }: RouteParams) {
@@ -61,15 +40,12 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const { id: spaceId } = await params
 
     // ID 형식 검증
-    if (!spaceId || spaceId.length > 100) {
-      return NextResponse.json(
-        { error: "Invalid space ID" },
-        { status: 400 }
-      )
+    if (!validateId(spaceId)) {
+      return invalidIdResponse("space ID")
     }
 
-    // 사용자 ID 확인 (로그인 필수)
-    const userId = await getUserId()
+    // 사용자 ID 확인 (로그인 필수, 개발환경 폴백 허용)
+    const userId = await getUserIdFromSession(true)
 
     // 🎫 게스트는 항상 PARTICIPANT
     if (!userId) {
@@ -95,7 +71,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     })
 
     if (!space) {
-      return NextResponse.json({ error: "Space not found" }, { status: 404 })
+      return notFoundResponse("Space")
     }
 
     // 🛡️ SpaceMember에서 역할 확인

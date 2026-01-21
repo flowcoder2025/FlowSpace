@@ -10,44 +10,14 @@
  */
 
 import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
-import { SpaceRole } from "@prisma/client"
-import { isSuperAdmin } from "@/lib/space-auth"
-
-// ============================================
-// Helper Functions
-// ============================================
-async function getUserId(): Promise<string | null> {
-  const session = await auth()
-  return session?.user?.id ?? null
-}
-
-async function canManageSpotlight(spaceId: string, userId: string): Promise<boolean> {
-  // 1. SuperAdmin은 모든 공간의 스포트라이트 관리 가능
-  if (await isSuperAdmin(userId)) {
-    return true
-  }
-
-  // 2. 공간 소유자 확인 (DB의 ownerId)
-  const space = await prisma.space.findUnique({
-    where: { id: spaceId, deletedAt: null },
-    select: { ownerId: true },
-  })
-  if (space?.ownerId === userId) {
-    return true
-  }
-
-  // 3. SpaceMember에서 OWNER 또는 STAFF 역할 확인
-  const membership = await prisma.spaceMember.findFirst({
-    where: {
-      spaceId,
-      userId,
-      role: { in: [SpaceRole.OWNER, SpaceRole.STAFF] },
-    },
-  })
-  return !!membership
-}
+import { canManageSpace } from "@/lib/space-auth"
+import {
+  getUserIdFromSession,
+  unauthorizedResponse,
+  forbiddenResponse,
+  notFoundResponse,
+} from "@/lib/api-helpers"
 
 // GET /api/spaces/[id]/spotlight - 스포트라이트 권한 목록
 export async function GET(
@@ -131,23 +101,17 @@ export async function POST(
 ) {
   try {
     const { id: spaceId } = await params
-    const userId = await getUserId()
+    const userId = await getUserIdFromSession()
 
     // 인증 확인
     if (!userId) {
-      return NextResponse.json(
-        { error: "인증이 필요합니다." },
-        { status: 401 }
-      )
+      return unauthorizedResponse()
     }
 
-    // 권한 확인 (STAFF 이상)
-    const canManage = await canManageSpotlight(spaceId, userId)
+    // 권한 확인 (STAFF 이상) - space-auth.ts의 통합 함수 사용
+    const canManage = await canManageSpace(userId, spaceId)
     if (!canManage) {
-      return NextResponse.json(
-        { error: "스포트라이트 권한을 부여할 권한이 없습니다." },
-        { status: 403 }
-      )
+      return forbiddenResponse("스포트라이트 권한을 부여할 권한이 없습니다.")
     }
 
     const body = await request.json()
@@ -228,23 +192,17 @@ export async function DELETE(
 ) {
   try {
     const { id: spaceId } = await params
-    const userId = await getUserId()
+    const userId = await getUserIdFromSession()
 
     // 인증 확인
     if (!userId) {
-      return NextResponse.json(
-        { error: "인증이 필요합니다." },
-        { status: 401 }
-      )
+      return unauthorizedResponse()
     }
 
-    // 권한 확인 (STAFF 이상)
-    const canManage = await canManageSpotlight(spaceId, userId)
+    // 권한 확인 (STAFF 이상) - space-auth.ts의 통합 함수 사용
+    const canManage = await canManageSpace(userId, spaceId)
     if (!canManage) {
-      return NextResponse.json(
-        { error: "스포트라이트 권한을 취소할 권한이 없습니다." },
-        { status: 403 }
-      )
+      return forbiddenResponse("스포트라이트 권한을 취소할 권한이 없습니다.")
     }
 
     const { searchParams } = new URL(request.url)
@@ -275,10 +233,7 @@ export async function DELETE(
     }
 
     if (!grant) {
-      return NextResponse.json(
-        { error: "스포트라이트 권한을 찾을 수 없습니다." },
-        { status: 404 }
-      )
+      return notFoundResponse("스포트라이트 권한")
     }
 
     // 권한 삭제
