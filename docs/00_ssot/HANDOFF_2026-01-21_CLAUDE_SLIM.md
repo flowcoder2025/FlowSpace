@@ -178,4 +178,51 @@ cat TASK.md
 
 ---
 
+---
+
+## 7. specctl 성능 이슈 분석
+
+> specctl verify 실행 시 타임아웃 발생 → 원인 분석 완료
+
+### 7.1 병목 지점
+
+| 병목 | 파일:라인 | 복잡도 | iterations |
+|------|----------|:------:|:----------:|
+| Contract-Evidence 매칭 | specctl:792-851 | O(n×m) | 11,470 |
+| validate_evidence | specctl:496-556 | - | 파일 I/O ×11,470 |
+| Snapshot 매칭 | specctl:854-879 | O(n×m) | 4,366 |
+
+### 7.2 코드 분석
+
+```bash
+# 병목 1: 이중 루프 (라인 792-851)
+while IFS='|' read -r spec_key contract_id; do     # 74개 Contract
+  while IFS='|' read -r ev_spec ev_contract ...; do  # 155개 Evidence
+    local result=$(validate_evidence "$ev_type" "$ev_value")
+  done < "$evidence_file"
+done < "$contracts_file"
+
+# 병목 2: validate_evidence (라인 546)
+grep -qE "(function|const|let|var|class|type|interface|enum|export)[[:space:]]+$symbol|$symbol[[:space:]]*[=:(]" "$full_path"
+```
+
+### 7.3 개선 방안
+
+| 개선 | 효과 | 구현 |
+|------|------|------|
+| associative array | O(1) 조회 | `declare -A evidence_map` |
+| 파일 캐싱 | I/O 제거 | `file_cache[$path]=$(cat)` |
+| hash 기반 매칭 | O(1) 조회 | `declare -A snapshot_hash` |
+
+**예상 개선**: ~15,000회 → ~300회 (50배)
+
+### 7.4 다음 태스크
+
+```bash
+# 다음 세션에서 실행
+# specctl 성능 개선 구현
+```
+
+---
+
 > **갱신**: 2026-01-21
