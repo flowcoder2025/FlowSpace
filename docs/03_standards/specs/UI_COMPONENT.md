@@ -63,6 +63,22 @@ shadcn/ui 기반 커스텀 UI 컴포넌트 시스템
   - code: `src/components/ui/dialog.tsx::animate-in`
   - code: `src/components/ui/dialog.tsx::fade-in-0`
 
+### Contract: UI_COMPONENT_DESIGN_BUTTON_HOVER
+
+- **Tier**: core
+- **What**: 버튼 Hover 스타일 규칙 (variant별 상호작용)
+- **Rules**:
+  | Variant | Hover 시 스타일 |
+  |---------|----------------|
+  | `default` | 배경 어둡게 (primary/90), 그림자 + 상승 효과 |
+  | `outline` | **테두리 → primary, 텍스트 → primary, 배경 → 투명 유지** |
+  | `destructive` | 배경 어둡게 (destructive/90), 그림자 + 상승 효과 |
+  | `ghost` | 배경 accent 적용 |
+- **Critical**: outline 버튼 hover 시 **배경색 변경 금지**, 테두리와 텍스트만 primary로 변경
+- **Evidence**:
+  - code: `src/components/ui/button.tsx::buttonVariants`
+  - code: `src/app/globals.css::--primary`
+
 <!-- DESIGN:END -->
 
 ---

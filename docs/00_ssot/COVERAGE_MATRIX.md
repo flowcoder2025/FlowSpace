@@ -21,174 +21,153 @@
 | 항목 | 값 |
 |------|-----|
 | **마지막 검증** | 2026-01-21 |
-| **검증 레벨** | Phase 2 완료 |
-| **총 SPEC 파일** | 14 |
-| **총 Contract** | 68 |
-| **SYNC** | 68 |
-| **MISSING_DOC** | 0 |
+| **검증 레벨** | soft |
+| **총 항목** | 133 |
+| **SYNC** | 47 |
+| **MISSING_DOC** | 59 |
 | **HALLUCINATION** | 0 |
-| **BROKEN_EVIDENCE** | 0 |
-| **SNAPSHOT_GAP** | 0 |
+| **BROKEN_EVIDENCE** | 16 |
+| **SNAPSHOT_GAP** | 11 |
 
 ---
 
-## SPEC 파일 현황
+## 전체 매트릭스
 
-| SPEC_KEY | 파일 | Contract 수 | Status |
-|----------|------|:-----------:|:------:|
-| ARCH | `ARCH.md` | 5 | SYNC |
-| PERMISSION | `PERMISSION.md` | 4 | SYNC |
-| INFRA | `INFRA.md` | 5 | SYNC |
-| FOUNDATION | `FOUNDATION.md` | 4 | SYNC |
-| UI_COMPONENT | `UI_COMPONENT.md` | 6 | SYNC |
-| UI_SYSTEM | `UI_SYSTEM.md` | 2 | SYNC |
-| AUTH | `AUTH.md` | 3 | SYNC |
-| SPACE | `SPACE.md` | 16 | SYNC |
-| ADMIN | `ADMIN.md` | 7 | SYNC |
-| DASHBOARD | `DASHBOARD.md` | 2 | SYNC |
-| USER | `USER.md` | 2 | SYNC |
-| GUEST | `GUEST.md` | 4 | SYNC |
-| LIVEKIT | `LIVEKIT.md` | 2 | SYNC |
-| CRON | `CRON.md` | 4 | SYNC |
-
----
-
-## Contract 상세 매트릭스
-
-### ARCH (5 Contracts)
-
-| Contract ID | Evidence | Status |
-|-------------|:--------:|:------:|
-| ARCH_FUNC_NEXTJS_PLATFORM | O | SYNC |
-| ARCH_FUNC_PHASER_GAME | O | SYNC |
-| ARCH_FUNC_SOCKET_REALTIME | O | SYNC |
-| ARCH_FUNC_LIVEKIT_MEDIA | O | SYNC |
-| ARCH_FUNC_PRISMA_DB | O | SYNC |
-
-### PERMISSION (4 Contracts)
-
-| Contract ID | Evidence | Status |
-|-------------|:--------:|:------:|
-| PERMISSION_FUNC_SPACE_ROLE | O | SYNC |
-| PERMISSION_FUNC_SPACE_AUTH | O | SYNC |
-| PERMISSION_FUNC_CHAT_MANAGE | O | SYNC |
-| PERMISSION_FUNC_SUBSCRIPTION | O | SYNC |
-
-### INFRA (5 Contracts)
-
-| Contract ID | Evidence | Status |
-|-------------|:--------:|:------:|
-| INFRA_FUNC_VERCEL_DEPLOY | O | SYNC |
-| INFRA_FUNC_OCI_SERVER | O | SYNC |
-| INFRA_FUNC_SOCKET_SERVER | O | SYNC |
-| INFRA_FUNC_LIVEKIT_SELFHOST | O | SYNC |
-| INFRA_FUNC_SSL_CADDY | O | SYNC |
-
-### FOUNDATION (4 Contracts)
-
-| Contract ID | Evidence | Status |
-|-------------|:--------:|:------:|
-| FOUNDATION_FUNC_DESIGN_TOKENS | O | SYNC |
-| FOUNDATION_FUNC_ACCESSIBILITY | O | SYNC |
-| FOUNDATION_FUNC_I18N | O | SYNC |
-| FOUNDATION_FUNC_NAMING | O | SYNC |
-
-### UI_COMPONENT (6 Contracts)
-
-| Contract ID | Evidence | Status |
-|-------------|:--------:|:------:|
-| UI_COMPONENT_FUNC_BUTTON | O | SYNC |
-| UI_COMPONENT_FUNC_MODAL | O | SYNC |
-| UI_COMPONENT_FUNC_FORM | O | SYNC |
-| UI_COMPONENT_FUNC_ICON | O | SYNC |
-| UI_COMPONENT_DESIGN_BUTTON | O | SYNC |
-| UI_COMPONENT_DESIGN_MODAL | O | SYNC |
-
-### UI_SYSTEM (2 Contracts)
-
-| Contract ID | Evidence | Status |
-|-------------|:--------:|:------:|
-| UI_SYSTEM_FUNC_TOKEN_FLOW | O | SYNC |
-| UI_SYSTEM_FUNC_TEXT_CONFIG | O | SYNC |
-
-### AUTH (3 Contracts)
-
-| Contract ID | Evidence | Status |
-|-------------|:--------:|:------:|
-| AUTH_API_NEXTAUTH | O | SYNC |
-| AUTH_API_REGISTER | O | SYNC |
-| AUTH_API_USER_CONSENT | O | SYNC |
-
-### SPACE (16 Contracts)
-
-| Contract ID | Evidence | Status |
-|-------------|:--------:|:------:|
-| SPACE_API_CRUD | O | SYNC |
-| SPACE_API_JOIN | O | SYNC |
-| SPACE_API_INVITE | O | SYNC |
-| SPACE_API_VISIT | O | SYNC |
-| SPACE_API_MY_ROLE | O | SYNC |
-| SPACE_API_MEMBERS | O | SYNC |
-| SPACE_API_KICK | O | SYNC |
-| SPACE_API_MUTE | O | SYNC |
-| SPACE_API_STAFF | O | SYNC |
-| SPACE_API_OBJECTS | O | SYNC |
-| SPACE_API_ZONES | O | SYNC |
-| SPACE_API_SPOTLIGHT | O | SYNC |
-| SPACE_API_MESSAGES | O | SYNC |
-| SPACE_API_MY_SPACES | O | SYNC |
-| SPACE_API_TEMPLATES | O | SYNC |
-
-### ADMIN (7 Contracts)
-
-| Contract ID | Evidence | Status |
-|-------------|:--------:|:------:|
-| ADMIN_API_SPACES | O | SYNC |
-| ADMIN_API_LOGS | O | SYNC |
-| ADMIN_API_STATS | O | SYNC |
-| ADMIN_API_USAGE_ANALYSIS | O | SYNC |
-| ADMIN_API_USAGE_RESET | O | SYNC |
-| ADMIN_API_USAGE_DEBUG | O | SYNC |
-| ADMIN_API_OCI_METRICS | O | SYNC |
-
-### DASHBOARD (2 Contracts)
-
-| Contract ID | Evidence | Status |
-|-------------|:--------:|:------:|
-| DASHBOARD_API_STATS | O | SYNC |
-| DASHBOARD_API_EXPORT | O | SYNC |
-
-### USER (2 Contracts)
-
-| Contract ID | Evidence | Status |
-|-------------|:--------:|:------:|
-| USER_API_NAV | O | SYNC |
-| USER_API_SEARCH | O | SYNC |
-
-### GUEST (4 Contracts)
-
-| Contract ID | Evidence | Status |
-|-------------|:--------:|:------:|
-| GUEST_API_CREATE | O | SYNC |
-| GUEST_API_VERIFY | O | SYNC |
-| GUEST_API_EVENT | O | SYNC |
-| GUEST_API_EXIT | O | SYNC |
-
-### LIVEKIT (2 Contracts)
-
-| Contract ID | Evidence | Status |
-|-------------|:--------:|:------:|
-| LIVEKIT_API_TOKEN | O | SYNC |
-| LIVEKIT_API_WEBHOOK | O | SYNC |
-
-### CRON (4 Contracts)
-
-| Contract ID | Evidence | Status |
-|-------------|:--------:|:------:|
-| CRON_API_CLEANUP_MESSAGES | O | SYNC |
-| CRON_API_CLEANUP_SESSIONS | O | SYNC |
-| CRON_API_COLLECT_METRICS | O | SYNC |
-| CRON_API_AGGREGATE_USAGE | O | SYNC |
+| SPEC_KEY | Contract ID | Code (Snapshot) | Doc (Contract) | Evidence | Status |
+|----------|-------------|:---------------:|:--------------:|:--------:|--------|
+| ADMIN | ADMIN_API_SPACES | O | O | O | SYNC |
+| ADMIN | ADMIN_API_LOGS | O | O | O | SYNC |
+| ADMIN | ADMIN_API_STATS | O | O | O | SYNC |
+| ADMIN | ADMIN_API_USAGE_ANALYSIS | O | O | O | SYNC |
+| ADMIN | ADMIN_API_USAGE_RESET | O | O | O | SYNC |
+| ADMIN | ADMIN_API_USAGE_DEBUG | O | O | O | SYNC |
+| ADMIN | ADMIN_API_OCI_METRICS | O | O | O | SYNC |
+| AI_PROTOCOL | AI_PROTOCOL_FUNC_SESSION_START | - | O | O | SNAPSHOT_GAP |
+| AI_PROTOCOL | AI_PROTOCOL_FUNC_TASK_MANAGEMENT | - | O | O | SNAPSHOT_GAP |
+| AI_PROTOCOL | AI_PROTOCOL_FUNC_CODE_DOC_SYNC | - | O | O | SNAPSHOT_GAP |
+| AI_PROTOCOL | AI_PROTOCOL_FUNC_VERIFICATION | - | O | O | SNAPSHOT_GAP |
+| AI_PROTOCOL | AI_PROTOCOL_DESIGN_TASK_STRUCTURE | - | O | O | SNAPSHOT_GAP |
+| AI_PROTOCOL | AI_PROTOCOL_DESIGN_HANDOFF_STRUCTURE | - | O | O | SNAPSHOT_GAP |
+| ARCH | ARCH_FUNC_NEXTJS_PLATFORM | O | O | X | BROKEN_EVIDENCE |
+| ARCH | ARCH_FUNC_PHASER_GAME | O | O | O | SYNC |
+| ARCH | ARCH_FUNC_SOCKET_REALTIME | O | O | O | SYNC |
+| ARCH | ARCH_FUNC_LIVEKIT_MEDIA | O | O | O | SYNC |
+| ARCH | ARCH_FUNC_PRISMA_DB | O | O | O | SYNC |
+| AUTH | AUTH_API_NEXTAUTH | O | O | X | BROKEN_EVIDENCE |
+| AUTH | AUTH_API_REGISTER | O | O | O | SYNC |
+| AUTH | AUTH_API_USER_CONSENT | O | O | X | BROKEN_EVIDENCE |
+| CRON | CRON_API_CLEANUP_MESSAGES | O | O | O | SYNC |
+| CRON | CRON_API_CLEANUP_SESSIONS | O | O | O | SYNC |
+| CRON | CRON_API_COLLECT_METRICS | O | O | O | SYNC |
+| CRON | CRON_API_AGGREGATE_USAGE | O | O | O | SYNC |
+| DASHBOARD | DASHBOARD_API_STATS | O | O | O | SYNC |
+| DASHBOARD | DASHBOARD_API_EXPORT | O | O | O | SYNC |
+| FOUNDATION | FOUNDATION_FUNC_DESIGN_TOKENS | - | O | O | SNAPSHOT_GAP |
+| FOUNDATION | FOUNDATION_FUNC_ACCESSIBILITY | - | O | X | BROKEN_EVIDENCE |
+| FOUNDATION | FOUNDATION_FUNC_I18N | - | O | O | SNAPSHOT_GAP |
+| FOUNDATION | FOUNDATION_FUNC_NAMING | - | O | O | SNAPSHOT_GAP |
+| FOUNDATION | FOUNDATION_DESIGN_A11Y_MODAL | - | O | O | SNAPSHOT_GAP |
+| FOUNDATION | FOUNDATION_DESIGN_STATE_MACHINE | - | O | O | SNAPSHOT_GAP |
+| GUEST | GUEST_API_CREATE | O | O | O | SYNC |
+| GUEST | GUEST_API_VERIFY | O | O | O | SYNC |
+| GUEST | GUEST_API_EVENT | O | O | O | SYNC |
+| GUEST | GUEST_API_EXIT | O | O | O | SYNC |
+| INFRA | INFRA_FUNC_VERCEL_DEPLOY | - | O | X | BROKEN_EVIDENCE |
+| INFRA | INFRA_FUNC_OCI_SERVER | - | O | X | BROKEN_EVIDENCE |
+| INFRA | INFRA_FUNC_SOCKET_SERVER | - | O | X | BROKEN_EVIDENCE |
+| INFRA | INFRA_FUNC_LIVEKIT_SELFHOST | - | O | X | BROKEN_EVIDENCE |
+| INFRA | INFRA_FUNC_SSL_CADDY | - | O | X | BROKEN_EVIDENCE |
+| LIVEKIT | LIVEKIT_API_TOKEN | O | O | O | SYNC |
+| LIVEKIT | LIVEKIT_API_WEBHOOK | O | O | O | SYNC |
+| PERMISSION | PERMISSION_FUNC_SPACE_ROLE | - | O | O | SNAPSHOT_GAP |
+| PERMISSION | PERMISSION_FUNC_SPACE_AUTH | - | O | O | SNAPSHOT_GAP |
+| PERMISSION | PERMISSION_FUNC_CHAT_MANAGE | - | O | O | SNAPSHOT_GAP |
+| PERMISSION | PERMISSION_FUNC_SUBSCRIPTION | - | O | O | SNAPSHOT_GAP |
+| SPACE | SPACE_API_CRUD | O | O | O | SYNC |
+| SPACE | SPACE_API_JOIN | O | O | O | SYNC |
+| SPACE | SPACE_API_INVITE | O | O | X | BROKEN_EVIDENCE |
+| SPACE | SPACE_API_VISIT | O | O | O | SYNC |
+| SPACE | SPACE_API_MY_ROLE | O | O | O | SYNC |
+| SPACE | SPACE_API_MEMBERS | O | O | O | SYNC |
+| SPACE | SPACE_API_KICK | O | O | O | SYNC |
+| SPACE | SPACE_API_MUTE | O | O | O | SYNC |
+| SPACE | SPACE_API_STAFF | O | O | O | SYNC |
+| SPACE | SPACE_API_OBJECTS | O | O | O | SYNC |
+| SPACE | SPACE_API_ZONES | O | O | X | BROKEN_EVIDENCE |
+| SPACE | SPACE_API_SPOTLIGHT | O | O | O | SYNC |
+| SPACE | SPACE_API_MESSAGES | O | O | O | SYNC |
+| SPACE | SPACE_API_MY_SPACES | O | O | O | SYNC |
+| SPACE | SPACE_API_TEMPLATES | O | O | O | SYNC |
+| UI_COMPONENT | UI_COMPONENT_FUNC_BUTTON | - | O | O | SNAPSHOT_GAP |
+| UI_COMPONENT | UI_COMPONENT_FUNC_MODAL | - | O | O | SNAPSHOT_GAP |
+| UI_COMPONENT | UI_COMPONENT_FUNC_FORM | - | O | X | BROKEN_EVIDENCE |
+| UI_COMPONENT | UI_COMPONENT_FUNC_ICON | - | O | X | BROKEN_EVIDENCE |
+| UI_COMPONENT | UI_COMPONENT_DESIGN_BUTTON | - | O | O | SNAPSHOT_GAP |
+| UI_COMPONENT | UI_COMPONENT_DESIGN_MODAL | - | O | X | BROKEN_EVIDENCE |
+| UI_COMPONENT | UI_COMPONENT_DESIGN_BUTTON_HOVER | - | O | O | SNAPSHOT_GAP |
+| UI_SYSTEM | UI_SYSTEM_FUNC_TOKEN_FLOW | - | O | X | BROKEN_EVIDENCE |
+| UI_SYSTEM | UI_SYSTEM_FUNC_TEXT_CONFIG | - | O | O | SNAPSHOT_GAP |
+| USER | USER_API_NAV | O | O | X | BROKEN_EVIDENCE |
+| USER | USER_API_SEARCH | O | O | O | SYNC |
+| UNCLASSIFIED | (없음) | O | X | - | MISSING_DOC |
+| UNCLASSIFIED | (없음) | O | X | - | MISSING_DOC |
+| UNCLASSIFIED | (없음) | O | X | - | MISSING_DOC |
+| UNCLASSIFIED | (없음) | O | X | - | MISSING_DOC |
+| DASHBOARD | (없음) | O | X | - | MISSING_DOC |
+| UNCLASSIFIED | (없음) | O | X | - | MISSING_DOC |
+| UNCLASSIFIED | (없음) | O | X | - | MISSING_DOC |
+| UNCLASSIFIED | (없음) | O | X | - | MISSING_DOC |
+| UNCLASSIFIED | (없음) | O | X | - | MISSING_DOC |
+| UNCLASSIFIED | (없음) | O | X | - | MISSING_DOC |
+| UNCLASSIFIED | (없음) | O | X | - | MISSING_DOC |
+| UNCLASSIFIED | (없음) | O | X | - | MISSING_DOC |
+| UNCLASSIFIED | (없음) | O | X | - | MISSING_DOC |
+| UNCLASSIFIED | (없음) | O | X | - | MISSING_DOC |
+| UNCLASSIFIED | (없음) | O | X | - | MISSING_DOC |
+| API | (없음) | O | X | - | MISSING_DOC |
+| API | (없음) | O | X | - | MISSING_DOC |
+| API | (없음) | O | X | - | MISSING_DOC |
+| API | (없음) | O | X | - | MISSING_DOC |
+| API | (없음) | O | X | - | MISSING_DOC |
+| API | (없음) | O | X | - | MISSING_DOC |
+| API | (없음) | O | X | - | MISSING_DOC |
+| AUTH | (없음) | O | X | - | MISSING_DOC |
+| AUTH | (없음) | O | X | - | MISSING_DOC |
+| API | (없음) | O | X | - | MISSING_DOC |
+| API | (없음) | O | X | - | MISSING_DOC |
+| API | (없음) | O | X | - | MISSING_DOC |
+| API | (없음) | O | X | - | MISSING_DOC |
+| API | (없음) | O | X | - | MISSING_DOC |
+| API | (없음) | O | X | - | MISSING_DOC |
+| API | (없음) | O | X | - | MISSING_DOC |
+| API | (없음) | O | X | - | MISSING_DOC |
+| API | (없음) | O | X | - | MISSING_DOC |
+| API | (없음) | O | X | - | MISSING_DOC |
+| API | (없음) | O | X | - | MISSING_DOC |
+| API | (없음) | O | X | - | MISSING_DOC |
+| API | (없음) | O | X | - | MISSING_DOC |
+| API | (없음) | O | X | - | MISSING_DOC |
+| API | (없음) | O | X | - | MISSING_DOC |
+| API | (없음) | O | X | - | MISSING_DOC |
+| API | (없음) | O | X | - | MISSING_DOC |
+| API | (없음) | O | X | - | MISSING_DOC |
+| API | (없음) | O | X | - | MISSING_DOC |
+| API | (없음) | O | X | - | MISSING_DOC |
+| API | (없음) | O | X | - | MISSING_DOC |
+| API | (없음) | O | X | - | MISSING_DOC |
+| API | (없음) | O | X | - | MISSING_DOC |
+| API | (없음) | O | X | - | MISSING_DOC |
+| API | (없음) | O | X | - | MISSING_DOC |
+| API | (없음) | O | X | - | MISSING_DOC |
+| API | (없음) | O | X | - | MISSING_DOC |
+| API | (없음) | O | X | - | MISSING_DOC |
+| API | (없음) | O | X | - | MISSING_DOC |
+| API | (없음) | O | X | - | MISSING_DOC |
+| API | (없음) | O | X | - | MISSING_DOC |
+| API | (없음) | O | X | - | MISSING_DOC |
+| USER | (없음) | O | X | - | MISSING_DOC |
+| USER | (없음) | O | X | - | MISSING_DOC |
+| USER | (없음) | O | X | - | MISSING_DOC |
 
 ---
 
@@ -196,9 +175,9 @@
 
 | 날짜 | SYNC | MISSING | HALLU | BROKEN | GAP | 변화 |
 |------|:----:|:-------:|:-----:|:------:|:---:|------|
-| 2026-01-21 | 0 | 58 | 0 | 0 | 26 | 초기 상태 |
-| 2026-01-21 | 68 | 0 | 0 | 0 | 0 | Phase 1-2 완료 |
+| 2026-01-21 | 47 | 59 | 0 | 16 | 11 | CLAUDE.md 슬림화 + AI_PROTOCOL 추가 |
+| 2026-01-21 | 38 | 59 | 0 | 16 | 11 | specctl verify |
 
 ---
 
-> **마지막 업데이트**: 2026-01-21 DocOps Phase 2 완료
+> **자동 생성**: `specctl verify` 실행 시 갱신됨

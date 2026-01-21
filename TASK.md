@@ -1,104 +1,119 @@
-# TASK: DocOps 드리프트 0% 수렴 작업
+# TASK: CLAUDE.md 슬림화 및 DocOps 통합
 
-> **목표**: SNAPSHOT_GAP 26개 + MISSING_DOC 58개 → 모두 SYNC로 전환
+> **목표**: CLAUDE.md 660줄 → 50줄 슬림화 + 상세 내용 DocOps SPEC 이전
 > **시작일**: 2026-01-21
-> **완료일**: 2026-01-21 ✅
+> **근거**: PDF "Claude Code 완전가이드 70가지 팁" - "CLAUDE.md는 간결하게 유지"
 
 ---
 
 ## 현재 상태
 
-| 상태 | 수량 | 설명 |
-|------|:----:|------|
-| SYNC | 68 | ✅ 완벽하게 연결됨 |
-| SNAPSHOT_GAP | 0 | ✅ Evidence 보강 완료 |
-| MISSING_DOC | 0 | ✅ Contract 추가 완료 |
-| HALLUCINATION | 0 | ✅ |
-| BROKEN_EVIDENCE | 0 | ✅ |
-
-**결과**: SYNC 68개, 드리프트 0% 달성!
+| 항목 | Before | After | 상태 |
+|------|:------:|:-----:|:----:|
+| CLAUDE.md 줄 수 | 660 | 50 | ✅ |
+| 컨텍스트 토큰 | ~19k | ~1k | ✅ |
+| DocOps SPEC 연동 | 부분 | 완전 | ✅ |
+| 새 Contract 수 | - | +9 | ✅ |
 
 ---
 
-## Phase 1: Evidence 보강 (SNAPSHOT_GAP → SYNC) ✅
+## Phase 1: 상세 내용 DocOps SPEC 이전 ✅
 
-> 기존 6개 SPEC 문서의 Evidence를 정확한 심볼로 연결
+> CLAUDE.md의 상세 규칙을 Evidence 기반 Contract로 이전
 
-### P1.1 대상 파일
+### P1.1 AI 프로토콜 → AI_PROTOCOL.md (신규)
 
-| 파일 | Contract 수 | 상태 |
-|------|:-----------:|:----:|
-| `docs/03_standards/specs/ARCH.md` | 5 | ✅ |
-| `docs/03_standards/specs/PERMISSION.md` | 4 | ✅ |
-| `docs/03_standards/specs/INFRA.md` | 5 | ✅ |
-| `docs/03_standards/specs/FOUNDATION.md` | 4 | ✅ |
-| `docs/03_standards/specs/UI_COMPONENT.md` | 6 | ✅ |
-| `docs/03_standards/specs/UI_SYSTEM.md` | 2 | ✅ |
+| 이전 대상 | 원본 위치 | Contract ID |
+|----------|----------|-------------|
+| 작업 시작 전 계층 구조 확인 | §0.7.1 | AI_PROTOCOL_FUNC_SESSION_START |
+| TASK.md 실시간 관리 | §0.7.2 | AI_PROTOCOL_FUNC_TASK_MANAGEMENT |
+| 코드-문서 연동 | §0.7.3 | AI_PROTOCOL_FUNC_CODE_DOC_SYNC |
+| 검증 프로세스 | §0.7.4 | AI_PROTOCOL_FUNC_VERIFICATION |
 
-### P1.2 작업 내용
+- [x] AI_PROTOCOL.md 생성
+- [x] 6개 Contract 작성 (Evidence 포함)
 
-1. ✅ 각 Contract의 Evidence에 정확한 심볼(함수명/클래스명/컴포넌트명) 추가
-2. ✅ 파일 경로 검증 (존재 여부)
-3. ✅ 심볼 검증 (코드에 실제 존재 여부)
+### P1.2 버튼 규칙 → UI_COMPONENT.md (기존 업데이트)
 
-### P1.3 완료 기준
+| 이전 대상 | 원본 위치 | Contract ID |
+|----------|----------|-------------|
+| 버튼 variant 제한 | §4.2 | UI_COMPONENT_DESIGN_BUTTON (기존) |
+| Hover 스타일 규칙 | §4.2 | UI_COMPONENT_DESIGN_BUTTON_HOVER (신규) |
 
-- [x] 6개 SPEC 파일 Evidence 보강 완료
-- [x] SNAPSHOT_GAP: 0
+- [x] UI_COMPONENT.md에 Hover 규칙 추가
+
+### P1.3 접근성 → FOUNDATION.md (기존 업데이트)
+
+| 이전 대상 | 원본 위치 | Contract ID |
+|----------|----------|-------------|
+| 모달 접근성 상세 | §4.5 | FOUNDATION_DESIGN_A11Y_MODAL (신규) |
+| 상태도 작성 규칙 | §4.5 | FOUNDATION_DESIGN_STATE_MACHINE (신규) |
+
+- [x] FOUNDATION.md에 모달 접근성 Contract 추가
+
+### P1.4 완료 기준
+
+- [x] 3개 SPEC 파일 업데이트/생성
+- [x] 9개 Contract 추가 완료
 
 ---
 
-## Phase 2: API Contract 추가 (MISSING_DOC → SYNC) ✅
+## Phase 2: CLAUDE.md 슬림화 ✅
 
-> API 라우트에 대한 Contract 문서 작성
+> 660줄 → 50줄로 축소, 핵심 원칙만 유지
 
-### P2.1 API 분류 및 SPEC 파일 생성
+### P2.1 유지할 내용 (핵심)
 
-| SPEC_KEY | Contract 수 | 설명 | 상태 |
-|----------|:----------:|------|:----:|
-| AUTH | 3 | 인증 관련 API | ✅ |
-| SPACE | 16 | 공간 관리 API | ✅ |
-| ADMIN | 7 | 관리자 API | ✅ |
-| DASHBOARD | 2 | 대시보드 API | ✅ |
-| USER | 2 | 사용자 API | ✅ |
-| GUEST | 4 | 게스트 API | ✅ |
-| LIVEKIT | 2 | LiveKit API | ✅ |
-| CRON | 4 | 크론 작업 API | ✅ |
+```markdown
+# FlowSpace
+> ZEP-감성 2D 메타버스 | Next.js 15 + Phaser 3 + Socket.io + LiveKit
 
-### P2.2 작업 순서
+## 핵심 원칙
+- Primary Color만 바꾸면 브랜드 완성 (CSS Variables 필수)
+- Button: `default`, `outline`만 사용
+- 한글 하드코딩 금지 → text-config.ts 사용
 
-- [x] P2.2.1: AUTH.md 생성 (인증 API)
-- [x] P2.2.2: SPACE.md 생성 (공간 관리 API)
-- [x] P2.2.3: ADMIN.md 생성 (관리자 API)
-- [x] P2.2.4: DASHBOARD.md 생성 (대시보드 API)
-- [x] P2.2.5: USER.md 생성 (사용자 API)
-- [x] P2.2.6: GUEST.md 생성 (게스트 API)
-- [x] P2.2.7: LIVEKIT.md 생성 (LiveKit API)
-- [x] P2.2.8: CRON.md 생성 (크론 작업 API)
+## 금지 사항 (DO NOT)
+- 색상 하드코딩, SQL 직접 쿼리, 시크릿 노출, variant 추가
+
+## 개발 서버
+`npm run dev:all` (3000, 3001, 7880)
+
+## 네비게이터 (상세 규칙 참조)
+| 작업 유형 | 참조 |
+|----------|------|
+| AI 프로토콜 | docs/03_standards/specs/AI_PROTOCOL.md |
+| UI 규칙 | docs/03_standards/specs/UI_COMPONENT.md |
+| 접근성 | docs/03_standards/specs/FOUNDATION.md |
+
+## DocOps
+세션 시작: `/docops-verify` | 완료: `/docops-finish`
+```
+
+### P2.2 삭제할 내용
+
+- [x] §0.5-0.7 TASK.md/AI 프로토콜 상세 (→ AI_PROTOCOL.md)
+- [x] §3 디렉토리 구조 상세 (→ ARCH.md Evidence)
+- [x] §4.2 버튼 상세 (→ UI_COMPONENT.md)
+- [x] §4.5 접근성 상세 (→ FOUNDATION.md)
+- [x] §5-6 개발 프로세스/문서 정책 (→ DOC_POLICY.md)
+- [x] 변경 이력 (→ docs/changes/)
 
 ### P2.3 완료 기준
 
-- [x] 8개 SPEC 파일 생성 완료
-- [x] MISSING_DOC: 0
+- [x] CLAUDE.md 50줄 이내 (정확히 50줄)
+- [x] 모든 상세 내용이 DocOps SPEC에 존재
 
 ---
 
-## Phase 3: 최종 검증 및 정리 ✅
+## Phase 3: 검증 및 마무리 ⏳
 
 ### P3.1 검증
 
-- [x] COVERAGE_MATRIX.md 업데이트 (SYNC 68개)
-- [x] HANDOFF 문서 참조하여 작업 진행
-
-### P3.2 마무리
-
-- [x] git commit
-- [x] git push
-
-### P3.3 완료 기준
-
-- [x] SYNC: 68, 나머지: 0
-- [x] git push 완료
+- [x] COVERAGE_MATRIX.md 업데이트 (+9 Contract)
+- [ ] git add .
+- [ ] git commit
+- [ ] git push
 
 ---
 
@@ -106,41 +121,17 @@
 
 | Phase | 설명 | 상태 | 완료일 |
 |-------|------|:----:|:------:|
-| Phase 1 | Evidence 보강 (26개) | ✅ 완료 | 2026-01-21 |
-| Phase 2 | API Contract (40개) | ✅ 완료 | 2026-01-21 |
-| Phase 3 | 최종 검증 | ✅ 완료 | 2026-01-21 |
-
----
-
-## 최종 결과
-
-### SPEC 파일 현황 (14개)
-
-| 카테고리 | SPEC 파일 | Contract 수 |
-|---------|----------|:-----------:|
-| 아키텍처 | ARCH.md | 5 |
-| 권한 | PERMISSION.md | 4 |
-| 인프라 | INFRA.md | 5 |
-| 디자인 | FOUNDATION.md | 4 |
-| UI | UI_COMPONENT.md | 6 |
-| UI | UI_SYSTEM.md | 2 |
-| API | AUTH.md | 3 |
-| API | SPACE.md | 16 |
-| API | ADMIN.md | 7 |
-| API | DASHBOARD.md | 2 |
-| API | USER.md | 2 |
-| API | GUEST.md | 4 |
-| API | LIVEKIT.md | 2 |
-| API | CRON.md | 4 |
-| **합계** | **14개** | **68** |
+| Phase 1 | DocOps SPEC 이전 | ✅ 완료 | 2026-01-21 |
+| Phase 2 | CLAUDE.md 슬림화 | ✅ 완료 | 2026-01-21 |
+| Phase 3 | 검증 및 마무리 | ⏳ 진행중 | - |
 
 ---
 
 ## 참조
 
+- 분석 근거: `docs/00_ssot/HANDOFF_2026-01-21_CLAUDE_SLIM.md`
 - DocOps 스펙: `docs/00_ssot/DOCOPS_SPEC_V3.2.md`
-- 현황판: `docs/00_ssot/COVERAGE_MATRIX.md`
-- 핸드오프: `docs/00_ssot/HANDOFF_2026-01-21.md`
+- 기존 SPEC: `docs/03_standards/specs/*.md`
 
 ---
 
@@ -148,7 +139,4 @@
 
 | 날짜 | 변경 내용 |
 |-----|----------|
-| 2026-01-21 | TASK.md 초기화 - DocOps 드리프트 0% 수렴 태스크 시작 |
-| 2026-01-21 | Phase 1 완료 - 6개 SPEC 파일 Evidence 보강 |
-| 2026-01-21 | Phase 2 완료 - 8개 API SPEC 파일 생성 (총 40 Contract) |
-| 2026-01-21 | Phase 3 완료 - COVERAGE_MATRIX 업데이트, 드리프트 0% 달성 |
+| 2026-01-21 | TASK.md 초기화 - CLAUDE.md 슬림화 태스크 시작 |

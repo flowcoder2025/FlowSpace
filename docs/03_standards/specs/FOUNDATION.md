@@ -47,6 +47,56 @@
 
 ---
 
+<!-- DESIGN:BEGIN -->
+
+### Contract: FOUNDATION_DESIGN_A11Y_MODAL
+
+- **Tier**: core
+- **What**: 모달 접근성 필수 요구사항 상세
+- **Requirements**:
+  | 요구사항 | 구현 방법 |
+  |---------|----------|
+  | 열릴 때 포커스 이동 | 모달 내부 첫 번째 포커스 요소로 |
+  | 포커스 트랩 | Tab 키로 모달 내부만 순환 |
+  | ESC 닫기 | 키보드 핸들러 등록 |
+  | 닫힐 때 포커스 복귀 | 트리거 요소로 복귀 |
+  | 역할 선언 | `role="dialog"` + `aria-modal="true"` |
+  | 레이블 | `aria-labelledby` 또는 `aria-label` 필수 |
+- **Evidence**:
+  - ui: `src/components/ui/dialog.tsx::DialogContent`
+  - code: `src/components/ui/dialog.tsx::Dialog`
+
+### Contract: FOUNDATION_DESIGN_STATE_MACHINE
+
+- **Tier**: normal
+- **What**: 모달 상태도 작성 규칙 (State Machine)
+- **States**: `[CLOSED, OPENING, OPEN, CLOSING]`
+- **Events**:
+  | 이벤트 | 설명 |
+  |-------|------|
+  | OPEN_MODAL | 모달 열기 요청 |
+  | CLOSE_MODAL | 모달 닫기 요청 |
+  | ANIMATION_END | 애니메이션 완료 |
+- **Guards**:
+  | Guard | 조건 |
+  |-------|------|
+  | canOpen | `currentState === CLOSED` |
+  | canClose | `currentState === OPEN` |
+- **Transitions**:
+  ```
+  CLOSED → OPENING: Event=OPEN_MODAL, Guard=canOpen
+  OPENING → OPEN: Event=ANIMATION_END
+  OPEN → CLOSING: Event=CLOSE_MODAL, Guard=canClose
+  CLOSING → CLOSED: Event=ANIMATION_END
+  ```
+- **Evidence**:
+  - code: `src/components/ui/dialog.tsx::open`
+  - code: `src/components/ui/dialog.tsx::onOpenChange`
+
+<!-- DESIGN:END -->
+
+---
+
 ## 디자인 토큰
 
 ### Color Tokens
