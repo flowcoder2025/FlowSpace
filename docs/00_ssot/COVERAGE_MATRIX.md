@@ -1,4 +1,4 @@
-# COVERAGE_MATRIX - 문서 커버리지 현황
+﻿# COVERAGE_MATRIX - 문서 커버리지 현황
 
 > 코드(Snapshot) ↔ 문서(Contract) 매핑 상태를 한 눈에 확인
 
@@ -22,11 +22,11 @@
 |------|-----|
 | **마지막 검증** | 2026-01-21 |
 | **검증 레벨** | soft |
-| **총 항목** | 133 |
-| **SYNC** | 38 |
-| **MISSING_DOC** | 59 |
+| **총 항목** | 128 |
+| **SYNC** | 27 |
+| **MISSING_DOC** | 54 |
 | **HALLUCINATION** | 0 |
-| **BROKEN_EVIDENCE** | 22 |
+| **BROKEN_EVIDENCE** | 33 |
 | **SNAPSHOT_GAP** | 14 |
 
 ---
@@ -34,8 +34,7 @@
 ## 전체 매트릭스
 
 | SPEC_KEY | Contract ID | Code (Snapshot) | Doc (Contract) | Evidence | Status |
-|----------|-------------|:---------------:|:--------------:|:--------:|--------|
-| ADMIN | ADMIN_API_SPACES | O | O | O | SYNC |
+|----------|-------------|:---------------:|:--------------:|:--------:|--------|| ADMIN | ADMIN_API_SPACES | O | O | O | SYNC |
 | ADMIN | ADMIN_API_LOGS | O | O | O | SYNC |
 | ADMIN | ADMIN_API_STATS | O | O | O | SYNC |
 | ADMIN | ADMIN_API_USAGE_ANALYSIS | O | O | O | SYNC |
@@ -48,7 +47,7 @@
 | AI_PROTOCOL | AI_PROTOCOL_FUNC_VERIFICATION | - | O | X | BROKEN_EVIDENCE |
 | AI_PROTOCOL | AI_PROTOCOL_DESIGN_TASK_STRUCTURE | - | O | O | SNAPSHOT_GAP |
 | AI_PROTOCOL | AI_PROTOCOL_DESIGN_HANDOFF_STRUCTURE | - | O | X | BROKEN_EVIDENCE |
-| ARCH | ARCH_FUNC_NEXTJS_PLATFORM | O | O | X | BROKEN_EVIDENCE |
+| ARCH | ARCH_FUNC_NEXTJS_PLATFORM | O | O | O | SYNC |
 | ARCH | ARCH_FUNC_PHASER_GAME | O | O | O | SYNC |
 | ARCH | ARCH_FUNC_SOCKET_REALTIME | O | O | O | SYNC |
 | ARCH | ARCH_FUNC_LIVEKIT_MEDIA | O | O | O | SYNC |
@@ -60,8 +59,8 @@
 | CRON | CRON_API_CLEANUP_SESSIONS | O | O | O | SYNC |
 | CRON | CRON_API_COLLECT_METRICS | O | O | O | SYNC |
 | CRON | CRON_API_AGGREGATE_USAGE | O | O | O | SYNC |
-| DASHBOARD | DASHBOARD_API_STATS | O | O | O | SYNC |
-| DASHBOARD | DASHBOARD_API_EXPORT | O | O | O | SYNC |
+| DASHBOARD | DASHBOARD_API_STATS | O | O | X | BROKEN_EVIDENCE |
+| DASHBOARD | DASHBOARD_API_EXPORT | O | O | X | BROKEN_EVIDENCE |
 | FOUNDATION | FOUNDATION_FUNC_DESIGN_TOKENS | - | O | O | SNAPSHOT_GAP |
 | FOUNDATION | FOUNDATION_FUNC_ACCESSIBILITY | - | O | X | BROKEN_EVIDENCE |
 | FOUNDATION | FOUNDATION_FUNC_I18N | - | O | O | SNAPSHOT_GAP |
@@ -83,19 +82,19 @@
 | PERMISSION | PERMISSION_FUNC_SPACE_AUTH | - | O | O | SNAPSHOT_GAP |
 | PERMISSION | PERMISSION_FUNC_CHAT_MANAGE | - | O | O | SNAPSHOT_GAP |
 | PERMISSION | PERMISSION_FUNC_SUBSCRIPTION | - | O | O | SNAPSHOT_GAP |
-| SPACE | SPACE_API_CRUD | O | O | O | SYNC |
-| SPACE | SPACE_API_JOIN | O | O | O | SYNC |
+| SPACE | SPACE_API_CRUD | O | O | X | BROKEN_EVIDENCE |
+| SPACE | SPACE_API_JOIN | O | O | X | BROKEN_EVIDENCE |
 | SPACE | SPACE_API_INVITE | O | O | X | BROKEN_EVIDENCE |
-| SPACE | SPACE_API_VISIT | O | O | O | SYNC |
-| SPACE | SPACE_API_MY_ROLE | O | O | O | SYNC |
-| SPACE | SPACE_API_MEMBERS | O | O | O | SYNC |
-| SPACE | SPACE_API_KICK | O | O | O | SYNC |
-| SPACE | SPACE_API_MUTE | O | O | O | SYNC |
-| SPACE | SPACE_API_STAFF | O | O | O | SYNC |
-| SPACE | SPACE_API_OBJECTS | O | O | O | SYNC |
+| SPACE | SPACE_API_VISIT | O | O | X | BROKEN_EVIDENCE |
+| SPACE | SPACE_API_MY_ROLE | O | O | X | BROKEN_EVIDENCE |
+| SPACE | SPACE_API_MEMBERS | O | O | X | BROKEN_EVIDENCE |
+| SPACE | SPACE_API_KICK | O | O | X | BROKEN_EVIDENCE |
+| SPACE | SPACE_API_MUTE | O | O | X | BROKEN_EVIDENCE |
+| SPACE | SPACE_API_STAFF | O | O | X | BROKEN_EVIDENCE |
+| SPACE | SPACE_API_OBJECTS | O | O | X | BROKEN_EVIDENCE |
 | SPACE | SPACE_API_ZONES | O | O | X | BROKEN_EVIDENCE |
-| SPACE | SPACE_API_SPOTLIGHT | O | O | O | SYNC |
-| SPACE | SPACE_API_MESSAGES | O | O | O | SYNC |
+| SPACE | SPACE_API_SPOTLIGHT | O | O | X | BROKEN_EVIDENCE |
+| SPACE | SPACE_API_MESSAGES | O | O | X | BROKEN_EVIDENCE |
 | SPACE | SPACE_API_MY_SPACES | O | O | O | SYNC |
 | SPACE | SPACE_API_TEMPLATES | O | O | O | SYNC |
 | UI_COMPONENT | UI_COMPONENT_FUNC_BUTTON | - | O | O | SNAPSHOT_GAP |
@@ -107,16 +106,14 @@
 | UI_COMPONENT | UI_COMPONENT_DESIGN_BUTTON_HOVER | - | O | X | BROKEN_EVIDENCE |
 | UI_SYSTEM | UI_SYSTEM_FUNC_TOKEN_FLOW | - | O | X | BROKEN_EVIDENCE |
 | UI_SYSTEM | UI_SYSTEM_FUNC_TEXT_CONFIG | - | O | O | SNAPSHOT_GAP |
-| USER | USER_API_NAV | O | O | X | BROKEN_EVIDENCE |
+| USER | USER_API_NAV | O | O | O | SYNC |
 | USER | USER_API_SEARCH | O | O | O | SYNC |
-| UNCLASSIFIED | (없음) | O | X | - | MISSING_DOC |
 | UNCLASSIFIED | (없음) | O | X | - | MISSING_DOC |
 | UNCLASSIFIED | (없음) | O | X | - | MISSING_DOC |
 | UNCLASSIFIED | (없음) | O | X | - | MISSING_DOC |
 | DASHBOARD | (없음) | O | X | - | MISSING_DOC |
 | UNCLASSIFIED | (없음) | O | X | - | MISSING_DOC |
-| UNCLASSIFIED | (없음) | O | X | - | MISSING_DOC |
-| UNCLASSIFIED | (없음) | O | X | - | MISSING_DOC |
+| AUTH | (없음) | O | X | - | MISSING_DOC |
 | UNCLASSIFIED | (없음) | O | X | - | MISSING_DOC |
 | UNCLASSIFIED | (없음) | O | X | - | MISSING_DOC |
 | UNCLASSIFIED | (없음) | O | X | - | MISSING_DOC |
@@ -163,9 +160,6 @@
 | API | (없음) | O | X | - | MISSING_DOC |
 | API | (없음) | O | X | - | MISSING_DOC |
 | API | (없음) | O | X | - | MISSING_DOC |
-| API | (없음) | O | X | - | MISSING_DOC |
-| API | (없음) | O | X | - | MISSING_DOC |
-| USER | (없음) | O | X | - | MISSING_DOC |
 | USER | (없음) | O | X | - | MISSING_DOC |
 | USER | (없음) | O | X | - | MISSING_DOC |
 
@@ -175,7 +169,7 @@
 
 | 날짜 | SYNC | MISSING | HALLU | BROKEN | GAP | 변화 |
 |------|:----:|:-------:|:-----:|:------:|:---:|------|
-| 2026-01-21 | 38 | 59 | 0 | 22 | 14 | specctl verify |
+| 2026-01-21 | 27 | 54 | 0 | 33 | 14 | specctl verify |
 
 ---
 

@@ -2,12 +2,12 @@
 set -euo pipefail
 
 #######################################
-# specctl - DocOps CLI v0.2.0
+# specctl - DocOps CLI v0.3.0
 # 문서-코드 동기화 및 검증 도구
-# 실제 구현 버전
+# 성능 최적화 버전
 #######################################
 
-VERSION="0.2.0"
+VERSION="0.3.0"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
@@ -21,6 +21,23 @@ MANUALS_DIR="$PROJECT_ROOT/docs/03_standards/manuals"
 TMP_DIR="${TMPDIR:-/tmp}/specctl_$$"
 mkdir -p "$TMP_DIR"
 trap "rm -rf $TMP_DIR" EXIT
+
+#######################################
+# 성능 최적화: Associative Arrays
+# Bash 4.0+ 필요
+#######################################
+
+# Evidence 인덱스: EVIDENCE_BY_CONTRACT["SPEC|CONTRACT"]="type|value\ntype|value..."
+declare -A EVIDENCE_BY_CONTRACT
+
+# 파일 내용 캐시: FILE_CACHE["path"]="content"
+declare -A FILE_CACHE
+
+# Snapshot 라우트 해시: SNAPSHOT_ROUTES["route"]=1
+declare -A SNAPSHOT_ROUTES
+
+# Contract 존재 해시: CONTRACT_EXISTS["CONTRACT_ID"]=1
+declare -A CONTRACT_EXISTS
 
 # 색상 정의
 RED='\033[0;31m'
@@ -64,6 +81,51 @@ get_date() {
 
 get_timestamp() {
   date +"%Y-%m-%d %H:%M:%S"
+}
+
+#######################################
+# 캐시 함수
+#######################################
+
+# 파일 내용 캐시하여 반환 (I/O 최소화)
+get_file_content() {
+  local file_path="$1"
+
+  if [[ -z "${FILE_CACHE[$file_path]+isset}" ]]; then
+    if [[ -f "$file_path" ]]; then
+      FILE_CACHE["$file_path"]=$(cat "$file_path" 2>/dev/null || echo "")
+    else
+      FILE_CACHE["$file_path"]=""
+    fi
+  fi
+
+  echo "${FILE_CACHE[$file_path]}"
+}
+
+# 캐시된 파일에서 패턴 검색
+cached_grep() {
+  local pattern="$1"
+  local file_path="$2"
+
+  local content=$(get_file_content "$file_path")
+  if [[ -z "$content" ]]; then
+    return 1
+  fi
+
+  echo "$content" | grep -qE "$pattern" 2>/dev/null
+}
+
+# 캐시된 파일에서 문자열 검색
+cached_grep_fixed() {
+  local string="$1"
+  local file_path="$2"
+
+  local content=$(get_file_content "$file_path")
+  if [[ -z "$content" ]]; then
+    return 1
+  fi
+
+  echo "$content" | grep -qF "$string" 2>/dev/null
 }
 
 #######################################
@@ -458,14 +520,17 @@ EOF
 }
 
 #######################################
-# Evidence 검증 함수
+# Evidence 검증 함수 (최적화)
 #######################################
 
-# Evidence 파싱 (specs/*.md에서 추출)
-extract_evidences() {
+# Evidence 파싱 + Associative Array 인덱싱 (O(1) 조회 가능)
+extract_evidences_indexed() {
   local output_file="$1"
 
   > "$output_file"
+
+  # 인덱스 초기화
+  EVIDENCE_BY_CONTRACT=()
 
   [[ ! -d "$SPECS_DIR" ]] && return
 
@@ -486,13 +551,27 @@ extract_evidences() {
         local ev_value="${BASH_REMATCH[2]}"
         ev_value=$(echo "$ev_value" | xargs)  # trim
 
+        # 파일 출력 (기존 호환)
         echo "$spec_key|$current_contract|$ev_type|$ev_value" >> "$output_file"
+
+        # Associative Array 인덱싱 (O(1) 조회용)
+        local key="$spec_key|$current_contract"
+        if [[ -z "${EVIDENCE_BY_CONTRACT[$key]+isset}" ]]; then
+          EVIDENCE_BY_CONTRACT["$key"]="$ev_type|$ev_value"
+        else
+          EVIDENCE_BY_CONTRACT["$key"]="${EVIDENCE_BY_CONTRACT[$key]}"$'\n'"$ev_type|$ev_value"
+        fi
       fi
     done < "$spec_file"
   done < <(find "$SPECS_DIR" -name "*.md" -print0 2>/dev/null)
 }
 
-# 단일 Evidence 검증
+# 레거시 호환 함수
+extract_evidences() {
+  extract_evidences_indexed "$@"
+}
+
+# 단일 Evidence 검증 (캐시 기반 최적화)
 validate_evidence() {
   local ev_type="$1"
   local ev_value="$2"
@@ -515,35 +594,35 @@ validate_evidence() {
 
   local full_path="$PROJECT_ROOT/$file_path"
 
-  # 파일 존재 확인
+  # 파일 존재 확인 (캐시에서)
   if [[ ! -f "$full_path" ]]; then
     echo "FILE_NOT_FOUND"
     return
   fi
 
-  # 심볼 존재 확인
+  # 심볼 존재 확인 (캐시 기반 grep)
   if [[ -n "$symbol" ]]; then
     # 테스트 selector의 경우 따옴표 내용 검색
     if [[ "$ev_type" == "test" || "$ev_type" == "e2e" ]]; then
       # describe("...") 또는 it("...") 내부 문자열 추출
-      local search_string=$(echo "$symbol" | grep -oP '(?<=["'"'"'])[^"'"'"']+(?=["'"'"'])' | head -1)
+      local search_string=$(echo "$symbol" | grep -oP '(?<=["'"'"'])[^"'"'"']+(?=["'"'"'])' 2>/dev/null | head -1)
       if [[ -n "$search_string" ]]; then
-        if grep -q "$search_string" "$full_path" 2>/dev/null; then
+        if cached_grep_fixed "$search_string" "$full_path"; then
           echo "VALID"
         else
           echo "SYMBOL_NOT_FOUND"
         fi
       else
         # 단순 문자열 검색
-        if grep -q "$symbol" "$full_path" 2>/dev/null; then
+        if cached_grep_fixed "$symbol" "$full_path"; then
           echo "VALID"
         else
           echo "SYMBOL_NOT_FOUND"
         fi
       fi
     else
-      # code, type, ui의 경우 심볼 직접 검색
-      if grep -qE "(function|const|let|var|class|type|interface|enum|export)[[:space:]]+$symbol|$symbol[[:space:]]*[=:(]" "$full_path" 2>/dev/null; then
+      # code, type, ui의 경우 심볼 직접 검색 (단순화된 패턴)
+      if cached_grep "(function|const|let|var|class|type|interface|enum|export)[[:space:]]+$symbol|$symbol[[:space:]]*[=:(]" "$full_path"; then
         echo "VALID"
       else
         echo "SYMBOL_NOT_FOUND"
@@ -758,16 +837,28 @@ cmd_verify() {
   local contract_count=$(wc -l < "$contracts_file" 2>/dev/null || echo 0)
   print_success "Contract: ${contract_count}개"
 
-  # 3. Snapshot 파싱 (간단 버전 - 실제 라우트 목록)
+  # 3. Snapshot 파싱 + Hash 인덱싱 (O(1) 조회용)
   print_info "Snapshot 파싱 중..."
   local snapshot_file="$SSOT_DIR/SPEC_SNAPSHOT.md"
   local snapshot_routes="$TMP_DIR/snapshot_routes.txt"
   > "$snapshot_routes"
 
+  # Hash 인덱스 초기화
+  SNAPSHOT_ROUTES=()
+
   if [[ -f "$snapshot_file" ]]; then
     # 테이블에서 라우트 추출
-    grep -E "^\|[[:space:]]*/[^|]*\|" "$snapshot_file" 2>/dev/null | \
-      sed 's/^|[[:space:]]*//' | cut -d'|' -f1 | xargs -I{} echo {} >> "$snapshot_routes" 2>/dev/null || true
+    while IFS= read -r route; do
+      route=$(echo "$route" | xargs)  # trim
+      [[ -z "$route" ]] && continue
+      echo "$route" >> "$snapshot_routes"
+      # Hash 인덱싱 (O(1) 조회용)
+      SNAPSHOT_ROUTES["$route"]=1
+      # 소문자 버전도 인덱싱
+      local route_lower=$(echo "$route" | tr '[:upper:]' '[:lower:]')
+      SNAPSHOT_ROUTES["$route_lower"]=1
+    done < <(grep -E "^\|[[:space:]]*/[^|]*\|" "$snapshot_file" 2>/dev/null | \
+      sed 's/^|[[:space:]]*//' | cut -d'|' -f1)
   fi
   local snapshot_count=$(wc -l < "$snapshot_routes" 2>/dev/null || echo 0)
   print_success "Snapshot 항목: ${snapshot_count}개"
@@ -788,32 +879,53 @@ cmd_verify() {
   > "$details_file"
   > "$drifts_file"
 
-  # Contract별 검증
+  # Contract 존재 해시 초기화 (MISSING_DOC 검사용)
+  CONTRACT_EXISTS=()
+
+  # Contract별 검증 (최적화: O(1) 해시 조회)
   if [[ -f "$contracts_file" && -s "$contracts_file" ]]; then
     while IFS='|' read -r spec_key contract_id; do
       local has_evidence=false
       local evidence_valid=true
       local in_snapshot=false
 
-      # 해당 Contract의 Evidence 검증
-      if [[ -f "$evidence_file" ]]; then
-        while IFS='|' read -r ev_spec ev_contract ev_type ev_value; do
-          if [[ "$ev_spec" == "$spec_key" && "$ev_contract" == "$contract_id" ]]; then
-            has_evidence=true
+      # Contract 존재 등록
+      CONTRACT_EXISTS["$contract_id"]=1
 
-            local result=$(validate_evidence "$ev_type" "$ev_value")
-            if [[ "$result" != "VALID" ]]; then
-              evidence_valid=false
-            fi
+      # O(1) 해시 조회로 Evidence 검증
+      local evidence_key="$spec_key|$contract_id"
+      if [[ -n "${EVIDENCE_BY_CONTRACT[$evidence_key]+isset}" ]]; then
+        has_evidence=true
+
+        # Evidence 목록 순회 (해당 Contract의 Evidence만)
+        while IFS='|' read -r ev_type ev_value; do
+          [[ -z "$ev_type" ]] && continue
+          local result=$(validate_evidence "$ev_type" "$ev_value")
+          if [[ "$result" != "VALID" ]]; then
+            evidence_valid=false
           fi
-        done < "$evidence_file"
+        done <<< "${EVIDENCE_BY_CONTRACT[$evidence_key]}"
       fi
 
-      # Snapshot 매칭 (간단 버전 - Contract ID에서 라우트 유추)
+      # Snapshot 매칭 (O(1) 해시 조회)
       # AUTH_FUNC_LOGIN → /api/auth/login 또는 /login
       local route_guess=$(echo "$contract_id" | tr '[:upper:]' '[:lower:]' | sed 's/_func_/\//g' | sed 's/_design_/\//g' | sed 's/_/\//g')
-      if grep -qi "$route_guess\|$(echo "$spec_key" | tr '[:upper:]' '[:lower:]')" "$snapshot_routes" 2>/dev/null; then
+      local spec_lower=$(echo "$spec_key" | tr '[:upper:]' '[:lower:]')
+
+      # 해시에서 직접 조회 (O(1))
+      if [[ -n "${SNAPSHOT_ROUTES[/$route_guess]+isset}" ]] || \
+         [[ -n "${SNAPSHOT_ROUTES[/api/$route_guess]+isset}" ]] || \
+         [[ -n "${SNAPSHOT_ROUTES[/$spec_lower]+isset}" ]] || \
+         [[ -n "${SNAPSHOT_ROUTES[/api/$spec_lower]+isset}" ]]; then
         in_snapshot=true
+      else
+        # 폴백: 부분 매칭 (해시 키 순회)
+        for route in "${!SNAPSHOT_ROUTES[@]}"; do
+          if [[ "$route" == *"$route_guess"* || "$route" == *"$spec_lower"* ]]; then
+            in_snapshot=true
+            break
+          fi
+        done
       fi
 
       # 상태 판정
@@ -851,23 +963,24 @@ cmd_verify() {
   fi
 
   # Snapshot에는 있지만 Contract가 없는 항목 (MISSING_DOC)
+  # 최적화: O(1) 해시 조회
   if [[ -f "$snapshot_routes" && -s "$snapshot_routes" ]]; then
     while IFS= read -r route; do
       [[ -z "$route" ]] && continue
 
-      # 해당 라우트에 대한 Contract가 있는지 확인
+      # 해당 라우트에 대한 Contract가 있는지 확인 (O(1) 해시 조회)
       local has_contract=false
       local route_lower=$(echo "$route" | tr '[:upper:]' '[:lower:]')
+      local route_key=$(echo "${route_lower#/}" | sed 's/\//_/g' | tr '[:lower:]' '[:upper:]')
 
-      if [[ -f "$contracts_file" ]]; then
-        while IFS='|' read -r spec_key contract_id; do
-          local contract_lower=$(echo "$contract_id" | tr '[:upper:]' '[:lower:]' | sed 's/_/\//g')
-          if [[ "$route_lower" == *"$contract_lower"* || "$contract_lower" == *"${route_lower#/}"* ]]; then
-            has_contract=true
-            break
-          fi
-        done < "$contracts_file"
-      fi
+      # 직접 해시 조회
+      for contract_id in "${!CONTRACT_EXISTS[@]}"; do
+        local contract_lower=$(echo "$contract_id" | tr '[:upper:]' '[:lower:]' | sed 's/_/\//g')
+        if [[ "$route_lower" == *"$contract_lower"* || "$contract_lower" == *"${route_lower#/}"* ]]; then
+          has_contract=true
+          break
+        fi
+      done
 
       if [[ "$has_contract" == "false" ]]; then
         local spec_key=$(classify_spec_key "$route")

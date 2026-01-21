@@ -1,10 +1,10 @@
 ﻿#######################################
-# specctl - DocOps CLI v0.2.0 (PowerShell)
+# specctl - DocOps CLI v0.3.0 (PowerShell)
 # 문서-코드 동기화 및 검증 도구
-# 실제 구현 버전
+# 성능 최적화 버전
 #######################################
 
-$VERSION = "0.2.0"
+$VERSION = "0.3.0"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProjectRoot = Split-Path -Parent $ScriptDir
 
@@ -17,6 +17,22 @@ $MANUALS_DIR = Join-Path $ProjectRoot "docs\03_standards\manuals"
 # 임시 디렉토리
 $TMP_DIR = Join-Path $env:TEMP "specctl_$(Get-Random)"
 New-Item -ItemType Directory -Force -Path $TMP_DIR | Out-Null
+
+#######################################
+# 성능 최적화: Hash 기반 캐시
+#######################################
+
+# Evidence 인덱스: Key="SPEC|CONTRACT" Value=@(@{Type="code"; Value="path"}, ...)
+$script:EvidenceByContract = @{}
+
+# 파일 내용 캐시: Key="path" Value="content"
+$script:FileCache = @{}
+
+# Snapshot 라우트 해시: Key="route" Value=$true
+$script:SnapshotRoutes = @{}
+
+# Contract 존재 해시: Key="CONTRACT_ID" Value=$true
+$script:ContractExists = @{}
 
 #######################################
 # 유틸리티 함수
@@ -55,6 +71,56 @@ function Get-DateString {
 
 function Get-TimestampString {
     return (Get-Date -Format "yyyy-MM-dd HH:mm:ss")
+}
+
+#######################################
+# 캐시 함수
+#######################################
+
+# 파일 내용 캐시하여 반환 (I/O 최소화)
+function Get-CachedFileContent {
+    param([string]$FilePath)
+
+    if (-not $script:FileCache.ContainsKey($FilePath)) {
+        if (Test-Path $FilePath) {
+            $script:FileCache[$FilePath] = Get-Content $FilePath -Raw -ErrorAction SilentlyContinue
+        }
+        else {
+            $script:FileCache[$FilePath] = ""
+        }
+    }
+
+    return $script:FileCache[$FilePath]
+}
+
+# 캐시된 파일에서 패턴 검색
+function Test-CachedPattern {
+    param(
+        [string]$Pattern,
+        [string]$FilePath
+    )
+
+    $content = Get-CachedFileContent -FilePath $FilePath
+    if ([string]::IsNullOrEmpty($content)) {
+        return $false
+    }
+
+    return $content -match $Pattern
+}
+
+# 캐시된 파일에서 문자열 검색
+function Test-CachedString {
+    param(
+        [string]$SearchString,
+        [string]$FilePath
+    )
+
+    $content = Get-CachedFileContent -FilePath $FilePath
+    if ([string]::IsNullOrEmpty($content)) {
+        return $false
+    }
+
+    return $content.Contains($SearchString)
 }
 
 #######################################
@@ -286,13 +352,16 @@ function Scan-APIRoutes {
 }
 
 #######################################
-# Evidence 검증 함수
+# Evidence 검증 함수 (최적화)
 #######################################
 
 function Extract-Evidences {
     param([string]$OutputFile)
 
     $evidences = @()
+
+    # 인덱스 초기화
+    $script:EvidenceByContract = @{}
 
     if (-not (Test-Path $SPECS_DIR)) { return }
 
@@ -309,10 +378,19 @@ function Extract-Evidences {
             }
 
             # Evidence 추출
-            if ($line -match "^\s*-\s*(code|type|ui|test|e2e):\s*`?([^`]+)`?$") {
+            if ($line -match "^\s*-\s*(code|type|ui|test|e2e):\s*``?([^``]+)``?$") {
                 $evType = $Matches[1]
                 $evValue = $Matches[2].Trim()
+
+                # 파일 출력 (기존 호환)
                 $evidences += "$specKey|$currentContract|$evType|$evValue"
+
+                # Hash 인덱싱 (O(1) 조회용)
+                $key = "$specKey|$currentContract"
+                if (-not $script:EvidenceByContract.ContainsKey($key)) {
+                    $script:EvidenceByContract[$key] = @()
+                }
+                $script:EvidenceByContract[$key] += @{Type = $evType; Value = $evValue}
             }
         }
     }
@@ -351,28 +429,26 @@ function Validate-Evidence {
         return "FILE_NOT_FOUND"
     }
 
-    # 심볼 존재 확인
+    # 심볼 존재 확인 (캐시 기반)
     if (-not [string]::IsNullOrEmpty($symbol)) {
-        $content = Get-Content $fullPath -Raw -ErrorAction SilentlyContinue
-
         if ($EvType -in @("test", "e2e")) {
             # 테스트 selector의 따옴표 내용 검색
-            if ($symbol -match '["'']([^"'']+)["'']') {
+            if ($symbol -match '["\u0027]([^"\u0027]+)["\u0027]') {
                 $searchString = $Matches[1]
-                if ($content -match [regex]::Escape($searchString)) {
+                if (Test-CachedString -SearchString $searchString -FilePath $fullPath) {
                     return "VALID"
                 }
                 return "SYMBOL_NOT_FOUND"
             }
-            if ($content -match [regex]::Escape($symbol)) {
+            if (Test-CachedString -SearchString $symbol -FilePath $fullPath) {
                 return "VALID"
             }
             return "SYMBOL_NOT_FOUND"
         }
         else {
-            # code, type, ui 심볼 검색
+            # code, type, ui 심볼 검색 (캐시 기반)
             $pattern = "(function|const|let|var|class|type|interface|enum|export)\s+$symbol|$symbol\s*[=:(]"
-            if ($content -match $pattern) {
+            if (Test-CachedPattern -Pattern $pattern -FilePath $fullPath) {
                 return "VALID"
             }
             return "SYMBOL_NOT_FOUND"
@@ -709,15 +785,22 @@ function Cmd-Verify {
     $contractCount = if (Test-Path $contractsFile) { (Get-Content $contractsFile | Measure-Object -Line).Lines } else { 0 }
     Print-Success "Contract: ${contractCount}개"
 
-    # 3. Snapshot 파싱
+    # 3. Snapshot 파싱 + Hash 인덱싱
     Print-Info "Snapshot 파싱 중..."
     $snapshotFile = Join-Path $SSOT_DIR "SPEC_SNAPSHOT.md"
     $snapshotRoutes = @()
 
+    # Hash 인덱스 초기화
+    $script:SnapshotRoutes = @{}
+
     if (Test-Path $snapshotFile) {
         Get-Content $snapshotFile | ForEach-Object {
             if ($_ -match '^\|\s*(\/[^|]*)\s*\|') {
-                $snapshotRoutes += $Matches[1].Trim()
+                $route = $Matches[1].Trim()
+                $snapshotRoutes += $route
+                # Hash 인덱싱 (O(1) 조회용)
+                $script:SnapshotRoutes[$route] = $true
+                $script:SnapshotRoutes[$route.ToLower()] = $true
             }
         }
     }
@@ -739,10 +822,12 @@ function Cmd-Verify {
     $details = @()
     $drifts = @()
 
-    # Contract별 검증
+    # Contract 존재 해시 초기화
+    $script:ContractExists = @{}
+
+    # Contract별 검증 (최적화: O(1) 해시 조회)
     if (Test-Path $contractsFile) {
         $contracts = Get-Content $contractsFile
-        $evidences = if (Test-Path $evidenceFile) { Get-Content $evidenceFile } else { @() }
 
         foreach ($contractLine in $contracts) {
             if ([string]::IsNullOrWhiteSpace($contractLine)) { continue }
@@ -753,30 +838,44 @@ function Cmd-Verify {
             $specKey = $parts[0]
             $contractId = $parts[1]
 
+            # Contract 존재 등록
+            $script:ContractExists[$contractId] = $true
+
             $hasEvidence = $false
             $evidenceValid = $true
             $inSnapshot = $false
 
-            # Evidence 검증
-            foreach ($evLine in $evidences) {
-                $evParts = $evLine -split '\|'
-                if ($evParts.Count -ge 4) {
-                    if ($evParts[0] -eq $specKey -and $evParts[1] -eq $contractId) {
-                        $hasEvidence = $true
-                        $result = Validate-Evidence -EvType $evParts[2] -EvValue $evParts[3]
-                        if ($result -ne "VALID") {
-                            $evidenceValid = $false
-                        }
+            # O(1) 해시 조회로 Evidence 검증
+            $evidenceKey = "$specKey|$contractId"
+            if ($script:EvidenceByContract.ContainsKey($evidenceKey)) {
+                $hasEvidence = $true
+
+                foreach ($ev in $script:EvidenceByContract[$evidenceKey]) {
+                    $result = Validate-Evidence -EvType $ev.Type -EvValue $ev.Value
+                    if ($result -ne "VALID") {
+                        $evidenceValid = $false
                     }
                 }
             }
 
-            # Snapshot 매칭
+            # Snapshot 매칭 (O(1) 해시 조회)
             $routeGuess = $contractId.ToLower() -replace '_func_', '/' -replace '_design_', '/' -replace '_', '/'
-            foreach ($route in $snapshotRoutes) {
-                if ($route.ToLower() -match [regex]::Escape($routeGuess) -or $route.ToLower() -match [regex]::Escape($specKey.ToLower())) {
-                    $inSnapshot = $true
-                    break
+            $specLower = $specKey.ToLower()
+
+            # 직접 해시 조회
+            if ($script:SnapshotRoutes.ContainsKey("/$routeGuess") -or
+                $script:SnapshotRoutes.ContainsKey("/api/$routeGuess") -or
+                $script:SnapshotRoutes.ContainsKey("/$specLower") -or
+                $script:SnapshotRoutes.ContainsKey("/api/$specLower")) {
+                $inSnapshot = $true
+            }
+            else {
+                # 폴백: 부분 매칭
+                foreach ($route in $script:SnapshotRoutes.Keys) {
+                    if ($route -like "*$routeGuess*" -or $route -like "*$specLower*") {
+                        $inSnapshot = $true
+                        break
+                    }
                 }
             }
 
@@ -814,22 +913,19 @@ function Cmd-Verify {
         }
     }
 
-    # Snapshot에 있지만 Contract가 없는 항목
+    # Snapshot에 있지만 Contract가 없는 항목 (최적화: O(1) 해시 조회)
     foreach ($route in $snapshotRoutes) {
         if ([string]::IsNullOrWhiteSpace($route)) { continue }
 
         $hasContract = $false
         $routeLower = $route.ToLower()
 
-        if (Test-Path $contractsFile) {
-            Get-Content $contractsFile | ForEach-Object {
-                $parts = $_ -split '\|'
-                if ($parts.Count -ge 2) {
-                    $contractLower = $parts[1].ToLower() -replace '_', '/'
-                    if ($routeLower -match [regex]::Escape($contractLower) -or $contractLower -match [regex]::Escape($routeLower.TrimStart('/'))) {
-                        $hasContract = $true
-                    }
-                }
+        # 해시 기반 검색
+        foreach ($contractId in $script:ContractExists.Keys) {
+            $contractLower = $contractId.ToLower() -replace '_', '/'
+            if ($routeLower -like "*$contractLower*" -or $contractLower -like "*$($routeLower.TrimStart('/') )*") {
+                $hasContract = $true
+                break
             }
         }
 

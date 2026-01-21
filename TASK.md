@@ -157,7 +157,65 @@ done
 
 - [x] 병목 지점 식별
 - [x] 원인 분석 문서화
-- [ ] 개선 구현 (다음 태스크)
+- [x] 개선 구현 완료
+
+---
+
+## Phase 5: specctl 성능 최적화 구현 ✅
+
+> v0.2.0 → v0.3.0 업그레이드
+
+### P5.1 구현된 최적화
+
+| 최적화 | 구현 위치 | 효과 |
+|--------|----------|------|
+| Evidence Associative Array | `EVIDENCE_BY_CONTRACT[]` | O(n×m) → O(1) 조회 |
+| 파일 내용 메모리 캐시 | `FILE_CACHE[]` + `get_file_content()` | 반복 I/O 제거 |
+| Snapshot Hash 인덱스 | `SNAPSHOT_ROUTES[]` | O(n) → O(1) 조회 |
+| Contract 존재 Hash | `CONTRACT_EXISTS[]` | MISSING_DOC 검사 최적화 |
+| 캐시 기반 grep | `cached_grep()`, `cached_grep_fixed()` | 파일 I/O 최소화 |
+
+### P5.2 변경 파일
+
+| 파일 | 변경 내용 |
+|------|----------|
+| `scripts/specctl` | Bash v0.3.0 - Associative array + 캐시 |
+| `scripts/specctl.ps1` | PowerShell v0.3.0 - Hash + 캐시 |
+
+### P5.3 예상 성능 개선
+
+| 지표 | Before | After | 개선율 |
+|------|:------:|:-----:|:------:|
+| Evidence 매칭 | O(n×m) ~11,470회 | O(n) ~74회 | ~155배 |
+| 파일 I/O | ~11,470회 | ~50회 (고유 파일) | ~230배 |
+| Snapshot 매칭 | O(n×m) ~4,366회 | O(n) ~59회 | ~74배 |
+| **총 연산량** | ~15,836회 | ~200회 | **~80배** |
+
+---
+
+---
+
+## Phase 6: BROKEN_EVIDENCE 수정 ⏳
+
+> 33개 깨진 Evidence 경로 수정
+
+### P6.1 수정 대상
+
+| SPEC | 개수 | 상태 |
+|------|:----:|:----:|
+| SPACE | 13 | ⏳ |
+| INFRA | 5 | ⏳ |
+| UI_COMPONENT | 5 | ⏳ |
+| AI_PROTOCOL | 4 | ⏳ |
+| AUTH | 2 | ⏳ |
+| DASHBOARD | 2 | ⏳ |
+| FOUNDATION | 2 | ⏳ |
+
+### P6.2 완료 기준
+
+- [ ] BROKEN_EVIDENCE 33개 → 0개
+- [ ] SYNC 27개 → 60개 이상
+- [ ] specctl verify 통과
 
 ---
 
@@ -169,6 +227,8 @@ done
 | Phase 2 | CLAUDE.md 슬림화 | ✅ 완료 | 2026-01-21 |
 | Phase 3 | 검증 및 마무리 | ✅ 완료 | 2026-01-21 |
 | Phase 4 | specctl 성능 분석 | ✅ 완료 | 2026-01-21 |
+| Phase 5 | specctl 성능 최적화 | ✅ 완료 | 2026-01-21 |
+| Phase 6 | BROKEN_EVIDENCE 수정 | ⏳ 진행중 | - |
 
 ---
 
@@ -189,3 +249,4 @@ done
 | 2026-01-21 | Phase 2 완료 - CLAUDE.md 660줄 → 50줄 슬림화 |
 | 2026-01-21 | Phase 3 완료 - git commit & push 완료 |
 | 2026-01-21 | Phase 4 완료 - specctl 성능 병목 분석 (O(n×m) 이중 루프, 파일 I/O 반복) |
+| 2026-01-21 | Phase 5 완료 - specctl v0.3.0 성능 최적화 (Associative array + 캐시) |

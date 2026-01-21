@@ -1,4 +1,4 @@
-# DRIFT_REPORT - 드리프트 기록
+﻿# DRIFT_REPORT - 드리프트 기록
 
 > 검증 실패 항목 추적
 
@@ -7,88 +7,93 @@
 ## Active (해결 필요)
 
 | ID | Type | Item | Detected | Status |
-|----|------|------|----------|--------|
-| DRIFT-001 | BROKEN_EVIDENCE | AI_PROTOCOL_FUNC_SESSION_START | 2026-01-21 | OPEN |
+|----|------|------|----------|--------|| DRIFT-001 | BROKEN_EVIDENCE | AI_PROTOCOL_FUNC_SESSION_START | 2026-01-21 | OPEN |
 | DRIFT-002 | BROKEN_EVIDENCE | AI_PROTOCOL_FUNC_CODE_DOC_SYNC | 2026-01-21 | OPEN |
 | DRIFT-003 | BROKEN_EVIDENCE | AI_PROTOCOL_FUNC_VERIFICATION | 2026-01-21 | OPEN |
 | DRIFT-004 | BROKEN_EVIDENCE | AI_PROTOCOL_DESIGN_HANDOFF_STRUCTURE | 2026-01-21 | OPEN |
-| DRIFT-005 | BROKEN_EVIDENCE | ARCH_FUNC_NEXTJS_PLATFORM | 2026-01-21 | OPEN |
-| DRIFT-006 | BROKEN_EVIDENCE | AUTH_API_NEXTAUTH | 2026-01-21 | OPEN |
-| DRIFT-007 | BROKEN_EVIDENCE | AUTH_API_USER_CONSENT | 2026-01-21 | OPEN |
-| DRIFT-008 | BROKEN_EVIDENCE | FOUNDATION_FUNC_ACCESSIBILITY | 2026-01-21 | OPEN |
-| DRIFT-009 | BROKEN_EVIDENCE | FOUNDATION_DESIGN_STATE_MACHINE | 2026-01-21 | OPEN |
-| DRIFT-010 | BROKEN_EVIDENCE | INFRA_FUNC_VERCEL_DEPLOY | 2026-01-21 | OPEN |
-| DRIFT-011 | BROKEN_EVIDENCE | INFRA_FUNC_OCI_SERVER | 2026-01-21 | OPEN |
-| DRIFT-012 | BROKEN_EVIDENCE | INFRA_FUNC_SOCKET_SERVER | 2026-01-21 | OPEN |
-| DRIFT-013 | BROKEN_EVIDENCE | INFRA_FUNC_LIVEKIT_SELFHOST | 2026-01-21 | OPEN |
-| DRIFT-014 | BROKEN_EVIDENCE | INFRA_FUNC_SSL_CADDY | 2026-01-21 | OPEN |
-| DRIFT-015 | BROKEN_EVIDENCE | SPACE_API_INVITE | 2026-01-21 | OPEN |
-| DRIFT-016 | BROKEN_EVIDENCE | SPACE_API_ZONES | 2026-01-21 | OPEN |
-| DRIFT-017 | BROKEN_EVIDENCE | UI_COMPONENT_FUNC_FORM | 2026-01-21 | OPEN |
-| DRIFT-018 | BROKEN_EVIDENCE | UI_COMPONENT_FUNC_ICON | 2026-01-21 | OPEN |
-| DRIFT-019 | BROKEN_EVIDENCE | UI_COMPONENT_DESIGN_MODAL | 2026-01-21 | OPEN |
-| DRIFT-020 | BROKEN_EVIDENCE | UI_COMPONENT_DESIGN_BUTTON_HOVER | 2026-01-21 | OPEN |
-| DRIFT-021 | BROKEN_EVIDENCE | UI_SYSTEM_FUNC_TOKEN_FLOW | 2026-01-21 | OPEN |
-| DRIFT-022 | BROKEN_EVIDENCE | USER_API_NAV | 2026-01-21 | OPEN |
-| DRIFT-023 | MISSING_DOC | /admin/logs  | 2026-01-21 | OPEN |
-| DRIFT-024 | MISSING_DOC | /admin/spaces/:id  | 2026-01-21 | OPEN |
-| DRIFT-025 | MISSING_DOC | /admin/spaces  | 2026-01-21 | OPEN |
-| DRIFT-026 | MISSING_DOC | /admin  | 2026-01-21 | OPEN |
-| DRIFT-027 | MISSING_DOC | /dashboard/spaces/:id  | 2026-01-21 | OPEN |
-| DRIFT-028 | MISSING_DOC | /game-test  | 2026-01-21 | OPEN |
-| DRIFT-029 | MISSING_DOC | /login  | 2026-01-21 | OPEN |
-| DRIFT-030 | MISSING_DOC | /my-spaces  | 2026-01-21 | OPEN |
-| DRIFT-031 | MISSING_DOC | /onboarding  | 2026-01-21 | OPEN |
-| DRIFT-032 | MISSING_DOC | /pricing  | 2026-01-21 | OPEN |
-| DRIFT-033 | MISSING_DOC | /profile  | 2026-01-21 | OPEN |
-| DRIFT-034 | MISSING_DOC | /space/:id  | 2026-01-21 | OPEN |
-| DRIFT-035 | MISSING_DOC | /spaces/new  | 2026-01-21 | OPEN |
-| DRIFT-036 | MISSING_DOC | /spaces/:inviteCode  | 2026-01-21 | OPEN |
-| DRIFT-037 | MISSING_DOC | /  | 2026-01-21 | OPEN |
-| DRIFT-038 | MISSING_DOC | /api/admin/logs  | 2026-01-21 | OPEN |
-| DRIFT-039 | MISSING_DOC | /api/admin/oci-metrics  | 2026-01-21 | OPEN |
-| DRIFT-040 | MISSING_DOC | /api/admin/spaces  | 2026-01-21 | OPEN |
-| DRIFT-041 | MISSING_DOC | /api/admin/stats  | 2026-01-21 | OPEN |
-| DRIFT-042 | MISSING_DOC | /api/admin/usage/analysis  | 2026-01-21 | OPEN |
-| DRIFT-043 | MISSING_DOC | /api/admin/usage/debug  | 2026-01-21 | OPEN |
-| DRIFT-044 | MISSING_DOC | /api/admin/usage/reset  | 2026-01-21 | OPEN |
-| DRIFT-045 | MISSING_DOC | /api/auth/register  | 2026-01-21 | OPEN |
-| DRIFT-046 | MISSING_DOC | /api/auth/*nextauth  | 2026-01-21 | OPEN |
-| DRIFT-047 | MISSING_DOC | /api/cron/aggregate-usage  | 2026-01-21 | OPEN |
-| DRIFT-048 | MISSING_DOC | /api/cron/cleanup-messages  | 2026-01-21 | OPEN |
-| DRIFT-049 | MISSING_DOC | /api/cron/cleanup-sessions  | 2026-01-21 | OPEN |
-| DRIFT-050 | MISSING_DOC | /api/cron/collect-metrics  | 2026-01-21 | OPEN |
-| DRIFT-051 | MISSING_DOC | /api/dashboard/spaces/:id/export  | 2026-01-21 | OPEN |
-| DRIFT-052 | MISSING_DOC | /api/dashboard/spaces/:id/stats  | 2026-01-21 | OPEN |
-| DRIFT-053 | MISSING_DOC | /api/guest/event  | 2026-01-21 | OPEN |
-| DRIFT-054 | MISSING_DOC | /api/guest/exit  | 2026-01-21 | OPEN |
-| DRIFT-055 | MISSING_DOC | /api/guest/verify  | 2026-01-21 | OPEN |
-| DRIFT-056 | MISSING_DOC | /api/guest  | 2026-01-21 | OPEN |
-| DRIFT-057 | MISSING_DOC | /api/livekit/token  | 2026-01-21 | OPEN |
-| DRIFT-058 | MISSING_DOC | /api/livekit/webhook  | 2026-01-21 | OPEN |
-| DRIFT-059 | MISSING_DOC | /api/my-spaces  | 2026-01-21 | OPEN |
-| DRIFT-060 | MISSING_DOC | /api/spaces/invite/:code  | 2026-01-21 | OPEN |
-| DRIFT-061 | MISSING_DOC | /api/spaces/:id/join  | 2026-01-21 | OPEN |
-| DRIFT-062 | MISSING_DOC | /api/spaces/:id/members/:memberId/kick  | 2026-01-21 | OPEN |
-| DRIFT-063 | MISSING_DOC | /api/spaces/:id/members/:memberId/mute  | 2026-01-21 | OPEN |
-| DRIFT-064 | MISSING_DOC | /api/spaces/:id/members  | 2026-01-21 | OPEN |
-| DRIFT-065 | MISSING_DOC | /api/spaces/:id/messages/:messageId  | 2026-01-21 | OPEN |
-| DRIFT-066 | MISSING_DOC | /api/spaces/:id/messages  | 2026-01-21 | OPEN |
-| DRIFT-067 | MISSING_DOC | /api/spaces/:id/my-role  | 2026-01-21 | OPEN |
-| DRIFT-068 | MISSING_DOC | /api/spaces/:id/objects  | 2026-01-21 | OPEN |
-| DRIFT-069 | MISSING_DOC | /api/spaces/:id/spotlight/activate  | 2026-01-21 | OPEN |
-| DRIFT-070 | MISSING_DOC | /api/spaces/:id/spotlight  | 2026-01-21 | OPEN |
-| DRIFT-071 | MISSING_DOC | /api/spaces/:id/staff/:userId  | 2026-01-21 | OPEN |
-| DRIFT-072 | MISSING_DOC | /api/spaces/:id/staff  | 2026-01-21 | OPEN |
-| DRIFT-073 | MISSING_DOC | /api/spaces/:id/visit  | 2026-01-21 | OPEN |
-| DRIFT-074 | MISSING_DOC | /api/spaces/:id/zones/:zoneId  | 2026-01-21 | OPEN |
-| DRIFT-075 | MISSING_DOC | /api/spaces/:id/zones  | 2026-01-21 | OPEN |
-| DRIFT-076 | MISSING_DOC | /api/spaces/:id  | 2026-01-21 | OPEN |
-| DRIFT-077 | MISSING_DOC | /api/spaces  | 2026-01-21 | OPEN |
-| DRIFT-078 | MISSING_DOC | /api/templates  | 2026-01-21 | OPEN |
-| DRIFT-079 | MISSING_DOC | /api/user/consent  | 2026-01-21 | OPEN |
-| DRIFT-080 | MISSING_DOC | /api/users/me/nav  | 2026-01-21 | OPEN |
-| DRIFT-081 | MISSING_DOC | /api/users/search  | 2026-01-21 | OPEN |
+| DRIFT-005 | BROKEN_EVIDENCE | AUTH_API_NEXTAUTH | 2026-01-21 | OPEN |
+| DRIFT-006 | BROKEN_EVIDENCE | AUTH_API_USER_CONSENT | 2026-01-21 | OPEN |
+| DRIFT-007 | BROKEN_EVIDENCE | DASHBOARD_API_STATS | 2026-01-21 | OPEN |
+| DRIFT-008 | BROKEN_EVIDENCE | DASHBOARD_API_EXPORT | 2026-01-21 | OPEN |
+| DRIFT-009 | BROKEN_EVIDENCE | FOUNDATION_FUNC_ACCESSIBILITY | 2026-01-21 | OPEN |
+| DRIFT-010 | BROKEN_EVIDENCE | FOUNDATION_DESIGN_STATE_MACHINE | 2026-01-21 | OPEN |
+| DRIFT-011 | BROKEN_EVIDENCE | INFRA_FUNC_VERCEL_DEPLOY | 2026-01-21 | OPEN |
+| DRIFT-012 | BROKEN_EVIDENCE | INFRA_FUNC_OCI_SERVER | 2026-01-21 | OPEN |
+| DRIFT-013 | BROKEN_EVIDENCE | INFRA_FUNC_SOCKET_SERVER | 2026-01-21 | OPEN |
+| DRIFT-014 | BROKEN_EVIDENCE | INFRA_FUNC_LIVEKIT_SELFHOST | 2026-01-21 | OPEN |
+| DRIFT-015 | BROKEN_EVIDENCE | INFRA_FUNC_SSL_CADDY | 2026-01-21 | OPEN |
+| DRIFT-016 | BROKEN_EVIDENCE | SPACE_API_CRUD | 2026-01-21 | OPEN |
+| DRIFT-017 | BROKEN_EVIDENCE | SPACE_API_JOIN | 2026-01-21 | OPEN |
+| DRIFT-018 | BROKEN_EVIDENCE | SPACE_API_INVITE | 2026-01-21 | OPEN |
+| DRIFT-019 | BROKEN_EVIDENCE | SPACE_API_VISIT | 2026-01-21 | OPEN |
+| DRIFT-020 | BROKEN_EVIDENCE | SPACE_API_MY_ROLE | 2026-01-21 | OPEN |
+| DRIFT-021 | BROKEN_EVIDENCE | SPACE_API_MEMBERS | 2026-01-21 | OPEN |
+| DRIFT-022 | BROKEN_EVIDENCE | SPACE_API_KICK | 2026-01-21 | OPEN |
+| DRIFT-023 | BROKEN_EVIDENCE | SPACE_API_MUTE | 2026-01-21 | OPEN |
+| DRIFT-024 | BROKEN_EVIDENCE | SPACE_API_STAFF | 2026-01-21 | OPEN |
+| DRIFT-025 | BROKEN_EVIDENCE | SPACE_API_OBJECTS | 2026-01-21 | OPEN |
+| DRIFT-026 | BROKEN_EVIDENCE | SPACE_API_ZONES | 2026-01-21 | OPEN |
+| DRIFT-027 | BROKEN_EVIDENCE | SPACE_API_SPOTLIGHT | 2026-01-21 | OPEN |
+| DRIFT-028 | BROKEN_EVIDENCE | SPACE_API_MESSAGES | 2026-01-21 | OPEN |
+| DRIFT-029 | BROKEN_EVIDENCE | UI_COMPONENT_FUNC_FORM | 2026-01-21 | OPEN |
+| DRIFT-030 | BROKEN_EVIDENCE | UI_COMPONENT_FUNC_ICON | 2026-01-21 | OPEN |
+| DRIFT-031 | BROKEN_EVIDENCE | UI_COMPONENT_DESIGN_MODAL | 2026-01-21 | OPEN |
+| DRIFT-032 | BROKEN_EVIDENCE | UI_COMPONENT_DESIGN_BUTTON_HOVER | 2026-01-21 | OPEN |
+| DRIFT-033 | BROKEN_EVIDENCE | UI_SYSTEM_FUNC_TOKEN_FLOW | 2026-01-21 | OPEN |
+| DRIFT-034 | MISSING_DOC | /admin/logs | 2026-01-21 | OPEN |
+| DRIFT-035 | MISSING_DOC | /admin/spaces/:id | 2026-01-21 | OPEN |
+| DRIFT-036 | MISSING_DOC | /admin/spaces | 2026-01-21 | OPEN |
+| DRIFT-037 | MISSING_DOC | /dashboard/spaces/:id | 2026-01-21 | OPEN |
+| DRIFT-038 | MISSING_DOC | /game-test | 2026-01-21 | OPEN |
+| DRIFT-039 | MISSING_DOC | /login | 2026-01-21 | OPEN |
+| DRIFT-040 | MISSING_DOC | /my-spaces | 2026-01-21 | OPEN |
+| DRIFT-041 | MISSING_DOC | /onboarding | 2026-01-21 | OPEN |
+| DRIFT-042 | MISSING_DOC | /pricing | 2026-01-21 | OPEN |
+| DRIFT-043 | MISSING_DOC | /profile | 2026-01-21 | OPEN |
+| DRIFT-044 | MISSING_DOC | /space/:id | 2026-01-21 | OPEN |
+| DRIFT-045 | MISSING_DOC | /spaces/new | 2026-01-21 | OPEN |
+| DRIFT-046 | MISSING_DOC | /spaces/:inviteCode | 2026-01-21 | OPEN |
+| DRIFT-047 | MISSING_DOC | /api/admin/logs | 2026-01-21 | OPEN |
+| DRIFT-048 | MISSING_DOC | /api/admin/oci-metrics | 2026-01-21 | OPEN |
+| DRIFT-049 | MISSING_DOC | /api/admin/spaces | 2026-01-21 | OPEN |
+| DRIFT-050 | MISSING_DOC | /api/admin/stats | 2026-01-21 | OPEN |
+| DRIFT-051 | MISSING_DOC | /api/admin/usage/analysis | 2026-01-21 | OPEN |
+| DRIFT-052 | MISSING_DOC | /api/admin/usage/debug | 2026-01-21 | OPEN |
+| DRIFT-053 | MISSING_DOC | /api/admin/usage/reset | 2026-01-21 | OPEN |
+| DRIFT-054 | MISSING_DOC | /api/auth/register | 2026-01-21 | OPEN |
+| DRIFT-055 | MISSING_DOC | /api/auth/*nextauth | 2026-01-21 | OPEN |
+| DRIFT-056 | MISSING_DOC | /api/cron/aggregate-usage | 2026-01-21 | OPEN |
+| DRIFT-057 | MISSING_DOC | /api/cron/cleanup-messages | 2026-01-21 | OPEN |
+| DRIFT-058 | MISSING_DOC | /api/cron/cleanup-sessions | 2026-01-21 | OPEN |
+| DRIFT-059 | MISSING_DOC | /api/cron/collect-metrics | 2026-01-21 | OPEN |
+| DRIFT-060 | MISSING_DOC | /api/dashboard/spaces/:id/export | 2026-01-21 | OPEN |
+| DRIFT-061 | MISSING_DOC | /api/dashboard/spaces/:id/stats | 2026-01-21 | OPEN |
+| DRIFT-062 | MISSING_DOC | /api/guest/event | 2026-01-21 | OPEN |
+| DRIFT-063 | MISSING_DOC | /api/guest/exit | 2026-01-21 | OPEN |
+| DRIFT-064 | MISSING_DOC | /api/guest/verify | 2026-01-21 | OPEN |
+| DRIFT-065 | MISSING_DOC | /api/guest | 2026-01-21 | OPEN |
+| DRIFT-066 | MISSING_DOC | /api/livekit/token | 2026-01-21 | OPEN |
+| DRIFT-067 | MISSING_DOC | /api/livekit/webhook | 2026-01-21 | OPEN |
+| DRIFT-068 | MISSING_DOC | /api/my-spaces | 2026-01-21 | OPEN |
+| DRIFT-069 | MISSING_DOC | /api/spaces/invite/:code | 2026-01-21 | OPEN |
+| DRIFT-070 | MISSING_DOC | /api/spaces/:id/join | 2026-01-21 | OPEN |
+| DRIFT-071 | MISSING_DOC | /api/spaces/:id/members/:memberId/kick | 2026-01-21 | OPEN |
+| DRIFT-072 | MISSING_DOC | /api/spaces/:id/members/:memberId/mute | 2026-01-21 | OPEN |
+| DRIFT-073 | MISSING_DOC | /api/spaces/:id/members | 2026-01-21 | OPEN |
+| DRIFT-074 | MISSING_DOC | /api/spaces/:id/messages/:messageId | 2026-01-21 | OPEN |
+| DRIFT-075 | MISSING_DOC | /api/spaces/:id/messages | 2026-01-21 | OPEN |
+| DRIFT-076 | MISSING_DOC | /api/spaces/:id/my-role | 2026-01-21 | OPEN |
+| DRIFT-077 | MISSING_DOC | /api/spaces/:id/objects | 2026-01-21 | OPEN |
+| DRIFT-078 | MISSING_DOC | /api/spaces/:id/spotlight/activate | 2026-01-21 | OPEN |
+| DRIFT-079 | MISSING_DOC | /api/spaces/:id/spotlight | 2026-01-21 | OPEN |
+| DRIFT-080 | MISSING_DOC | /api/spaces/:id/staff/:userId | 2026-01-21 | OPEN |
+| DRIFT-081 | MISSING_DOC | /api/spaces/:id/staff | 2026-01-21 | OPEN |
+| DRIFT-082 | MISSING_DOC | /api/spaces/:id/visit | 2026-01-21 | OPEN |
+| DRIFT-083 | MISSING_DOC | /api/spaces/:id/zones/:zoneId | 2026-01-21 | OPEN |
+| DRIFT-084 | MISSING_DOC | /api/spaces/:id/zones | 2026-01-21 | OPEN |
+| DRIFT-085 | MISSING_DOC | /api/spaces/:id | 2026-01-21 | OPEN |
+| DRIFT-086 | MISSING_DOC | /api/users/me/nav | 2026-01-21 | OPEN |
+| DRIFT-087 | MISSING_DOC | /api/users/search | 2026-01-21 | OPEN |
 
 ---
 
@@ -106,4 +111,4 @@
 
 ---
 
-> **자동 생성**: 2026-01-21 14:26:33
+> **자동 생성**: 2026-01-21 14:39:51
