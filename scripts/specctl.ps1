@@ -210,25 +210,40 @@ function Convert-FileToRoute {
 function Get-SpecKey {
     param([string]$Route)
 
+    # API routes - 기능별 분류
     switch -Wildcard ($Route) {
         "/api/auth/*" { return "AUTH" }
-        "/auth/*" { return "AUTH" }
         "/api/user/*" { return "USER" }
         "/api/users/*" { return "USER" }
-        "/user/*" { return "USER" }
-        "/users/*" { return "USER" }
+        "/api/admin/*" { return "ADMIN" }
+        "/api/space/*" { return "SPACE" }
+        "/api/spaces/*" { return "SPACE" }
+        "/api/guest/*" { return "GUEST" }
+        "/api/livekit/*" { return "LIVEKIT" }
+        "/api/cron/*" { return "CRON" }
+        "/api/dashboard/*" { return "DASHBOARD" }
+        "/api/my-spaces" { return "SPACE" }
+        "/api/templates" { return "SPACE" }
         "/api/chat/*" { return "CHAT" }
-        "/chat/*" { return "CHAT" }
         "/api/billing/*" { return "BILLING" }
-        "/billing/*" { return "BILLING" }
-        "/payment/*" { return "BILLING" }
-        "/api/*" { return "API" }
+        # UI routes - PAGE로 분류
+        "/admin*" { return "PAGE" }
+        "/space/*" { return "PAGE" }
+        "/my-spaces" { return "PAGE" }
+        "/profile" { return "PAGE" }
+        "/onboarding" { return "PAGE" }
+        "/pricing" { return "PAGE" }
+        "/spaces/*" { return "PAGE" }
+        "/game-test" { return "PAGE" }
+        "/dashboard/spaces/*" { return "PAGE" }
         "/login" { return "AUTH" }
         "/logout" { return "AUTH" }
         "/register" { return "AUTH" }
         "/signup" { return "AUTH" }
+        "/" { return "PAGE" }
         "/dashboard*" { return "DASHBOARD" }
         "/settings*" { return "SETTINGS" }
+        "/api/*" { return "API" }
         default { return "UNCLASSIFIED" }
     }
 }
@@ -835,6 +850,9 @@ function Cmd-Verify {
     # Contract 존재 해시 초기화
     $script:ContractExists = @{}
 
+    # Evidence 라우트 → Contract 역방향 인덱스
+    $script:RouteToContract = @{}
+
     # Contract별 검증 (최적화: O(1) 해시 조회)
     if (Test-Path $contractsFile) {
         $contracts = Get-Content $contractsFile
@@ -868,23 +886,62 @@ function Cmd-Verify {
                 }
             }
 
-            # Snapshot 매칭 (O(1) 해시 조회)
+            # Snapshot 매칭 (Evidence 파일 경로 기반 + Contract ID 기반)
             $routeGuess = $contractId.ToLower() -replace '_func_', '/' -replace '_design_', '/' -replace '_', '/'
             $specLower = $specKey.ToLower()
 
-            # 직접 해시 조회
-            if ($script:SnapshotRoutes.ContainsKey("/$routeGuess") -or
-                $script:SnapshotRoutes.ContainsKey("/api/$routeGuess") -or
-                $script:SnapshotRoutes.ContainsKey("/$specLower") -or
-                $script:SnapshotRoutes.ContainsKey("/api/$specLower")) {
-                $inSnapshot = $true
+            # Evidence 파일 경로에서 라우트 추출
+            $evidenceRoutes = @()
+            if ($script:EvidenceByContract.ContainsKey($evidenceKey)) {
+                foreach ($ev in $script:EvidenceByContract[$evidenceKey]) {
+                    $evPath = $ev.Value -split '::' | Select-Object -First 1
+                    # src/app/xxx/page.tsx -> /xxx
+                    # src/app/api/xxx/route.ts -> /api/xxx
+                    if ($evPath -match 'src/app/api/(.+)/route\.ts') {
+                        # [...param] -> *param (catch-all), [param] -> :param (dynamic)
+                        $routePart = $Matches[1] -replace '\[\.\.\.([^\]]+)\]', '*$1' -replace '\[([^\]]+)\]', ':$1'
+                        $evidenceRoutes += "/api/$routePart"
+                    }
+                    elseif ($evPath -match 'src/app/(.+)/page\.tsx') {
+                        # [...param] -> *param (catch-all), [param] -> :param (dynamic)
+                        $routePath = $Matches[1] -replace '\[\.\.\.([^\]]+)\]', '*$1' -replace '\[([^\]]+)\]', ':$1'
+                        $evidenceRoutes += "/$routePath"
+                    }
+                    elseif ($evPath -match 'src/app/page\.tsx') {
+                        $evidenceRoutes += "/"
+                    }
+                }
             }
-            else {
-                # 폴백: 부분 매칭
-                foreach ($route in $script:SnapshotRoutes.Keys) {
-                    if ($route -like "*$routeGuess*" -or $route -like "*$specLower*") {
-                        $inSnapshot = $true
-                        break
+
+            # Evidence 라우트를 역방향 인덱스에 등록
+            foreach ($evRoute in $evidenceRoutes) {
+                $script:RouteToContract[$evRoute] = $contractId
+                $script:RouteToContract[$evRoute.ToLower()] = $contractId
+            }
+
+            # Evidence 라우트로 매칭 시도
+            foreach ($evRoute in $evidenceRoutes) {
+                if ($script:SnapshotRoutes.ContainsKey($evRoute) -or $script:SnapshotRoutes.ContainsKey($evRoute.ToLower())) {
+                    $inSnapshot = $true
+                    break
+                }
+            }
+
+            # 기존 Contract ID 기반 매칭 (폴백)
+            if (-not $inSnapshot) {
+                if ($script:SnapshotRoutes.ContainsKey("/$routeGuess") -or
+                    $script:SnapshotRoutes.ContainsKey("/api/$routeGuess") -or
+                    $script:SnapshotRoutes.ContainsKey("/$specLower") -or
+                    $script:SnapshotRoutes.ContainsKey("/api/$specLower")) {
+                    $inSnapshot = $true
+                }
+                else {
+                    # 폴백: 부분 매칭
+                    foreach ($route in $script:SnapshotRoutes.Keys) {
+                        if ($route -like "*$routeGuess*" -or $route -like "*$specLower*") {
+                            $inSnapshot = $true
+                            break
+                        }
                     }
                 }
             }
@@ -930,12 +987,18 @@ function Cmd-Verify {
         $hasContract = $false
         $routeLower = $route.ToLower()
 
-        # 해시 기반 검색
-        foreach ($contractId in $script:ContractExists.Keys) {
-            $contractLower = $contractId.ToLower() -replace '_', '/'
-            if ($routeLower -like "*$contractLower*" -or $contractLower -like "*$($routeLower.TrimStart('/') )*") {
-                $hasContract = $true
-                break
+        # 1. Evidence 라우트 역방향 인덱스에서 먼저 확인 (O(1))
+        if ($script:RouteToContract.ContainsKey($route) -or $script:RouteToContract.ContainsKey($routeLower)) {
+            $hasContract = $true
+        }
+        else {
+            # 2. Contract ID 기반 해시 검색 (폴백)
+            foreach ($contractId in $script:ContractExists.Keys) {
+                $contractLower = $contractId.ToLower() -replace '_', '/'
+                if ($routeLower -like "*$contractLower*" -or $contractLower -like "*$($routeLower.TrimStart('/') )*") {
+                    $hasContract = $true
+                    break
+                }
             }
         }
 

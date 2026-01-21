@@ -22,9 +22,9 @@
 |------|-----|
 | **마지막 검증** | 2026-01-21 |
 | **검증 레벨** | soft |
-| **총 항목** | 128 |
-| **SYNC** | 44 |
-| **MISSING_DOC** | 54 |
+| **총 항목** | 89 |
+| **SYNC** | 59 |
+| **MISSING_DOC** | 0 |
 | **HALLUCINATION** | 0 |
 | **BROKEN_EVIDENCE** | 0 |
 | **SNAPSHOT_GAP** | 30 |
@@ -78,6 +78,21 @@
 | INFRA | INFRA_FUNC_SSL_CADDY | - | O | O | SNAPSHOT_GAP |
 | LIVEKIT | LIVEKIT_API_TOKEN | O | O | O | SYNC |
 | LIVEKIT | LIVEKIT_API_WEBHOOK | O | O | O | SYNC |
+| PAGE | PAGE_HOME | O | O | O | SYNC |
+| PAGE | PAGE_ADMIN_DASHBOARD | O | O | O | SYNC |
+| PAGE | PAGE_ADMIN_LOGS | O | O | O | SYNC |
+| PAGE | PAGE_ADMIN_SPACES | O | O | O | SYNC |
+| PAGE | PAGE_ADMIN_SPACE_DETAIL | O | O | O | SYNC |
+| PAGE | PAGE_SPACE_MAIN | O | O | O | SYNC |
+| PAGE | PAGE_MY_SPACES | O | O | O | SYNC |
+| PAGE | PAGE_PROFILE | O | O | O | SYNC |
+| PAGE | PAGE_ONBOARDING | O | O | O | SYNC |
+| PAGE | PAGE_PRICING | O | O | O | SYNC |
+| PAGE | PAGE_SPACE_CREATE | O | O | O | SYNC |
+| PAGE | PAGE_SPACE_INVITE | O | O | O | SYNC |
+| PAGE | PAGE_GAME_TEST | O | O | O | SYNC |
+| PAGE | PAGE_DASHBOARD_SPACE | O | O | O | SYNC |
+| PAGE | PAGE_LOGIN | O | O | O | SYNC |
 | PERMISSION | PERMISSION_FUNC_SPACE_ROLE | - | O | O | SNAPSHOT_GAP |
 | PERMISSION | PERMISSION_FUNC_SPACE_AUTH | - | O | O | SNAPSHOT_GAP |
 | PERMISSION | PERMISSION_FUNC_CHAT_MANAGE | - | O | O | SNAPSHOT_GAP |
@@ -108,60 +123,6 @@
 | UI_SYSTEM | UI_SYSTEM_FUNC_TEXT_CONFIG | - | O | O | SNAPSHOT_GAP |
 | USER | USER_API_NAV | O | O | O | SYNC |
 | USER | USER_API_SEARCH | O | O | O | SYNC |
-| UNCLASSIFIED | (없음) | O | X | - | MISSING_DOC |
-| UNCLASSIFIED | (없음) | O | X | - | MISSING_DOC |
-| UNCLASSIFIED | (없음) | O | X | - | MISSING_DOC |
-| DASHBOARD | (없음) | O | X | - | MISSING_DOC |
-| UNCLASSIFIED | (없음) | O | X | - | MISSING_DOC |
-| AUTH | (없음) | O | X | - | MISSING_DOC |
-| UNCLASSIFIED | (없음) | O | X | - | MISSING_DOC |
-| UNCLASSIFIED | (없음) | O | X | - | MISSING_DOC |
-| UNCLASSIFIED | (없음) | O | X | - | MISSING_DOC |
-| UNCLASSIFIED | (없음) | O | X | - | MISSING_DOC |
-| UNCLASSIFIED | (없음) | O | X | - | MISSING_DOC |
-| UNCLASSIFIED | (없음) | O | X | - | MISSING_DOC |
-| UNCLASSIFIED | (없음) | O | X | - | MISSING_DOC |
-| API | (없음) | O | X | - | MISSING_DOC |
-| API | (없음) | O | X | - | MISSING_DOC |
-| API | (없음) | O | X | - | MISSING_DOC |
-| API | (없음) | O | X | - | MISSING_DOC |
-| API | (없음) | O | X | - | MISSING_DOC |
-| API | (없음) | O | X | - | MISSING_DOC |
-| API | (없음) | O | X | - | MISSING_DOC |
-| AUTH | (없음) | O | X | - | MISSING_DOC |
-| AUTH | (없음) | O | X | - | MISSING_DOC |
-| API | (없음) | O | X | - | MISSING_DOC |
-| API | (없음) | O | X | - | MISSING_DOC |
-| API | (없음) | O | X | - | MISSING_DOC |
-| API | (없음) | O | X | - | MISSING_DOC |
-| API | (없음) | O | X | - | MISSING_DOC |
-| API | (없음) | O | X | - | MISSING_DOC |
-| API | (없음) | O | X | - | MISSING_DOC |
-| API | (없음) | O | X | - | MISSING_DOC |
-| API | (없음) | O | X | - | MISSING_DOC |
-| API | (없음) | O | X | - | MISSING_DOC |
-| API | (없음) | O | X | - | MISSING_DOC |
-| API | (없음) | O | X | - | MISSING_DOC |
-| API | (없음) | O | X | - | MISSING_DOC |
-| API | (없음) | O | X | - | MISSING_DOC |
-| API | (없음) | O | X | - | MISSING_DOC |
-| API | (없음) | O | X | - | MISSING_DOC |
-| API | (없음) | O | X | - | MISSING_DOC |
-| API | (없음) | O | X | - | MISSING_DOC |
-| API | (없음) | O | X | - | MISSING_DOC |
-| API | (없음) | O | X | - | MISSING_DOC |
-| API | (없음) | O | X | - | MISSING_DOC |
-| API | (없음) | O | X | - | MISSING_DOC |
-| API | (없음) | O | X | - | MISSING_DOC |
-| API | (없음) | O | X | - | MISSING_DOC |
-| API | (없음) | O | X | - | MISSING_DOC |
-| API | (없음) | O | X | - | MISSING_DOC |
-| API | (없음) | O | X | - | MISSING_DOC |
-| API | (없음) | O | X | - | MISSING_DOC |
-| API | (없음) | O | X | - | MISSING_DOC |
-| API | (없음) | O | X | - | MISSING_DOC |
-| USER | (없음) | O | X | - | MISSING_DOC |
-| USER | (없음) | O | X | - | MISSING_DOC |
 
 ---
 
@@ -169,7 +130,7 @@
 
 | 날짜 | SYNC | MISSING | HALLU | BROKEN | GAP | 변화 |
 |------|:----:|:-------:|:-----:|:------:|:---:|------|
-| 2026-01-21 | 44 | 54 | 0 | 0 | 30 | specctl verify |
+| 2026-01-21 | 59 | 0 | 0 | 0 | 30 | specctl verify |
 
 ---
 
