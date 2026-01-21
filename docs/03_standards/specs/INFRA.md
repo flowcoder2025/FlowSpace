@@ -56,6 +56,37 @@ LiveKit + Socket.io를 Oracle Always Free에 통합 배포하여 인프라 비�
 - **Evidence**:
   - code: `terraform/flowspace-stack/caddy/Caddyfile`
 
+### Contract: INFRA_FUNC_OCI_MONITORING
+
+- **What**: OCI 리소스 모니터링 API
+- **Rules**:
+  | 메트릭 | 데이터 소스 | 용도 |
+  |--------|------------|------|
+  | CPU | OCI Monitoring API | 실시간 사용률 |
+  | 메모리 | OCI Monitoring API | 실시간 사용률 |
+  | 트래픽 | OCI Monitoring API | 월 누적 + 예측 |
+  | 스토리지 할당량 | Block Volume API | Boot Volume 크기 |
+  | 스토리지 사용량 | Socket 서버 df | 실제 사용량 |
+- **Evidence**:
+  - code: `src/app/api/admin/oci-metrics/route.ts::GET`
+  - code: `src/lib/utils/oci-monitoring.ts::getOCIInstanceMetrics`
+
+### Contract: INFRA_FUNC_OCI_COST
+
+- **What**: OCI 비용 추정 및 무료 한도 관리
+- **Rules**:
+  - Always Free 한도: 4 OCPU, 24GB RAM, 200GB Storage, 10TB/월 트래픽
+  - 1공간 50명×9시간 = 무료 범위
+  - 트래픽 초과 시 과금 발생
+- **Evidence**:
+  - code: `src/lib/utils/oci-cost.ts::calculateCostEstimate`
+
+### Contract: INFRA_FUNC_METRICS_CRON
+
+- **What**: 메트릭 수집 크론 작업
+- **Evidence**:
+  - code: `src/app/api/cron/collect-metrics/route.ts::POST`
+
 <!-- FUNCTIONAL:END -->
 
 ---
