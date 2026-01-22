@@ -52,6 +52,19 @@ npm run dev:all    # Next.js(3000) + Socket.io(3001) + LiveKit(7880)
 
 **상세**: `docs/00_ssot/ANCHOR.md`
 
+### DocOps 문서화 규칙 (필수)
+
+1. **SSOT 폴더 (`docs/00_ssot/`)에 임의 파일 생성 금지**
+   - 허용 파일: `ANCHOR.md`, `COVERAGE_MATRIX.md`, `DRIFT_REPORT.md`, `DOC_DEBT.md`, `SPEC_SNAPSHOT.md`, `DOC_POLICY.md`, `DOCOPS_SPEC_V3.2.md`, `AGENT_GUIDE.md`
+   - CHANGELOG, HANDOFF 등 임의 문서 생성 ❌
+
+2. **변경 이력은 해당 Spec 문서에 기록**
+   - 위치: `docs/03_standards/specs/<SPEC_KEY>.md` → "변경 이력" 섹션
+   - 형식: `| 날짜 | 요약 | 커밋 |`
+
+3. **Evidence 없는 Contract 금지**
+   - 모든 Contract는 `code:`, `ui:`, `test:` 등 Evidence 필수
+
 ## 현재 태스크
 
 **TASK.md 참조** (없으면 신규 태스크 없음)
