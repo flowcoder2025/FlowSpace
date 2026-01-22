@@ -562,5 +562,16 @@
 
 ---
 
+## Server 핸들러/유틸리티 (v0.5.1)
+
+> 수동 추가: server/handlers/*.ts, server/utils/*.ts
+| Name | File | SPEC_KEY | Type |
+|------|------|----------|------|
+| registerHandlers | server/handlers/index.ts | SOCKET | function |
+| logger | server/utils/logger.ts | SOCKET | module |
+| config | server/config.ts | SOCKET | module |
+
+---
+
 > **참고**: 모든 항목은 자동 스캔됨 (v0.5.0 확장)
 > **Contract 유형 분류**: PROCESS_BASED(AI_PROTOCOL), INFRA_BASED(INFRA)는 GAP 계산에서 제외

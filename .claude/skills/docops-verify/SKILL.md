@@ -65,10 +65,18 @@ parallel_tasks:
 ```yaml
 status_rules:
   SYNC: "코드O, 문서O, 증거O"
-  MISSING_DOC: "코드O, 문서X (Snapshot에만 존재)"
-  HALLUCINATION: "코드X, 문서O (Contract에만 존재)"
-  BROKEN_EVIDENCE: "증거 링크가 깨짐"
-  SNAPSHOT_GAP: "자동화 범위 밖 (AI_PROTOCOL, INFRA, PAGE 등)"
+  MISSING_DOC: "코드O, 문서X (Snapshot에만 존재) → 드리프트"
+  HALLUCINATION: "코드X, 문서O (Contract에만 존재) → 드리프트"
+  BROKEN_EVIDENCE: "증거 링크가 깨짐 → 드리프트"
+  SNAPSHOT_GAP: "코드X, 문서O (CODE 기반) → 드리프트 (스캔 범위 확장 필요)"
+  PROCESS_BASED: "AI_PROTOCOL 등 프로세스 기반 → GAP 제외"
+  INFRA_BASED: "INFRA 등 인프라 기반 → GAP 제외"
+
+drift_check:
+  - MISSING_DOC > 0: 드리프트
+  - HALLUCINATION > 0: 드리프트
+  - BROKEN_EVIDENCE > 0: 드리프트
+  - SNAPSHOT_GAP > 0: 드리프트 (CODE 기반이면 스캔 범위 확장 필요)
 ```
 
 ### Step 4: 심볼 검증 (--fast 아닐 때만)
@@ -116,6 +124,7 @@ update_file: docs/00_ssot/DRIFT_REPORT.md
 add_to_active:
   - BROKEN_EVIDENCE 항목
   - MISSING_DOC 항목 (새로 발견된 것만)
+  - SNAPSHOT_GAP 항목 (CODE 기반, 스캔 범위 확장 필요)
 ```
 
 ### Step 7: 결과 보고
@@ -144,7 +153,12 @@ drift_section_format: |
 status_icons:
   0: "✓"
   ">0": "✗"
-  gap: "⚠"
+
+drift_conditions:
+  - MISSING_DOC > 0
+  - HALLUCINATION > 0
+  - BROKEN_EVIDENCE > 0
+  - SNAPSHOT_GAP > 0 (CODE 기반만, PROCESS_BASED/INFRA_BASED 제외)
 ```
 
 ---
