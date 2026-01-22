@@ -1093,41 +1093,13 @@ export function LiveKitMediaInternalProvider({ children }: { children: ReactNode
 
   // 📌 AudioWorklet 처리된 트랙으로 교체
   // LiveKit의 기존 마이크 트랙을 AudioWorklet에서 처리된 트랙으로 교체
-  // 🔧 핵심 수정: RTCRtpSender.replaceTrack()을 직접 호출하여 실제 WebRTC 전송 트랙 교체
-  // 🔧 재시도 로직 추가: RTCRtpSender가 준비될 때까지 대기
+  // 🔧 두 가지 방법 시도: 1) LocalTrack.replaceTrack() 2) RTCRtpSender.replaceTrack()
   const replaceAudioTrackWithProcessed = useCallback(async (processedTrack: MediaStreamTrack): Promise<boolean> => {
     if (!localParticipant || !room) {
       if (IS_DEV) {
         console.log("[LiveKitMediaContext] replaceAudioTrackWithProcessed: No local participant or room")
       }
       return false
-    }
-
-    // 🔧 RTCRtpSender를 찾는 헬퍼 함수
-    const findAudioSender = (): RTCRtpSender | null => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const engine = (room as any).engine
-      const senders = engine?.publisher?.pc?.getSenders()
-      if (!senders) return null
-      return senders.find((s: RTCRtpSender) => s.track?.kind === "audio") || null
-    }
-
-    // 🔧 재시도 로직: RTCRtpSender가 준비될 때까지 최대 3초 대기 (300ms x 10회)
-    const waitForSender = async (maxRetries: number = 10, delayMs: number = 300): Promise<RTCRtpSender | null> => {
-      for (let i = 0; i < maxRetries; i++) {
-        const sender = findAudioSender()
-        if (sender) {
-          if (IS_DEV && i > 0) {
-            console.log(`[LiveKitMediaContext] Audio sender found after ${i + 1} attempts`)
-          }
-          return sender
-        }
-        if (IS_DEV) {
-          console.log(`[LiveKitMediaContext] Waiting for audio sender... attempt ${i + 1}/${maxRetries}`)
-        }
-        await new Promise(resolve => setTimeout(resolve, delayMs))
-      }
-      return null
     }
 
     try {
@@ -1139,22 +1111,76 @@ export function LiveKitMediaInternalProvider({ children }: { children: ReactNode
         return false
       }
 
-      // 🔧 RTCRtpSender 대기 (WebRTC 연결이 완료될 때까지)
-      const sender = await waitForSender()
+      // 🔧 방법 1: LiveKit LocalTrack.replaceTrack() 사용 (권장)
+      // 이 메서드는 내부적으로 RTCRtpSender.replaceTrack()을 호출함
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const localTrack = publication.track as any
 
-      if (!sender) {
-        console.warn("[LiveKitMediaContext] replaceAudioTrackWithProcessed: No audio sender found after retries")
+      if (typeof localTrack.replaceTrack === "function") {
+        try {
+          await localTrack.replaceTrack(processedTrack, true) // userProvidedTrack = true
+          if (IS_DEV) {
+            console.log("[LiveKitMediaContext] replaceAudioTrackWithProcessed: Track replaced via LocalTrack.replaceTrack()")
+          }
+          return true
+        } catch (err) {
+          if (IS_DEV) {
+            console.log("[LiveKitMediaContext] LocalTrack.replaceTrack() failed, trying RTCRtpSender:", err)
+          }
+          // 실패 시 방법 2로 fallback
+        }
+      }
+
+      // 🔧 방법 2: RTCRtpSender 직접 접근 (fallback)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const engine = (room as any).engine
+      const pc = engine?.publisher?.pc as RTCPeerConnection | undefined
+
+      if (!pc) {
+        console.warn("[LiveKitMediaContext] replaceAudioTrackWithProcessed: No RTCPeerConnection")
         return false
       }
 
-      // RTCRtpSender.replaceTrack()으로 실제 전송 트랙 교체
-      await sender.replaceTrack(processedTrack)
+      // 🔧 모든 sender 중 audio sender 찾기 (track이 없어도 kind로 판별)
+      const senders = pc.getSenders()
+      let audioSender: RTCRtpSender | null = null
+
+      for (const sender of senders) {
+        // track이 있으면 kind로 확인
+        if (sender.track?.kind === "audio") {
+          audioSender = sender
+          break
+        }
+        // track이 없으면 getParameters로 codec 확인
+        const params = sender.getParameters()
+        if (params.codecs?.some(c => c.mimeType.toLowerCase().includes("audio"))) {
+          audioSender = sender
+          break
+        }
+      }
+
+      if (!audioSender) {
+        // 🔧 마지막 시도: transceiver에서 audio sender 찾기
+        const transceivers = pc.getTransceivers()
+        for (const transceiver of transceivers) {
+          if (transceiver.sender && transceiver.receiver?.track?.kind === "audio") {
+            audioSender = transceiver.sender
+            break
+          }
+        }
+      }
+
+      if (!audioSender) {
+        console.warn("[LiveKitMediaContext] replaceAudioTrackWithProcessed: No audio sender found")
+        return false
+      }
+
+      await audioSender.replaceTrack(processedTrack)
 
       if (IS_DEV) {
         console.log("[LiveKitMediaContext] replaceAudioTrackWithProcessed: Track replaced via RTCRtpSender", {
           newTrackId: processedTrack.id,
-          newTrackLabel: processedTrack.label,
-          senderTrackId: sender.track?.id,
+          senderTrackId: audioSender.track?.id,
         })
       }
 
