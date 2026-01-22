@@ -164,8 +164,12 @@
 ### Contract: SPACE_HOOK_SOCKET
 
 - **What**: useSocket Socket.io 연결 훅
+- **Rules**:
+  - 재연결 시 `gameReadyRef`, `pendingPlayersRef` 리셋 필수
+  - `handleGameReady`에서 pending 큐 + players Map 양방향 동기화
+  - Race Condition 방지: GAME_READY와 room:joined 순서 역전 대응
 - **Evidence**:
-  - code: `src/features/space/socket/useSocket.ts`
+  - code: `src/features/space/socket/useSocket.ts::handleGameReady`
   - code: `src/features/space/socket/types.ts`
 
 ### Contract: SPACE_HOOK_CHAT_MODE
