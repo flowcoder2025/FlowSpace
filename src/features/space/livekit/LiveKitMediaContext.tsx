@@ -1094,12 +1094,40 @@ export function LiveKitMediaInternalProvider({ children }: { children: ReactNode
   // 📌 AudioWorklet 처리된 트랙으로 교체
   // LiveKit의 기존 마이크 트랙을 AudioWorklet에서 처리된 트랙으로 교체
   // 🔧 핵심 수정: RTCRtpSender.replaceTrack()을 직접 호출하여 실제 WebRTC 전송 트랙 교체
+  // 🔧 재시도 로직 추가: RTCRtpSender가 준비될 때까지 대기
   const replaceAudioTrackWithProcessed = useCallback(async (processedTrack: MediaStreamTrack): Promise<boolean> => {
     if (!localParticipant || !room) {
       if (IS_DEV) {
         console.log("[LiveKitMediaContext] replaceAudioTrackWithProcessed: No local participant or room")
       }
       return false
+    }
+
+    // 🔧 RTCRtpSender를 찾는 헬퍼 함수
+    const findAudioSender = (): RTCRtpSender | null => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const engine = (room as any).engine
+      const senders = engine?.publisher?.pc?.getSenders()
+      if (!senders) return null
+      return senders.find((s: RTCRtpSender) => s.track?.kind === "audio") || null
+    }
+
+    // 🔧 재시도 로직: RTCRtpSender가 준비될 때까지 최대 3초 대기 (300ms x 10회)
+    const waitForSender = async (maxRetries: number = 10, delayMs: number = 300): Promise<RTCRtpSender | null> => {
+      for (let i = 0; i < maxRetries; i++) {
+        const sender = findAudioSender()
+        if (sender) {
+          if (IS_DEV && i > 0) {
+            console.log(`[LiveKitMediaContext] Audio sender found after ${i + 1} attempts`)
+          }
+          return sender
+        }
+        if (IS_DEV) {
+          console.log(`[LiveKitMediaContext] Waiting for audio sender... attempt ${i + 1}/${maxRetries}`)
+        }
+        await new Promise(resolve => setTimeout(resolve, delayMs))
+      }
+      return null
     }
 
     try {
@@ -1111,16 +1139,11 @@ export function LiveKitMediaInternalProvider({ children }: { children: ReactNode
         return false
       }
 
-      // 🔧 핵심: RTCRtpSender에서 직접 트랙 교체 (WebRTC 레벨)
-      // LocalTrack.replaceTrack()은 내부 참조만 변경하고 실제 전송 트랙은 변경하지 않음
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const engine = (room as any).engine
-      const sender = engine?.publisher?.pc?.getSenders()?.find(
-        (s: RTCRtpSender) => s.track?.kind === "audio"
-      )
+      // 🔧 RTCRtpSender 대기 (WebRTC 연결이 완료될 때까지)
+      const sender = await waitForSender()
 
       if (!sender) {
-        console.warn("[LiveKitMediaContext] replaceAudioTrackWithProcessed: No audio sender found")
+        console.warn("[LiveKitMediaContext] replaceAudioTrackWithProcessed: No audio sender found after retries")
         return false
       }
 
