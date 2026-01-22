@@ -1,0 +1,15 @@
+# Auto detect text files and normalize line endings
+* text=auto
+
+# Markdown files - preserve as-is (CRLF on Windows)
+*.md text eol=crlf
+
+# Shell scripts - always LF
+*.sh text eol=lf
+
+# Batch files - always CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# PowerShell - always CRLF
+*.ps1 text eol=crlf
