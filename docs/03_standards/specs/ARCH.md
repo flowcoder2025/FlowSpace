@@ -55,7 +55,7 @@ Phaser 3 + Socket.io + LiveKit 기반 ZEP-감성 2D 메타버스 플랫폼
 
 - **What**: Socket.io 실시간 동기화 (위치, 채팅, 세션)
 - **Evidence**:
-  - code: `server/socket-server.ts::io`
+  - code: `server/index.ts::io`
   - code: `src/features/space/socket/useSocket.ts::useSocket`
 
 ### Contract: ARCH_FUNC_LIVEKIT_MEDIA

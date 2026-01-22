@@ -40,7 +40,7 @@ LiveKit + Socket.io를 Oracle Always Free에 통합 배포하여 인프라 비�
 
 - **What**: Socket.io 실시간 서버 배포
 - **Evidence**:
-  - code: `server/socket-server.ts::io`
+  - code: `server/index.ts::io`
   - code: `server/package.json`
 
 ### Contract: INFRA_FUNC_LIVEKIT_SELFHOST

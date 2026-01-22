@@ -60,9 +60,6 @@
   | 3개+ 파일 수정 | ⚠️ 권장 |
   | 새 기능 추가 | ✅ 필수 |
   | 복잡한 리팩토링 | ✅ 필수 |
-- **Evidence**:
-  - code: `TASK.md::TASK`
-
 ### Contract: AI_PROTOCOL_FUNC_CODE_DOC_SYNC
 - **Tier**: normal
 - **What**: 코드 변경 시 문서 업데이트 연동
@@ -133,9 +130,6 @@
   ## 변경 이력
   | 날짜 | 변경 내용 |
   ```
-- **Evidence**:
-  - code: `TASK.md::TASK`
-
 ### Contract: AI_PROTOCOL_DESIGN_HANDOFF_STRUCTURE
 - **Tier**: normal
 - **What**: HANDOFF 문서 구조 (세션 간 컨텍스트 전달)
@@ -152,9 +146,6 @@
   ## 3. 다음 작업
   ## 4. 파일 위치 요약
   ```
-- **Evidence**:
-  - code: `docs/00_ssot/HANDOFF_2026-01-21_CLAUDE_SLIM.md`
-
 <!-- DESIGN:END -->
 
 ---

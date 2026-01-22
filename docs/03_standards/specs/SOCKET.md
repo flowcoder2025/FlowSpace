@@ -49,7 +49,7 @@
   | S→C | `proximity:error` | `{ message }` | 근접 설정 에러 |
   | S→C | `error` | `{ message }` | 일반 에러 |
 - **Evidence**:
-  - code: `server/handlers/`
+  - code: `server/handlers/index.ts::registerHandlers`
 
 ### Contract: SOCKET_FUNC_SESSION_VERIFY
 
