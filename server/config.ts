@@ -24,7 +24,7 @@ export const CORS_ORIGINS = (() => {
     origins.push(process.env.NEXT_PUBLIC_APP_URL)
   }
 
-  // Additional allowed domains (Railway/Vercel etc.)
+  // Additional allowed domains
   if (process.env.CORS_ORIGINS) {
     const additionalOrigins = process.env.CORS_ORIGINS.split(",").map(o => o.trim())
     origins.push(...additionalOrigins)
