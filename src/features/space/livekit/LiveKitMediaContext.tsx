@@ -1093,10 +1093,11 @@ export function LiveKitMediaInternalProvider({ children }: { children: ReactNode
 
   // 📌 AudioWorklet 처리된 트랙으로 교체
   // LiveKit의 기존 마이크 트랙을 AudioWorklet에서 처리된 트랙으로 교체
+  // 🔧 핵심 수정: RTCRtpSender.replaceTrack()을 직접 호출하여 실제 WebRTC 전송 트랙 교체
   const replaceAudioTrackWithProcessed = useCallback(async (processedTrack: MediaStreamTrack): Promise<boolean> => {
-    if (!localParticipant) {
+    if (!localParticipant || !room) {
       if (IS_DEV) {
-        console.log("[LiveKitMediaContext] replaceAudioTrackWithProcessed: No local participant")
+        console.log("[LiveKitMediaContext] replaceAudioTrackWithProcessed: No local participant or room")
       }
       return false
     }
@@ -1110,44 +1111,31 @@ export function LiveKitMediaInternalProvider({ children }: { children: ReactNode
         return false
       }
 
-      // LiveKit LocalTrack의 replaceTrack 메서드 사용
-      // 이 메서드는 WebRTC RTCRtpSender.replaceTrack()을 내부적으로 호출
-      // 재협상 없이 트랙만 교체되므로 끊김 없이 전환됨
+      // 🔧 핵심: RTCRtpSender에서 직접 트랙 교체 (WebRTC 레벨)
+      // LocalTrack.replaceTrack()은 내부 참조만 변경하고 실제 전송 트랙은 변경하지 않음
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const localTrack = publication.track as any
+      const engine = (room as any).engine
+      const sender = engine?.publisher?.pc?.getSenders()?.find(
+        (s: RTCRtpSender) => s.track?.kind === "audio"
+      )
 
-      if (typeof localTrack.replaceTrack === "function") {
-        await localTrack.replaceTrack(processedTrack)
-
-        if (IS_DEV) {
-          console.log("[LiveKitMediaContext] replaceAudioTrackWithProcessed: Track replaced successfully")
-        }
-        return true
-      } else {
-        // replaceTrack이 없는 경우 RTCRtpSender를 통한 교체 시도
-        if (IS_DEV) {
-          console.log("[LiveKitMediaContext] replaceAudioTrackWithProcessed: replaceTrack not available, using fallback")
-        }
-
-        // Room context에서 RTCPeerConnection 접근
-        if (room) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const engine = (room as any).engine
-          const sender = engine?.publisher?.pc?.getSenders()?.find(
-            (s: RTCRtpSender) => s.track?.kind === "audio"
-          )
-          if (sender) {
-            await sender.replaceTrack(processedTrack)
-            if (IS_DEV) {
-              console.log("[LiveKitMediaContext] replaceAudioTrackWithProcessed: Track replaced via RTCRtpSender")
-            }
-            return true
-          }
-        }
-
-        console.warn("[LiveKitMediaContext] replaceAudioTrackWithProcessed: Could not replace track")
+      if (!sender) {
+        console.warn("[LiveKitMediaContext] replaceAudioTrackWithProcessed: No audio sender found")
         return false
       }
+
+      // RTCRtpSender.replaceTrack()으로 실제 전송 트랙 교체
+      await sender.replaceTrack(processedTrack)
+
+      if (IS_DEV) {
+        console.log("[LiveKitMediaContext] replaceAudioTrackWithProcessed: Track replaced via RTCRtpSender", {
+          newTrackId: processedTrack.id,
+          newTrackLabel: processedTrack.label,
+          senderTrackId: sender.track?.id,
+        })
+      }
+
+      return true
     } catch (error) {
       console.error("[LiveKitMediaContext] replaceAudioTrackWithProcessed error:", error)
       return false
