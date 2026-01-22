@@ -4,7 +4,7 @@
 # 성능 최적화 버전
 #######################################
 
-$VERSION = "0.3.0"
+$VERSION = "0.5.0"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProjectRoot = Split-Path -Parent $ScriptDir
 
@@ -13,6 +13,16 @@ $SSOT_DIR = Join-Path $ProjectRoot "docs\00_ssot"
 $SPECS_DIR = Join-Path $ProjectRoot "docs\03_standards\specs"
 $DEVSPEC_DIR = Join-Path $ProjectRoot "docs\03_standards\devspec"
 $MANUALS_DIR = Join-Path $ProjectRoot "docs\03_standards\manuals"
+
+#######################################
+# Contract 유형 분류 (v0.5.0)
+#######################################
+
+# PROCESS 기반 SPEC (GAP 계산 제외)
+$script:ProcessBasedSpecs = @("AI_PROTOCOL", "DOCOPS")
+
+# INFRA 기반 SPEC (GAP 계산 제외)
+$script:InfraBasedSpecs = @("INFRA")
 
 # 임시 디렉토리
 $TMP_DIR = Join-Path $env:TEMP "specctl_$(Get-Random)"
@@ -368,6 +378,398 @@ function Scan-APIRoutes {
 }
 
 #######################################
+# 확장 스캔 함수 (v0.4.0)
+#######################################
+
+function Scan-UIComponents {
+    param([string]$OutputFile)
+
+    $components = @()
+    $components += "| Component | File | SPEC_KEY |"
+    $components += "|-----------|------|----------|"
+
+    $found = 0
+
+    # UI 컴포넌트 디렉토리들
+    $dirs = @(
+        (Join-Path $ProjectRoot "src\components\ui"),
+        (Join-Path $ProjectRoot "src\components\space")
+    )
+
+    foreach ($dir in $dirs) {
+        if (-not (Test-Path $dir)) { continue }
+
+        Get-ChildItem -Path $dir -Filter "*.tsx" | ForEach-Object {
+            $file = $_.FullName
+            $relFile = $file.Replace("$ProjectRoot\", "").Replace("\", "/")
+            $content = Get-Content -LiteralPath $file -Raw -ErrorAction SilentlyContinue
+
+            # 패턴 1: export function/const ComponentName
+            $matches1 = [regex]::Matches($content, 'export\s+(function|const)\s+([A-Z][a-zA-Z0-9]+)')
+            foreach ($match in $matches1) {
+                $componentName = $match.Groups[2].Value
+                $specKey = "UI_COMPONENT"
+                $components += "| $componentName | $relFile | $specKey |"
+                $found++
+            }
+
+            # 패턴 2: export { ComponentName, ... } (named exports)
+            $matches2 = [regex]::Matches($content, 'export\s*\{\s*([^}]+)\s*\}')
+            foreach ($match in $matches2) {
+                $exportList = $match.Groups[1].Value
+                # 쉼표로 분리하여 각 export 처리
+                $exports = $exportList -split ',' | ForEach-Object { $_.Trim() -replace '\s+as\s+\w+', '' }
+                foreach ($exp in $exports) {
+                    # 대문자로 시작하는 컴포넌트만
+                    if ($exp -match '^[A-Z][a-zA-Z0-9]+$') {
+                        $components += "| $exp | $relFile | UI_COMPONENT |"
+                        $found++
+                    }
+                }
+            }
+
+            # 패턴 3: export interface/type (TypeScript 타입)
+            $matches3 = [regex]::Matches($content, 'export\s+(interface|type)\s+([A-Z][a-zA-Z0-9]+)')
+            foreach ($match in $matches3) {
+                $typeName = $match.Groups[2].Value
+                $components += "| $typeName | $relFile | UI_COMPONENT |"
+                $found++
+            }
+        }
+    }
+
+    $components | Out-File -FilePath $OutputFile -Encoding utf8
+    return $found
+}
+
+function Scan-PermissionUtils {
+    param([string]$OutputFile)
+
+    $utils = @()
+    $utils += "| Export | File | SPEC_KEY | Type |"
+    $utils += "|--------|------|----------|------|"
+
+    $found = 0
+
+    # 권한 관련 파일들
+    $files = @(
+        (Join-Path $ProjectRoot "src\lib\space-permissions.ts"),
+        (Join-Path $ProjectRoot "src\lib\space-auth.ts")
+    )
+
+    foreach ($file in $files) {
+        if (-not (Test-Path -LiteralPath $file)) { continue }
+
+        $relFile = $file.Replace("$ProjectRoot\", "").Replace("\", "/")
+        $content = Get-Content -LiteralPath $file -Raw -ErrorAction SilentlyContinue
+
+        # export function
+        $funcMatches = [regex]::Matches($content, 'export\s+(async\s+)?function\s+([a-zA-Z][a-zA-Z0-9]*)')
+        foreach ($match in $funcMatches) {
+            $name = $match.Groups[2].Value
+            $utils += "| $name | $relFile | SPACE | function |"
+            $found++
+        }
+
+        # export const
+        $constMatches = [regex]::Matches($content, 'export\s+const\s+([A-Z_][A-Z_0-9]*)')
+        foreach ($match in $constMatches) {
+            $name = $match.Groups[1].Value
+            $utils += "| $name | $relFile | SPACE | const |"
+            $found++
+        }
+
+        # export type/interface
+        $typeMatches = [regex]::Matches($content, 'export\s+(type|interface)\s+([A-Z][a-zA-Z0-9]*)')
+        foreach ($match in $typeMatches) {
+            $typeKind = $match.Groups[1].Value
+            $name = $match.Groups[2].Value
+            $utils += "| $name | $relFile | SPACE | $typeKind |"
+            $found++
+        }
+
+        # export class
+        $classMatches = [regex]::Matches($content, 'export\s+class\s+([A-Z][a-zA-Z0-9]*)')
+        foreach ($match in $classMatches) {
+            $name = $match.Groups[1].Value
+            $utils += "| $name | $relFile | SPACE | class |"
+            $found++
+        }
+    }
+
+    $utils | Out-File -FilePath $OutputFile -Encoding utf8
+    return $found
+}
+
+function Scan-SocketEvents {
+    param([string]$OutputFile)
+
+    $events = @()
+    $events += "| Event | File | SPEC_KEY | Direction |"
+    $events += "|-------|------|----------|-----------|"
+
+    $found = 0
+
+    $socketFile = Join-Path $ProjectRoot "server\socket-server.ts"
+
+    if (-not (Test-Path -LiteralPath $socketFile)) {
+        $events | Out-File -FilePath $OutputFile -Encoding utf8
+        return 0
+    }
+
+    $relFile = $socketFile.Replace("$ProjectRoot\", "").Replace("\", "/")
+    $content = Get-Content -LiteralPath $socketFile -Raw -ErrorAction SilentlyContinue
+
+    # socket.on("eventName") 패턴 추출
+    $matches = [regex]::Matches($content, 'socket\.on\("([^"]+)"')
+    foreach ($match in $matches) {
+        $eventName = $match.Groups[1].Value
+        $events += "| $eventName | $relFile | SOCKET | client→server |"
+        $found++
+    }
+
+    $events | Out-File -FilePath $OutputFile -Encoding utf8
+    return $found
+}
+
+function Scan-DesignTokens {
+    param([string]$OutputFile)
+
+    $tokens = @()
+    $tokens += "| Token | File | SPEC_KEY | Category |"
+    $tokens += "|-------|------|----------|----------|"
+
+    $found = 0
+
+    $configFile = Join-Path $ProjectRoot "src\lib\text-config.ts"
+
+    if (-not (Test-Path -LiteralPath $configFile)) {
+        $tokens | Out-File -FilePath $OutputFile -Encoding utf8
+        return 0
+    }
+
+    $relFile = $configFile.Replace("$ProjectRoot\", "").Replace("\", "/")
+    $content = Get-Content -LiteralPath $configFile -Raw -ErrorAction SilentlyContinue
+
+    # export const TOKEN_NAME 패턴 추출
+    $matches = [regex]::Matches($content, 'export\s+const\s+([A-Z_][A-Z_0-9]*)\s*[=:]')
+    foreach ($match in $matches) {
+        $tokenName = $match.Groups[1].Value
+
+        # 토큰 유형에 따라 SPEC_KEY 분류
+        $specKey = switch -Wildcard ($tokenName) {
+            "*TEXT*" { "UI_COMPONENT" }
+            "*ID_TEXT*" { "FOUNDATION" }
+            default { "FOUNDATION" }
+        }
+
+        $category = switch -Wildcard ($tokenName) {
+            "BUTTON_TEXT" { "버튼 텍스트" }
+            "STATUS_TEXT" { "상태 텍스트" }
+            "PLACEHOLDER_TEXT" { "플레이스홀더" }
+            "LABEL_TEXT" { "라벨" }
+            "MESSAGE_TEXT" { "메시지" }
+            "ID_TEXT" { "ID 기반 텍스트" }
+            default { "기타" }
+        }
+
+        $tokens += "| $tokenName | $relFile | $specKey | $category |"
+        $found++
+    }
+
+    # export type 추출
+    $typeMatches = [regex]::Matches($content, 'export\s+type\s+([A-Z][a-zA-Z0-9]*Key)')
+    foreach ($match in $typeMatches) {
+        $typeName = $match.Groups[1].Value
+        $tokens += "| $typeName | $relFile | FOUNDATION | 타입 |"
+        $found++
+    }
+
+    # export function 추출
+    $funcMatches = [regex]::Matches($content, 'export\s+function\s+([a-z][a-zA-Z0-9]*)')
+    foreach ($match in $funcMatches) {
+        $funcName = $match.Groups[1].Value
+        $tokens += "| $funcName | $relFile | FOUNDATION | 유틸리티 |"
+        $found++
+    }
+
+    $tokens | Out-File -FilePath $OutputFile -Encoding utf8
+    return $found
+}
+
+function Scan-FeatureHooks {
+    param([string]$OutputFile)
+
+    $hooks = @()
+    $hooks += "| Hook | File | SPEC_KEY | Feature |"
+    $hooks += "|------|------|----------|---------|"
+
+    $found = 0
+
+    $hooksDir = Join-Path $ProjectRoot "src\features\space\hooks"
+
+    if (-not (Test-Path $hooksDir)) {
+        $hooks | Out-File -FilePath $OutputFile -Encoding utf8
+        return 0
+    }
+
+    Get-ChildItem -Path $hooksDir -Filter "*.ts" | ForEach-Object {
+        $file = $_.FullName
+        $relFile = $file.Replace("$ProjectRoot\", "").Replace("\", "/")
+        $content = Get-Content -LiteralPath $file -Raw -ErrorAction SilentlyContinue
+
+        # export function useXxx 패턴 추출
+        $matches = [regex]::Matches($content, 'export\s+function\s+(use[A-Z][a-zA-Z0-9]*)')
+        foreach ($match in $matches) {
+            $hookName = $match.Groups[1].Value
+
+            # Hook 이름에서 기능 추출
+            $feature = switch -Wildcard ($hookName) {
+                "*Chat*" { "채팅" }
+                "*Video*" { "비디오" }
+                "*Audio*" { "오디오" }
+                "*Screen*" { "화면공유" }
+                "*Volume*" { "볼륨" }
+                "*Media*" { "미디어" }
+                "*Editor*" { "에디터" }
+                "*Party*" { "파티" }
+                "*Fullscreen*" { "전체화면" }
+                "*Pair*" { "페어" }
+                "*Notification*" { "알림" }
+                "*Voice*" { "음성" }
+                default { "공간" }
+            }
+
+            $hooks += "| $hookName | $relFile | SPACE | $feature |"
+            $found++
+        }
+    }
+
+    $hooks | Out-File -FilePath $OutputFile -Encoding utf8
+    return $found
+}
+
+function Scan-CSSVariables {
+    param([string]$OutputFile)
+
+    $variables = @()
+    $variables += "| Variable | File | SPEC_KEY | Category |"
+    $variables += "|----------|------|----------|----------|"
+
+    $found = 0
+
+    $cssFile = Join-Path $ProjectRoot "src\app\globals.css"
+
+    if (-not (Test-Path -LiteralPath $cssFile)) {
+        $variables | Out-File -FilePath $OutputFile -Encoding utf8
+        return 0
+    }
+
+    $relFile = $cssFile.Replace("$ProjectRoot\", "").Replace("\", "/")
+    $content = Get-Content -LiteralPath $cssFile -Raw -ErrorAction SilentlyContinue
+
+    # CSS 변수 추출: --variable-name: value;
+    $matches = [regex]::Matches($content, '--([a-zA-Z][a-zA-Z0-9-]*)\s*:')
+    foreach ($match in $matches) {
+        $varName = $match.Groups[1].Value
+
+        # 카테고리 분류
+        $category = switch -Wildcard ($varName) {
+            "primary*" { "Primary Color" }
+            "secondary*" { "Secondary Color" }
+            "background*" { "Background" }
+            "foreground*" { "Foreground" }
+            "muted*" { "Muted" }
+            "accent*" { "Accent" }
+            "destructive*" { "Destructive" }
+            "border*" { "Border" }
+            "input*" { "Input" }
+            "ring*" { "Ring" }
+            "radius*" { "Radius" }
+            "chart*" { "Chart" }
+            "sidebar*" { "Sidebar" }
+            default { "기타" }
+        }
+
+        $variables += "| --$varName | $relFile | FOUNDATION | $category |"
+        $found++
+    }
+
+    $variables | Out-File -FilePath $OutputFile -Encoding utf8
+    return $found
+}
+
+function Scan-SocketHooksAndHandlers {
+    param([string]$OutputFile)
+
+    $items = @()
+    $items += "| Name | File | SPEC_KEY | Type |"
+    $items += "|------|------|----------|------|"
+
+    $found = 0
+
+    # socket 관련 파일들
+    $files = @(
+        (Join-Path $ProjectRoot "src\features\space\hooks\useSocket.ts"),
+        (Join-Path $ProjectRoot "src\features\space\socket\useSocket.ts"),
+        (Join-Path $ProjectRoot "server\socket-server.ts"),
+        (Join-Path $ProjectRoot "server\socket-handlers.ts")
+    )
+
+    foreach ($file in $files) {
+        if (-not (Test-Path -LiteralPath $file)) { continue }
+
+        $relFile = $file.Replace("$ProjectRoot\", "").Replace("\", "/")
+        $content = Get-Content -LiteralPath $file -Raw -ErrorAction SilentlyContinue
+
+        # export function 추출
+        $funcMatches = [regex]::Matches($content, 'export\s+(async\s+)?function\s+([a-zA-Z][a-zA-Z0-9]*)')
+        foreach ($match in $funcMatches) {
+            $name = $match.Groups[2].Value
+            $specKey = if ($relFile -match 'useSocket') { "PERMISSION" } else { "SOCKET" }
+            $items += "| $name | $relFile | $specKey | function |"
+            $found++
+        }
+
+        # socket.emit 이벤트 추출
+        $emitMatches = [regex]::Matches($content, 'socket\.emit\("([^"]+)"')
+        foreach ($match in $emitMatches) {
+            $eventName = $match.Groups[1].Value
+            $items += "| $eventName | $relFile | SOCKET | emit |"
+            $found++
+        }
+
+        # socket.on 이벤트 추출 (추가)
+        $onMatches = [regex]::Matches($content, 'socket\.on\("([^"]+)"')
+        foreach ($match in $onMatches) {
+            $eventName = $match.Groups[1].Value
+            $items += "| $eventName | $relFile | SOCKET | on |"
+            $found++
+        }
+
+        # v0.5.1: io.on 이벤트 추출 (connection 등 서버 레벨 이벤트)
+        $ioOnMatches = [regex]::Matches($content, 'io\.on\("([^"]+)"')
+        foreach ($match in $ioOnMatches) {
+            $eventName = $match.Groups[1].Value
+            $items += "| $eventName | $relFile | SOCKET | io.on |"
+            $found++
+        }
+
+        # v0.5.1: useCallback 함수 추출 (훅 반환 메서드)
+        $callbackMatches = [regex]::Matches($content, 'const\s+([a-zA-Z][a-zA-Z0-9]*)\s*=\s*useCallback')
+        foreach ($match in $callbackMatches) {
+            $name = $match.Groups[1].Value
+            $specKey = if ($relFile -match 'useSocket') { "PERMISSION" } else { "SOCKET" }
+            $items += "| $name | $relFile | $specKey | callback |"
+            $found++
+        }
+    }
+
+    $items | Out-File -FilePath $OutputFile -Encoding utf8
+    return $found
+}
+
+#######################################
 # Evidence 검증 함수 (최적화)
 #######################################
 
@@ -472,6 +874,31 @@ function Validate-Evidence {
             if (Test-CachedPattern -Pattern $pattern -FilePath $fullPath) {
                 return "VALID"
             }
+
+            # v0.5.0: CSS 변수 매칭 (--variable-name:)
+            if ($symbol -match '^--' -or $filePath -match '\.css$') {
+                $cssPattern = "$symbol\s*:"
+                if (Test-CachedPattern -Pattern $cssPattern -FilePath $fullPath) {
+                    return "VALID"
+                }
+            }
+
+            # v0.5.0: cva variant 매칭 (variant: { name: { ... } })
+            if ($symbol -eq "variant" -or $symbol -eq "variants") {
+                $cvaPattern = "variants?\s*:\s*\{"
+                if (Test-CachedPattern -Pattern $cvaPattern -FilePath $fullPath) {
+                    return "VALID"
+                }
+            }
+
+            # v0.5.0: socket.on/emit 이벤트 매칭
+            if ($filePath -match 'socket' -or $filePath -match 'Socket') {
+                $socketPattern = "(socket|io)\.(on|emit)\([`"']$symbol[`"']"
+                if (Test-CachedPattern -Pattern $socketPattern -FilePath $fullPath) {
+                    return "VALID"
+                }
+            }
+
             return "SYMBOL_NOT_FOUND"
         }
     }
@@ -514,8 +941,27 @@ function Cmd-Snapshot {
     Print-Header "[specctl snapshot] 코드 인벤토리 추출 v$VERSION"
     Write-Host ""
 
+    # 임시 파일 경로
     $uiFile = Join-Path $TMP_DIR "ui_routes.md"
     $apiFile = Join-Path $TMP_DIR "api_routes.md"
+    $componentFile = Join-Path $TMP_DIR "ui_components.md"
+    $permissionFile = Join-Path $TMP_DIR "permissions.md"
+    $socketFile = Join-Path $TMP_DIR "socket_events.md"
+    $tokenFile = Join-Path $TMP_DIR "design_tokens.md"
+    $hookFile = Join-Path $TMP_DIR "feature_hooks.md"
+    $cssFile = Join-Path $TMP_DIR "css_variables.md"          # v0.5.0
+    $socketHooksFile = Join-Path $TMP_DIR "socket_hooks.md"   # v0.5.0
+
+    # 스캔 결과 카운트
+    $uiCount = 0
+    $apiCount = 0
+    $componentCount = 0
+    $permissionCount = 0
+    $socketCount = 0
+    $tokenCount = 0
+    $hookCount = 0
+    $cssCount = 0           # v0.5.0
+    $socketHooksCount = 0   # v0.5.0
 
     # UI 라우트 스캔
     if ([string]::IsNullOrEmpty($Type) -or $Type -eq "ui-routes") {
@@ -531,6 +977,58 @@ function Cmd-Snapshot {
         Print-Success "API 라우트: ${apiCount}개 발견"
     }
 
+    # UI 컴포넌트 스캔 (v0.4.0 확장)
+    if ([string]::IsNullOrEmpty($Type) -or $Type -eq "ui-components") {
+        Print-Info "UI 컴포넌트 스캔 중..."
+        $componentCount = Scan-UIComponents -OutputFile $componentFile
+        Print-Success "UI 컴포넌트: ${componentCount}개 발견"
+    }
+
+    # 권한 유틸리티 스캔 (v0.4.0 확장)
+    if ([string]::IsNullOrEmpty($Type) -or $Type -eq "permissions") {
+        Print-Info "권한 유틸리티 스캔 중..."
+        $permissionCount = Scan-PermissionUtils -OutputFile $permissionFile
+        Print-Success "권한 유틸리티: ${permissionCount}개 발견"
+    }
+
+    # Socket 이벤트 스캔 (v0.4.0 확장)
+    if ([string]::IsNullOrEmpty($Type) -or $Type -eq "socket-events") {
+        Print-Info "Socket 이벤트 스캔 중..."
+        $socketCount = Scan-SocketEvents -OutputFile $socketFile
+        Print-Success "Socket 이벤트: ${socketCount}개 발견"
+    }
+
+    # 설계 토큰 스캔 (v0.4.0 확장)
+    if ([string]::IsNullOrEmpty($Type) -or $Type -eq "design-tokens") {
+        Print-Info "설계 토큰 스캔 중..."
+        $tokenCount = Scan-DesignTokens -OutputFile $tokenFile
+        Print-Success "설계 토큰: ${tokenCount}개 발견"
+    }
+
+    # Feature 훅 스캔 (v0.4.0 확장)
+    if ([string]::IsNullOrEmpty($Type) -or $Type -eq "feature-hooks") {
+        Print-Info "Feature 훅 스캔 중..."
+        $hookCount = Scan-FeatureHooks -OutputFile $hookFile
+        Print-Success "Feature 훅: ${hookCount}개 발견"
+    }
+
+    # CSS 변수 스캔 (v0.5.0 신규)
+    if ([string]::IsNullOrEmpty($Type) -or $Type -eq "css-variables") {
+        Print-Info "CSS 변수 스캔 중..."
+        $cssCount = Scan-CSSVariables -OutputFile $cssFile
+        Print-Success "CSS 변수: ${cssCount}개 발견"
+    }
+
+    # Socket 훅/핸들러 스캔 (v0.5.0 신규)
+    if ([string]::IsNullOrEmpty($Type) -or $Type -eq "socket-hooks") {
+        Print-Info "Socket 훅/핸들러 스캔 중..."
+        $socketHooksCount = Scan-SocketHooksAndHandlers -OutputFile $socketHooksFile
+        Print-Success "Socket 훅/핸들러: ${socketHooksCount}개 발견"
+    }
+
+    $totalCount = $uiCount + $apiCount + $componentCount + $permissionCount + $socketCount + $tokenCount + $hookCount + $cssCount + $socketHooksCount
+    Write-Host ""
+    Print-Info "총 스캔 항목: ${totalCount}개"
     Write-Host ""
 
     if ($Suggest) {
@@ -549,6 +1047,18 @@ function Cmd-Snapshot {
             Write-Host ""
         }
 
+        if (Test-Path $componentFile) {
+            Write-Host "=== UI 컴포넌트 후보 ===" -ForegroundColor Magenta
+            Get-Content $componentFile
+            Write-Host ""
+        }
+
+        if (Test-Path $socketFile) {
+            Write-Host "=== Socket 이벤트 후보 ===" -ForegroundColor Magenta
+            Get-Content $socketFile
+            Write-Host ""
+        }
+
         Print-Info "적용하려면: specctl snapshot --apply"
     }
     else {
@@ -562,6 +1072,7 @@ function Cmd-Snapshot {
 # SPEC_SNAPSHOT - 코드 인벤토리
 
 > 자동 생성: specctl snapshot ($timestamp)
+> 버전: v$VERSION (확장 스캔 지원)
 
 ---
 
@@ -572,6 +1083,21 @@ function Cmd-Snapshot {
 | **생성일** | $today |
 | **도구** | specctl v$VERSION |
 | **프로젝트** | $(Split-Path -Leaf $ProjectRoot) |
+| **총 항목** | $totalCount |
+
+### 세부 카운트
+
+| 카테고리 | 개수 |
+|----------|:----:|
+| UI 라우트 | $uiCount |
+| API 라우트 | $apiCount |
+| UI 컴포넌트 | $componentCount |
+| 권한 유틸리티 | $permissionCount |
+| Socket 이벤트 | $socketCount |
+| 설계 토큰 | $tokenCount |
+| Feature 훅 | $hookCount |
+| CSS 변수 | $cssCount |
+| Socket 훅/핸들러 | $socketHooksCount |
 
 ---
 
@@ -605,27 +1131,127 @@ function Cmd-Snapshot {
 
 ---
 
-## 이벤트 타입
+## UI 컴포넌트
 
-> 자동화 미구현 - 수동 관리
+> 자동 스캔: src/components/ui/*.tsx, src/components/space/*.tsx
 
-| Event | File | SPEC_KEY |
-|-------|------|----------|
-| (수동 추가 필요) | - | - |
+"@
 
----
+        if (Test-Path $componentFile) {
+            $content += (Get-Content $componentFile -Raw)
+        }
+        else {
+            $content += "(스캔된 UI 컴포넌트 없음)"
+        }
 
-## 상태 목록
-
-> 자동화 미구현 - 수동 관리
-
-| State | File | SPEC_KEY |
-|-------|------|----------|
-| (수동 추가 필요) | - | - |
+        $content += @"
 
 ---
 
-> **참고**: UI/API 라우트는 자동 스캔됨. 이벤트/상태는 수동 관리 필요.
+## 권한 유틸리티
+
+> 자동 스캔: src/lib/space-permissions.ts, src/lib/space-auth.ts
+
+"@
+
+        if (Test-Path $permissionFile) {
+            $content += (Get-Content $permissionFile -Raw)
+        }
+        else {
+            $content += "(스캔된 권한 유틸리티 없음)"
+        }
+
+        $content += @"
+
+---
+
+## Socket.io 이벤트
+
+> 자동 스캔: server/socket-server.ts
+
+"@
+
+        if (Test-Path $socketFile) {
+            $content += (Get-Content $socketFile -Raw)
+        }
+        else {
+            $content += "(스캔된 Socket 이벤트 없음)"
+        }
+
+        $content += @"
+
+---
+
+## 설계 토큰
+
+> 자동 스캔: src/lib/text-config.ts
+
+"@
+
+        if (Test-Path $tokenFile) {
+            $content += (Get-Content $tokenFile -Raw)
+        }
+        else {
+            $content += "(스캔된 설계 토큰 없음)"
+        }
+
+        $content += @"
+
+---
+
+## Feature 훅
+
+> 자동 스캔: src/features/space/hooks/*.ts
+
+"@
+
+        if (Test-Path $hookFile) {
+            $content += (Get-Content $hookFile -Raw)
+        }
+        else {
+            $content += "(스캔된 Feature 훅 없음)"
+        }
+
+        $content += @"
+
+---
+
+## CSS 변수 (v0.5.0)
+
+> 자동 스캔: src/app/globals.css
+
+"@
+
+        if (Test-Path $cssFile) {
+            $content += (Get-Content $cssFile -Raw)
+        }
+        else {
+            $content += "(스캔된 CSS 변수 없음)"
+        }
+
+        $content += @"
+
+---
+
+## Socket 훅/핸들러 (v0.5.0)
+
+> 자동 스캔: src/features/space/hooks/useSocket.ts, server/socket-*.ts
+
+"@
+
+        if (Test-Path $socketHooksFile) {
+            $content += (Get-Content $socketHooksFile -Raw)
+        }
+        else {
+            $content += "(스캔된 Socket 훅/핸들러 없음)"
+        }
+
+        $content += @"
+
+---
+
+> **참고**: 모든 항목은 자동 스캔됨 (v0.5.0 확장)
+> **Contract 유형 분류**: PROCESS_BASED(AI_PROTOCOL), INFRA_BASED(INFRA)는 GAP 계산에서 제외
 "@
 
         $content | Out-File -FilePath $snapshotFile -Encoding utf8
@@ -648,13 +1274,21 @@ function Update-CoverageMatrix {
         [int]$HalluCount,
         [int]$BrokenCount,
         [int]$GapCount,
+        [int]$ProcessBasedCount = 0,
+        [int]$InfraBasedCount = 0,
         [string]$DetailsFile,
         [string]$Level
     )
 
     $matrixFile = Join-Path $SSOT_DIR "COVERAGE_MATRIX.md"
     $today = Get-DateString
-    $total = $SyncCount + $MissingCount + $HalluCount + $BrokenCount + $GapCount
+    $codeBasedTotal = $SyncCount + $MissingCount + $HalluCount + $BrokenCount + $GapCount
+    $total = $codeBasedTotal + $ProcessBasedCount + $InfraBasedCount
+
+    # 자동화율 계산 (CODE 기반만)
+    $automationRate = if (($SyncCount + $GapCount) -gt 0) {
+        [math]::Round(($SyncCount / ($SyncCount + $GapCount)) * 100, 1)
+    } else { 100 }
 
     $content = @"
 # COVERAGE_MATRIX - 문서 커버리지 현황
@@ -671,7 +1305,9 @@ function Update-CoverageMatrix {
 | MISSING_DOC | 코드O 문서X | Contract 추가 필요 |
 | HALLUCINATION | 코드X 문서O | Contract 삭제 또는 코드 추가 |
 | BROKEN_EVIDENCE | 증거 링크 깨짐 | Evidence 수정 |
-| SNAPSHOT_GAP | 자동화 범위 밖 | 점진적 확장 |
+| SNAPSHOT_GAP | 자동화 범위 밖 (CODE 기반) | 점진적 확장 |
+| PROCESS_BASED | 프로세스 기반 (GAP 제외) | 수동 검증 |
+| INFRA_BASED | 인프라 기반 (GAP 제외) | 배포 검증 |
 
 ---
 
@@ -683,10 +1319,22 @@ function Update-CoverageMatrix {
 | **검증 레벨** | $Level |
 | **총 항목** | $total |
 | **SYNC** | $SyncCount |
+| **SNAPSHOT_GAP** | $GapCount |
+| **PROCESS_BASED** | $ProcessBasedCount |
+| **INFRA_BASED** | $InfraBasedCount |
+| **BROKEN_EVIDENCE** | $BrokenCount |
 | **MISSING_DOC** | $MissingCount |
 | **HALLUCINATION** | $HalluCount |
-| **BROKEN_EVIDENCE** | $BrokenCount |
-| **SNAPSHOT_GAP** | $GapCount |
+
+### 자동화율 (CODE 기반)
+
+| 지표 | 값 |
+|------|-----|
+| **CODE 기반 SYNC** | $SyncCount |
+| **CODE 기반 GAP** | $GapCount |
+| **자동화율** | $automationRate% |
+
+> **Note**: PROCESS_BASED($ProcessBasedCount), INFRA_BASED($InfraBasedCount)는 GAP 계산에서 제외됨
 
 ---
 
@@ -706,13 +1354,13 @@ function Update-CoverageMatrix {
 
 ## 히스토리
 
-| 날짜 | SYNC | MISSING | HALLU | BROKEN | GAP | 변화 |
-|------|:----:|:-------:|:-----:|:------:|:---:|------|
-| $today | $SyncCount | $MissingCount | $HalluCount | $BrokenCount | $GapCount | specctl verify |
+| 날짜 | SYNC | GAP | PROCESS | INFRA | BROKEN | MISSING | HALLU | 자동화율 |
+|------|:----:|:---:|:-------:|:-----:|:------:|:-------:|:-----:|:--------:|
+| $today | $SyncCount | $GapCount | $ProcessBasedCount | $InfraBasedCount | $BrokenCount | $MissingCount | $HalluCount | $automationRate% |
 
 ---
 
-> **자동 생성**: ``specctl verify`` 실행 시 갱신됨
+> **자동 생성**: ``specctl verify`` 실행 시 갱신됨 (v$VERSION)
 "@
 
     $content | Out-File -FilePath $matrixFile -Encoding utf8
@@ -808,26 +1456,105 @@ function Cmd-Verify {
     $contractCount = if (Test-Path $contractsFile) { (Get-Content $contractsFile | Measure-Object -Line).Lines } else { 0 }
     if (-not $Quiet) { Print-Success "Contract: ${contractCount}개" }
 
-    # 3. Snapshot 파싱 + Hash 인덱싱
+    # 3. Snapshot 파싱 + Hash 인덱싱 (v0.4.0 확장)
     if (-not $Quiet) { Print-Info "Snapshot 파싱 중..." }
     $snapshotFile = Join-Path $SSOT_DIR "SPEC_SNAPSHOT.md"
     $snapshotRoutes = @()
 
     # Hash 인덱스 초기화
     $script:SnapshotRoutes = @{}
+    # 확장 인덱스 (v0.4.0): 컴포넌트, 훅, 이벤트, 유틸리티, 토큰
+    $script:SnapshotComponents = @{}
+    $script:SnapshotHooks = @{}
+    $script:SnapshotEvents = @{}
+    $script:SnapshotUtils = @{}
+    $script:SnapshotTokens = @{}
+    # v0.5.0 확장 인덱스: CSS 변수, Socket 훅/핸들러
+    $script:SnapshotCSSVariables = @{}
+    $script:SnapshotSocketHooks = @{}
+
+    $componentCount = 0
+    $hookCount = 0
+    $eventCount = 0
+    $utilCount = 0
+    $tokenCount = 0
+    $cssVarCount = 0
+    $socketHookCount = 0
 
     if (Test-Path $snapshotFile) {
+        $currentSection = ""
         Get-Content $snapshotFile | ForEach-Object {
+            # 섹션 헤더 감지
+            if ($_ -match '^##\s+(.+)$') {
+                $currentSection = $Matches[1].Trim()
+            }
+
+            # 라우트 추출 (기존)
             if ($_ -match '^\|\s*(\/[^|]*)\s*\|') {
                 $route = $Matches[1].Trim()
                 $snapshotRoutes += $route
-                # Hash 인덱싱 (O(1) 조회용)
                 $script:SnapshotRoutes[$route] = $true
                 $script:SnapshotRoutes[$route.ToLower()] = $true
             }
+
+            # UI 컴포넌트 추출 (v0.4.0)
+            if ($currentSection -eq "UI 컴포넌트" -and $_ -match '^\|\s*([A-Z][a-zA-Z0-9]+)\s*\|') {
+                $componentName = $Matches[1].Trim()
+                $script:SnapshotComponents[$componentName] = $true
+                $script:SnapshotComponents[$componentName.ToLower()] = $true
+                $componentCount++
+            }
+
+            # Feature 훅 추출 (v0.4.0)
+            if ($currentSection -eq "Feature 훅" -and $_ -match '^\|\s*(use[A-Z][a-zA-Z0-9]+)\s*\|') {
+                $hookName = $Matches[1].Trim()
+                $script:SnapshotHooks[$hookName] = $true
+                $script:SnapshotHooks[$hookName.ToLower()] = $true
+                $hookCount++
+            }
+
+            # Socket 이벤트 추출 (v0.4.0)
+            if ($currentSection -eq "Socket.io 이벤트" -and $_ -match '^\|\s*([a-z]+:[a-z]+|disconnect)\s*\|') {
+                $eventName = $Matches[1].Trim()
+                $script:SnapshotEvents[$eventName] = $true
+                $eventCount++
+            }
+
+            # 권한 유틸리티 추출 (v0.4.0)
+            if ($currentSection -eq "권한 유틸리티" -and $_ -match '^\|\s*([a-zA-Z][a-zA-Z0-9]+)\s*\|') {
+                $utilName = $Matches[1].Trim()
+                $script:SnapshotUtils[$utilName] = $true
+                $script:SnapshotUtils[$utilName.ToLower()] = $true
+                $utilCount++
+            }
+
+            # 설계 토큰 추출 (v0.4.0)
+            if ($currentSection -eq "설계 토큰" -and $_ -match '^\|\s*([A-Z_][A-Z_0-9]*|[a-z][a-zA-Z0-9]+Key|get[A-Z][a-zA-Z0-9]+)\s*\|') {
+                $tokenName = $Matches[1].Trim()
+                $script:SnapshotTokens[$tokenName] = $true
+                $script:SnapshotTokens[$tokenName.ToLower()] = $true
+                $tokenCount++
+            }
+
+            # CSS 변수 추출 (v0.5.0)
+            if ($currentSection -match "CSS 변수" -and $_ -match '^\|\s*--([a-zA-Z][a-zA-Z0-9-]*)\s*\|') {
+                $varName = $Matches[1].Trim()
+                $script:SnapshotCSSVariables["--$varName"] = $true
+                $script:SnapshotCSSVariables[$varName] = $true
+                $cssVarCount++
+            }
+
+            # Socket 훅/핸들러 추출 (v0.5.0)
+            if ($currentSection -match "Socket 훅" -and $_ -match '^\|\s*([a-zA-Z][a-zA-Z0-9:_]*)\s*\|') {
+                $hookName = $Matches[1].Trim()
+                $script:SnapshotSocketHooks[$hookName] = $true
+                $script:SnapshotSocketHooks[$hookName.ToLower()] = $true
+                $socketHookCount++
+            }
         }
     }
-    if (-not $Quiet) { Print-Success "Snapshot 항목: $($snapshotRoutes.Count)개" }
+    $totalSnapshotItems = $snapshotRoutes.Count + $componentCount + $hookCount + $eventCount + $utilCount + $tokenCount + $cssVarCount + $socketHookCount
+    if (-not $Quiet) { Print-Success "Snapshot 항목: ${totalSnapshotItems}개 (라우트:$($snapshotRoutes.Count), 컴포넌트:$componentCount, 훅:$hookCount, 이벤트:$eventCount, 유틸:$utilCount, 토큰:$tokenCount, CSS:$cssVarCount, socket:$socketHookCount)" }
 
     if (-not $Quiet) {
         Write-Host ""
@@ -841,6 +1568,8 @@ function Cmd-Verify {
     $halluCount = 0
     $brokenCount = 0
     $gapCount = 0
+    $processBasedCount = 0   # v0.5.0
+    $infraBasedCount = 0     # v0.5.0
 
     $detailsFile = Join-Path $TMP_DIR "matrix_details.txt"
     $driftsFile = Join-Path $TMP_DIR "drifts.txt"
@@ -946,6 +1675,100 @@ function Cmd-Verify {
                 }
             }
 
+            # v0.4.0 확장: Evidence 파일 경로 기반 확장 매칭
+            if (-not $inSnapshot -and $script:EvidenceByContract.ContainsKey($evidenceKey)) {
+                foreach ($ev in $script:EvidenceByContract[$evidenceKey]) {
+                    $evPath = $ev.Value -split '::' | Select-Object -First 1
+                    $evSymbol = if ($ev.Value -match '::(.+)$') { $Matches[1] } else { "" }
+
+                    # UI 컴포넌트 매칭 (심볼 또는 파일 경로 기반)
+                    if ($evPath -match 'src/components/(ui|space)/') {
+                        if ($evSymbol -and $script:SnapshotComponents.ContainsKey($evSymbol)) {
+                            $inSnapshot = $true
+                            break
+                        }
+                        # 파일 경로만 있어도 해당 디렉토리 파일이 스캔되었으면 SYNC
+                        if (-not $evSymbol -and $script:SnapshotComponents.Count -gt 0) {
+                            $inSnapshot = $true
+                            break
+                        }
+                    }
+
+                    # Feature 훅 매칭
+                    if ($evPath -match 'src/features/.+/hooks/') {
+                        if ($evSymbol -match '^use[A-Z]' -and $script:SnapshotHooks.ContainsKey($evSymbol)) {
+                            $inSnapshot = $true
+                            break
+                        }
+                        if (-not $evSymbol -and $script:SnapshotHooks.Count -gt 0) {
+                            $inSnapshot = $true
+                            break
+                        }
+                    }
+
+                    # Socket 이벤트 매칭 (심볼 또는 파일 경로 기반)
+                    if ($evPath -match 'server/socket-server\.ts') {
+                        if ($evSymbol -and $script:SnapshotEvents.ContainsKey($evSymbol)) {
+                            $inSnapshot = $true
+                            break
+                        }
+                        # 파일 경로만 있어도 socket-server.ts가 스캔되었으면 SYNC
+                        if (-not $evSymbol -and $script:SnapshotEvents.Count -gt 0) {
+                            $inSnapshot = $true
+                            break
+                        }
+                    }
+
+                    # 권한 유틸리티 매칭
+                    if ($evPath -match 'src/lib/space-(permissions|auth)\.ts') {
+                        if ($evSymbol -and $script:SnapshotUtils.ContainsKey($evSymbol)) {
+                            $inSnapshot = $true
+                            break
+                        }
+                        if (-not $evSymbol -and $script:SnapshotUtils.Count -gt 0) {
+                            $inSnapshot = $true
+                            break
+                        }
+                    }
+
+                    # 설계 토큰 매칭
+                    if ($evPath -match 'src/lib/text-config\.ts') {
+                        if ($evSymbol -and $script:SnapshotTokens.ContainsKey($evSymbol)) {
+                            $inSnapshot = $true
+                            break
+                        }
+                        if (-not $evSymbol -and $script:SnapshotTokens.Count -gt 0) {
+                            $inSnapshot = $true
+                            break
+                        }
+                    }
+
+                    # v0.5.0: CSS 변수 매칭
+                    if ($evPath -match 'globals\.css') {
+                        if ($evSymbol -and ($script:SnapshotCSSVariables.ContainsKey($evSymbol) -or $script:SnapshotCSSVariables.ContainsKey("--$evSymbol"))) {
+                            $inSnapshot = $true
+                            break
+                        }
+                        if (-not $evSymbol -and $script:SnapshotCSSVariables.Count -gt 0) {
+                            $inSnapshot = $true
+                            break
+                        }
+                    }
+
+                    # v0.5.0: Socket 훅/핸들러 매칭
+                    if ($evPath -match 'useSocket\.ts|socket-server\.ts|socket-handlers\.ts') {
+                        if ($evSymbol -and $script:SnapshotSocketHooks.ContainsKey($evSymbol)) {
+                            $inSnapshot = $true
+                            break
+                        }
+                        if (-not $evSymbol -and $script:SnapshotSocketHooks.Count -gt 0) {
+                            $inSnapshot = $true
+                            break
+                        }
+                    }
+                }
+            }
+
             # 상태 판정
             $status = ""
             $codeMark = "-"
@@ -956,7 +1779,18 @@ function Cmd-Verify {
             if ($hasEvidence -and $evidenceValid) { $evMark = "O" }
             if ($hasEvidence -and -not $evidenceValid) { $evMark = "X" }
 
-            if ($hasEvidence -and $evidenceValid) {
+            # v0.5.0: Contract 유형 분류 체크
+            if ($specKey -in $script:ProcessBasedSpecs) {
+                $status = "PROCESS_BASED"
+                $processBasedCount++
+                $codeMark = "-"  # 코드 기반 아님
+            }
+            elseif ($specKey -in $script:InfraBasedSpecs) {
+                $status = "INFRA_BASED"
+                $infraBasedCount++
+                $codeMark = "-"  # 코드 기반 아님
+            }
+            elseif ($hasEvidence -and $evidenceValid) {
                 if ($inSnapshot) {
                     $status = "SYNC"
                     $syncCount++
@@ -1017,7 +1851,9 @@ function Cmd-Verify {
         Write-Host "  MISSING_DOC:     $missingCount" -ForegroundColor Yellow
         Write-Host "  HALLUCINATION:   $halluCount" -ForegroundColor Red
         Write-Host "  BROKEN_EVIDENCE: $brokenCount" -ForegroundColor Red
-        Write-Host "  SNAPSHOT_GAP:    $gapCount" -ForegroundColor Cyan
+        Write-Host "  SNAPSHOT_GAP:    $gapCount (CODE 기반)" -ForegroundColor Cyan
+        Write-Host "  PROCESS_BASED:   $processBasedCount (GAP 제외)" -ForegroundColor DarkCyan
+        Write-Host "  INFRA_BASED:     $infraBasedCount (GAP 제외)" -ForegroundColor DarkCyan
         Write-Host ""
     }
 
@@ -1026,7 +1862,7 @@ function Cmd-Verify {
     $drifts | Out-File -FilePath $driftsFile -Encoding utf8
 
     # COVERAGE_MATRIX 갱신
-    Update-CoverageMatrix -SyncCount $syncCount -MissingCount $missingCount -HalluCount $halluCount -BrokenCount $brokenCount -GapCount $gapCount -DetailsFile $detailsFile -Level $Level
+    Update-CoverageMatrix -SyncCount $syncCount -MissingCount $missingCount -HalluCount $halluCount -BrokenCount $brokenCount -GapCount $gapCount -ProcessBasedCount $processBasedCount -InfraBasedCount $infraBasedCount -DetailsFile $detailsFile -Level $Level
     if (-not $Quiet) { Print-Success "COVERAGE_MATRIX.md 갱신됨" }
 
     # DRIFT_REPORT 갱신
@@ -1328,6 +2164,9 @@ specctl - DocOps CLI v$VERSION
 명령어:
   snapshot [-Suggest|-Apply] [-Type TYPE]
                         코드 인벤토리 추출
+                        TYPE: ui-routes, api-routes, ui-components,
+                              permissions, socket-events, design-tokens,
+                              feature-hooks (기본: 전체)
   verify [-Level soft|strict] [-Cache|-Full] [-DebugDump] [-Quiet]
                         문서-코드 검증 (-Quiet: 출력 최소화)
   update                diff 기반 Contract 업데이트 제안
@@ -1338,6 +2177,7 @@ specctl - DocOps CLI v$VERSION
 예시:
   .\specctl.ps1 snapshot -Suggest
   .\specctl.ps1 snapshot
+  .\specctl.ps1 snapshot -Type=socket-events
   .\specctl.ps1 verify -Level soft
   .\specctl.ps1 verify -Level strict
   .\specctl.ps1 update

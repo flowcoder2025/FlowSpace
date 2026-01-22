@@ -121,6 +121,80 @@
   - code: `src/app/api/templates/route.ts::GET`
   - code: `prisma/schema.prisma::TemplateKey`
 
+### Contract: SPACE_COMP_LAYOUT
+
+- **What**: SpaceLayout 전체 레이아웃 컴포넌트
+- **Evidence**:
+  - code: `src/features/space/components/SpaceLayout.tsx`
+  - code: `src/features/space/components/SpaceHeader.tsx`
+
+### Contract: SPACE_COMP_VIDEO_TILE
+
+- **What**: VideoTile 개별 비디오 타일
+- **Evidence**:
+  - code: `src/features/space/components/video/VideoTile.tsx`
+  - code: `src/features/space/components/video/ParticipantPanel.tsx`
+  - code: `src/features/space/components/video/ScreenShare.tsx`
+
+### Contract: SPACE_COMP_CONTROL_BAR
+
+- **What**: ControlBar 하단 미디어 컨트롤
+- **Evidence**:
+  - code: `src/features/space/components/controls/ControlBar.tsx`
+
+### Contract: SPACE_COMP_CHAT_OVERLAY
+
+- **What**: FloatingChatOverlay 게임 위 플로팅 채팅
+- **Evidence**:
+  - code: `src/features/space/components/chat/FloatingChatOverlay.tsx`
+  - code: `src/features/space/components/chat/ChatTabs.tsx`
+  - code: `src/features/space/components/chat/ChatMessageList.tsx`
+  - code: `src/features/space/components/chat/ChatInputArea.tsx`
+
+### Contract: SPACE_COMP_MEDIA_SETTINGS
+
+- **What**: MediaSettingsModal 디스코드 스타일 설정
+- **Evidence**:
+  - code: `src/features/space/components/settings/MediaSettingsModal.tsx`
+  - code: `src/features/space/components/settings/AudioSettingsTab.tsx`
+  - code: `src/features/space/components/settings/VideoSettingsTab.tsx`
+  - code: `src/features/space/components/settings/DeviceSelector.tsx`
+  - code: `src/features/space/components/settings/VolumeMeter.tsx`
+
+### Contract: SPACE_HOOK_SOCKET
+
+- **What**: useSocket Socket.io 연결 훅
+- **Evidence**:
+  - code: `src/features/space/socket/useSocket.ts`
+  - code: `src/features/space/socket/types.ts`
+
+### Contract: SPACE_HOOK_CHAT_MODE
+
+- **What**: useChatMode 채팅 모드 상태 관리
+- **Evidence**:
+  - code: `src/features/space/hooks/useChatMode.ts`
+  - code: `src/features/space/hooks/useChatDrag.ts`
+  - code: `src/features/space/hooks/useChatStorage.ts`
+
+### Contract: SPACE_HOOK_PROXIMITY
+
+- **What**: useProximitySubscription 7x7 근접 통신 구독
+- **Evidence**:
+  - code: `src/features/space/livekit/useProximitySubscription.ts`
+
+### Contract: SPACE_HOOK_PARTY_ZONE
+
+- **What**: usePartyZone 파티 존 감지/관리
+- **Evidence**:
+  - code: `src/features/space/hooks/usePartyZone.ts`
+
+### Contract: SPACE_UTIL_CHAT_PARSER
+
+- **What**: chatParser 채팅 명령어 파싱
+- **Evidence**:
+  - code: `src/features/space/utils/chatParser.ts`
+  - code: `src/features/space/utils/commandHints.ts`
+
 <!-- FUNCTIONAL:END -->
 
 ---

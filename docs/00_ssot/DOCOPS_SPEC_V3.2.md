@@ -305,8 +305,67 @@ $ specctl verify --verbose
 - **HALLUCINATION**: Snapshot ❌, Contract ✅
 - **BROKEN_EVIDENCE**: Snapshot ✅, Contract ✅, Evidence ❌
 
-### 6.2 보강 상태 (1)
-- **SNAPSHOT_GAP**: Snapshot 생성기가 아직 커버하지 않는 유형
+### 6.2 보강 상태 (3) - V2.5 업데이트
+- **SNAPSHOT_GAP**: Snapshot 생성기가 아직 커버하지 않는 유형 (CODE 기반만)
+- **PROCESS_BASED**: 프로세스 기반 Contract (GAP 계산 제외)
+- **INFRA_BASED**: 인프라 기반 Contract (GAP 계산 제외)
+
+---
+
+## 6A) Contract 유형 분류 체계 (V2.5 신규)
+
+### 6A.1 유형 정의
+
+DocOps는 Contract를 검증 방식에 따라 3가지 유형으로 분류합니다:
+
+| 유형 | 코드 기반 | Evidence 형태 | 검증 방식 | GAP 계산 |
+|------|:--------:|--------------|----------|:--------:|
+| **CODE** | ✅ | `code: path::function` | 자동 스캔 | 포함 |
+| **PROCESS** | ❌ | 플로우, 체크리스트 | 수동 검증 | **제외** |
+| **INFRA** | ❌ | 설정 파일, Terraform | 배포 검증 | **제외** |
+
+### 6A.2 SPEC별 분류
+
+**CODE 기반 (자동 검증 가능)** - GAP 계산에 포함
+
+```
+SPACE, AUTH, USER, GUEST, ADMIN, DASHBOARD, SOCKET, GAME,
+LIVEKIT, UI_COMPONENT, FOUNDATION, PERMISSION, PAGE
+```
+
+**PROCESS 기반 (수동 검증)** - GAP 계산에서 제외
+
+```
+AI_PROTOCOL (세션 프로토콜, TASK.md 규칙)
+```
+
+**INFRA 기반 (배포 검증)** - GAP 계산에서 제외
+
+```
+INFRA (OCI, Vercel, Caddy 설정)
+```
+
+### 6A.3 GAP 계산 로직
+
+```
+# 기존 (왜곡된 자동화율)
+자동화율 = SYNC / (SYNC + 모든_GAP) × 100%
+
+# 개선 (정확한 자동화율)
+실제_GAP = SNAPSHOT_GAP (CODE 기반 SPEC만)
+PROCESS_BASED = AI_PROTOCOL Contract 수
+INFRA_BASED = INFRA Contract 수
+
+자동화율 = SYNC / (SYNC + 실제_GAP) × 100%
+```
+
+### 6A.4 철학적 근거
+
+| 원칙 | 적용 |
+|------|------|
+| 드리프트 0% 수렴 | CODE 기반만 자동화 대상 |
+| 검증 방식 다양성 | 유형별 적합한 검증 (자동/수동/배포) |
+| 정확한 지표 | GAP에 자동화 불가 항목 제외 |
 
 ---
 
@@ -395,8 +454,9 @@ npm run flow:finish -- --docs-only
 | V2.2 | 2026-01-20 | 초기 구현 완료 (CLI, 통합, 훅) |
 | V2.3 | 2026-01-20 | 템플릿 파일 제거, 스키마 기반 접근 |
 | V2.3.1 | 2026-01-20 | npm CLI 패키지 추가 |
-| **V2.4** | **2026-01-20** | **설정 파일, 캐시 구현, Evidence 개선, verbose** |
+| V2.4 | 2026-01-20 | 설정 파일, 캐시 구현, Evidence 개선, verbose |
+| **V2.5** | **2026-01-21** | **Contract 유형 분류 체계, specctl v0.5.0** |
 
 ---
 
-> **갱신**: 2026-01-20 | DocOps V3.2
+> **갱신**: 2026-01-21 | DocOps V3.2 (V2.5)

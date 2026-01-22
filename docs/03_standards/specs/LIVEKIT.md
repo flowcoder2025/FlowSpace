@@ -26,6 +26,61 @@ LiveKit 토큰 발급 및 웹훅 처리 API
 - **Evidence**:
   - code: `src/app/api/livekit/webhook/route.ts::POST`
 
+### Contract: LIVEKIT_COMP_PROVIDER
+
+- **What**: LiveKitRoomProvider 토큰 페칭 + 컨텍스트
+- **Evidence**:
+  - code: `src/features/space/livekit/LiveKitRoomProvider.tsx`
+  - code: `src/features/space/livekit/LiveKitMediaContext.tsx`
+
+### Contract: LIVEKIT_HOOK_MEDIA
+
+- **What**: useLiveKitMedia 컨텍스트 기반 미디어 제어
+- **Evidence**:
+  - code: `src/features/space/livekit/useLiveKitMedia.ts`
+  - code: `src/features/space/livekit/useLiveKit.ts`
+
+### Contract: LIVEKIT_HOOK_AUDIO
+
+- **What**: useAudioSettings 오디오 설정 관리
+- **Rules**:
+  | 옵션 | 기본값 | LiveKit 옵션 |
+  |-----|-------|--------------|
+  | noiseSuppression | true | AudioCaptureOptions.noiseSuppression |
+  | echoCancellation | true | AudioCaptureOptions.echoCancellation |
+  | autoGainControl | true | AudioCaptureOptions.autoGainControl |
+  | voiceIsolation | false | 실험적 기능 |
+- **Evidence**:
+  - code: `src/features/space/hooks/useAudioSettings.ts`
+
+### Contract: LIVEKIT_HOOK_VIDEO
+
+- **What**: useVideoSettings 비디오 설정 관리
+- **Rules**:
+  | 프리셋 | 해상도 | 용도 |
+  |-------|-------|------|
+  | 480p | 640x480 | 저대역폭 |
+  | 720p | 1280x720 | 기본 (권장) |
+  | 1080p | 1920x1080 | 고화질 |
+- **Evidence**:
+  - code: `src/features/space/hooks/useVideoSettings.ts`
+
+### Contract: LIVEKIT_HOOK_VOLUME
+
+- **What**: useVolumeMeter Web Audio API 실시간 볼륨 측정
+- **Evidence**:
+  - code: `src/features/space/hooks/useVolumeMeter.ts`
+
+### Contract: LIVEKIT_HOOK_DEVICES
+
+- **What**: useMediaDevices 미디어 장치 관리
+- **Rules**:
+  - Option C: 지연된 권한 요청 (iOS Safari 호환)
+  - 마운트 시 getUserMedia 호출 안함
+  - 설정 열 때 requestPermission() 호출
+- **Evidence**:
+  - code: `src/features/space/hooks/useMediaDevices.ts`
+
 <!-- FUNCTIONAL:END -->
 
 ---
@@ -58,10 +113,23 @@ LiveKit 토큰 발급 및 웹훅 처리 API
 
 ---
 
+## 배포 환경 (OCI 셀프호스팅)
+
+| 환경 | URL | IP |
+|------|-----|-----|
+| Production | `wss://space-livekit.flow-coder.com` | OCI 144.24.72.143 |
+| Development | `ws://localhost:7880` | - |
+
+> Railway/LiveKit Cloud 사용 안함 - Oracle Cloud에서 셀프호스팅
+> 상세 OCI 배포 가이드: `docs/infrastructure/OCI.md`
+
+---
+
 ## 참조
 
 - Provider: `src/features/space/livekit/LiveKitRoomProvider.tsx`
 - Context: `src/features/space/livekit/LiveKitMediaContext.tsx`
+- 인프라: `docs/03_standards/specs/INFRA.md`
 
 ---
 

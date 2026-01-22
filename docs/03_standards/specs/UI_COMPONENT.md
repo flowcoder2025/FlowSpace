@@ -42,6 +42,32 @@ shadcn/ui 기반 커스텀 UI 컴포넌트 시스템
   - code: `src/components/ui/dialog.tsx`
   - code: `package.json`
 
+### Contract: UI_COMPONENT_FUNC_MEMBER_MGMT
+
+- **What**: MemberManagement 멤버 관리 통합 컴포넌트
+- **Evidence**:
+  - code: `src/components/space/MemberManagement.tsx`
+  - code: `src/components/space/MemberList.tsx`
+
+### Contract: UI_COMPONENT_FUNC_ROLE_BADGE
+
+- **What**: RoleBadge 역할 뱃지 컴포넌트
+- **Rules**:
+  | 역할 | 색상 | 의미 |
+  |-----|------|------|
+  | SuperAdmin | 보라색 | 플랫폼 관리자 |
+  | OWNER | 파란색 | 공간 소유자 |
+  | STAFF | 초록색 | 운영 스태프 |
+  | PARTICIPANT | 회색 | 일반 참가자 |
+- **Evidence**:
+  - code: `src/components/space/RoleBadge.tsx`
+
+### Contract: UI_COMPONENT_FUNC_MEMBER_SEARCH
+
+- **What**: MemberSearchInput 멤버 검색 컴포넌트
+- **Evidence**:
+  - code: `src/components/space/MemberSearchInput.tsx`
+
 <!-- FUNCTIONAL:END -->
 
 ---
@@ -52,7 +78,7 @@ shadcn/ui 기반 커스텀 UI 컴포넌트 시스템
 
 - **What**: 버튼 시각 디자인 및 상호작용 상태
 - **Evidence**:
-  - code: `src/components/ui/button.tsx::variant`
+  - code: `src/components/ui/button.tsx::buttonVariants`
   - code: `src/components/ui/button.tsx::size`
 
 ### Contract: UI_COMPONENT_DESIGN_MODAL

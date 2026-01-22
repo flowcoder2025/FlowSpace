@@ -81,22 +81,36 @@ export async function POST(request: NextRequest) {
     // 델타 계산 (MB 단위)
     // 5분 간격 기준 최대 합리적 트래픽: 10GB (= 약 267 Mbps 지속)
     const MAX_DELTA_MB = 10 * 1024 // 10GB in MB
+    const EXPECTED_INTERVAL_MINUTES = 5 // Cron 간격 (5분)
 
     let trafficDeltaMB = 0
     let deltaNote = "no_previous"
 
     if (lastSnapshot) {
       const rawDelta = (trafficGB - lastSnapshot.trafficGB) * 1024
+      const elapsedMinutes = (Date.now() - lastSnapshot.timestamp.getTime()) / 60000
 
       if (rawDelta < 0) {
         // 월초 리셋: 새 달의 누적값만 사용
         trafficDeltaMB = Math.min(trafficGB * 1024, MAX_DELTA_MB)
         deltaNote = "month_reset"
+      } else if (elapsedMinutes > 0 && elapsedMinutes < 60) {
+        // 시간 기반 정규화: 실제 경과 시간에 맞게 5분 기준으로 정규화
+        const normalizedDelta = rawDelta * (EXPECTED_INTERVAL_MINUTES / elapsedMinutes)
+
+        if (normalizedDelta > MAX_DELTA_MB) {
+          console.warn(`[Collect Metrics] Unusually large delta: ${normalizedDelta.toFixed(2)} MB (raw: ${rawDelta.toFixed(2)} MB, elapsed: ${elapsedMinutes.toFixed(1)} min), capping to ${MAX_DELTA_MB} MB`)
+          trafficDeltaMB = MAX_DELTA_MB
+          deltaNote = "capped_normalized"
+        } else {
+          trafficDeltaMB = normalizedDelta
+          deltaNote = `normalized_${elapsedMinutes.toFixed(1)}min`
+        }
       } else if (rawDelta > MAX_DELTA_MB) {
-        // 비정상적으로 큰 델타: 캡 적용 + 경고
-        console.warn(`[Collect Metrics] Unusually large delta: ${rawDelta.toFixed(2)} MB, capping to ${MAX_DELTA_MB} MB`)
+        // 경과 시간이 비정상적 (60분 이상 또는 0 이하): 캡 적용
+        console.warn(`[Collect Metrics] Unusual elapsed time: ${elapsedMinutes.toFixed(1)} min, raw delta: ${rawDelta.toFixed(2)} MB, capping to ${MAX_DELTA_MB} MB`)
         trafficDeltaMB = MAX_DELTA_MB
-        deltaNote = "capped"
+        deltaNote = "capped_stale"
       } else {
         trafficDeltaMB = rawDelta
         deltaNote = "normal"

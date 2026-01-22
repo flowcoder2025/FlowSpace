@@ -56,8 +56,8 @@ export async function GET(request: NextRequest) {
       data = await getDailyAnalysis(startDate, endDate, spaceId)
     }
 
-    // 6. 상관관계 계산
-    const correlation = calculateCorrelation(data.records)
+    // 6. 상관관계 계산 (period 전달)
+    const correlation = calculateCorrelation(data.records, period)
 
     // 7. 비용 예측 공식 도출
     const costFormula = deriveCostFormula(correlation)
@@ -302,7 +302,7 @@ interface CorrelationResult {
   }
 }
 
-function calculateCorrelation(records: AnalysisRecord[]): CorrelationResult {
+function calculateCorrelation(records: AnalysisRecord[], period: string = "daily"): CorrelationResult {
   // 유효한 레코드만 필터링
   const validRecords = records.filter(
     (r) => r.concurrentUsers > 0 || r.videoMinutes > 0 || r.trafficMB > 0
@@ -330,6 +330,16 @@ function calculateCorrelation(records: AnalysisRecord[]): CorrelationResult {
     }
   }
 
+  // period에 따른 시간 단위 결정
+  // hourly: 각 레코드 = 1시간
+  // daily: 각 레코드 = 1일 (실제 운영 시간 8시간 가정)
+  // weekly: 각 레코드 = 1주 (7일 × 8시간 = 56시간)
+  const OPERATING_HOURS_PER_DAY = 8 // 실제 운영 시간 (예: 10시~18시)
+  const hoursPerRecord =
+    period === "hourly" ? 1 :
+    period === "daily" ? OPERATING_HOURS_PER_DAY :
+    period === "weekly" ? 7 * OPERATING_HOURS_PER_DAY : 1
+
   // Video-Traffic 상관관계
   const videoTrafficRecords = validRecords.filter((r) => r.videoMinutes > 0)
   let gbPerVideoMin = 0
@@ -344,8 +354,11 @@ function calculateCorrelation(records: AnalysisRecord[]): CorrelationResult {
   let gbPerUserHour = 0
   if (usersTrafficRecords.length > 0) {
     const totalTrafficGB = usersTrafficRecords.reduce((sum, r) => sum + r.trafficMB / 1024, 0)
-    // 대략적인 사용자-시간 추정 (시간별 데이터 기준)
-    const totalUserHours = usersTrafficRecords.reduce((sum, r) => sum + r.concurrentUsers, 0)
+    // 각 레코드의 concurrentUsers는 해당 기간의 피크 동접자 수
+    // 실제 사용자-시간 = Σ(concurrentUsers × hoursPerRecord)
+    const totalUserHours = usersTrafficRecords.reduce(
+      (sum, r) => sum + r.concurrentUsers * hoursPerRecord, 0
+    )
     gbPerUserHour = totalUserHours > 0 ? totalTrafficGB / totalUserHours : 0
   }
 
@@ -362,6 +375,12 @@ function calculateCorrelation(records: AnalysisRecord[]): CorrelationResult {
     if (count < 10) return "low"
     if (count < 50) return "medium"
     return "high"
+  }
+
+  // 데이터 품질 검증: 비정상 값 경고
+  const isValidGbPerUserHour = gbPerUserHour > 0.01 && gbPerUserHour < 10
+  if (!isValidGbPerUserHour && gbPerUserHour > 0) {
+    console.warn(`[Usage Analysis] Abnormal gbPerUserHour: ${gbPerUserHour.toFixed(4)} (period: ${period}, records: ${usersTrafficRecords.length})`)
   }
 
   return {

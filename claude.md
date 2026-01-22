@@ -2,6 +2,12 @@
 
 > ZEP-감성 2D 메타버스 | Next.js 15 + Phaser 3 + Socket.io + LiveKit
 
+## 응답 규칙
+
+- **응답 언어**: 한글 (코드/명령어/파일명 제외)
+- 기술 용어는 영어 허용 (예: API, TypeScript, hook, component)
+- 테이블 헤더, 요약, 설명 모두 한글로 작성
+
 ## 핵심 원칙
 
 - **Primary Color만 바꾸면 브랜드 완성** (CSS Variables 필수)
@@ -29,10 +35,12 @@ npm run dev:all    # Next.js(3000) + Socket.io(3001) + LiveKit(7880)
 | AI 프로토콜 | `docs/03_standards/specs/AI_PROTOCOL.md` |
 | UI 규칙 | `docs/03_standards/specs/UI_COMPONENT.md` |
 | 접근성/토큰 | `docs/03_standards/specs/FOUNDATION.md` |
-| 공간 기능 | `src/features/space/claude.md` |
-| Socket.io | `server/claude.md` |
-| API/백엔드 | `src/lib/claude.md` |
-| 컴포넌트 | `src/components/claude.md` |
+| 공간 API | `docs/03_standards/specs/SPACE.md` |
+| Socket.io | `docs/03_standards/specs/SOCKET.md` |
+| 게임 엔진 | `docs/03_standards/specs/GAME.md` |
+| LiveKit | `docs/03_standards/specs/LIVEKIT.md` |
+| OCI 인프라 | `docs/03_standards/specs/INFRA.md` |
+| OCI 배포 상세 | `docs/infrastructure/OCI.md` |
 
 ## DocOps
 

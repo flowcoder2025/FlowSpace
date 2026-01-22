@@ -121,6 +121,32 @@ function ConfidenceBadge({ confidence }: { confidence: "low" | "medium" | "high"
 }
 
 // ============================================
+// Abnormal Value Warning Badge Component
+// ============================================
+const NORMAL_RANGE = {
+  gbPerUserHour: { min: 0.01, max: 10, unit: "GB/사용자-시간" },
+  gbPerVideoMin: { min: 0.0001, max: 0.5, unit: "GB/영상-분" },
+}
+
+function AbnormalValueWarning({ value, type }: { value: number; type: keyof typeof NORMAL_RANGE }) {
+  const range = NORMAL_RANGE[type]
+  const isAbnormal = value < range.min || value > range.max
+
+  if (!isAbnormal || value === 0) return null
+
+  const severity = value > range.max * 10 ? "destructive" : "secondary"
+  const message = value > range.max
+    ? `비정상: ${range.unit} 정상 범위 초과 (${range.min}~${range.max})`
+    : `비정상: ${range.unit} 정상 범위 미달`
+
+  return (
+    <Badge variant={severity} className="ml-2" title={message}>
+      ⚠️ 비정상
+    </Badge>
+  )
+}
+
+// ============================================
 // Stat Card Component
 // ============================================
 function MetricCard({
@@ -176,9 +202,13 @@ function CostCalculator({
   const [hoursPerDay, setHoursPerDay] = useState(5)
   const [days, setDays] = useState(22)
 
+  // 비정상 값 감지 시 기본값 사용
+  const isAbnormalRate = gbPerUserHour > 10 || gbPerUserHour < 0.01
+  const effectiveRate = isAbnormalRate ? 0.14 : gbPerUserHour // 기본값: 140MB/시간
+
   const calculation = useMemo(() => {
     const totalHours = users * hoursPerDay * days
-    const trafficGB = totalHours * gbPerUserHour
+    const trafficGB = totalHours * effectiveRate
     const freeLimit = 10 * 1024 // 10TB = 10240GB
     const excessGB = Math.max(0, trafficGB - freeLimit)
     const costUSD = excessGB * 0.0085
@@ -192,7 +222,7 @@ function CostCalculator({
       costUSD: Math.round(costUSD * 100) / 100,
       costKRW,
     }
-  }, [users, hoursPerDay, days, gbPerUserHour])
+  }, [users, hoursPerDay, days, effectiveRate])
 
   return (
     <Card>
@@ -287,6 +317,11 @@ function CostCalculator({
           <Text size="xs" tone="muted" className="text-center">
             * OCI 아웃바운드 트래픽 기준 ($0.0085/GB, 월 10TB 무료)
           </Text>
+          {isAbnormalRate && (
+            <Text size="xs" className="text-center text-yellow-600">
+              ⚠️ 측정 데이터가 비정상입니다. 기본 추정값(0.14 GB/사용자-시간)을 사용합니다.
+            </Text>
+          )}
         </VStack>
       </CardContent>
     </Card>
@@ -586,16 +621,28 @@ export function UsageAnalysis() {
                   <CardTitle>사용자 → 트래픽</CardTitle>
                   <CardDescription>사용자 수와 트래픽 상관관계</CardDescription>
                 </VStack>
-                <ConfidenceBadge confidence={data?.correlation.usersToTraffic.confidence || "low"} />
+                <HStack gap="xs">
+                  <ConfidenceBadge confidence={data?.correlation.usersToTraffic.confidence || "low"} />
+                  {data && (
+                    <AbnormalValueWarning
+                      value={data.correlation.usersToTraffic.gbPerUserHour}
+                      type="gbPerUserHour"
+                    />
+                  )}
+                </HStack>
               </HStack>
             </CardHeader>
             <CardContent>
               <VStack gap="sm">
                 <HStack justify="between">
-                  <Text tone="muted" size="sm">GB/사용자-시간</Text>
-                  <Text weight="bold">
-                    {data?.correlation.usersToTraffic.gbPerUserHour.toFixed(3) || "0"}
+                  <Text tone="muted" size="sm" title="일별 데이터 기준: 운영시간 8시간 가정">
+                    GB/사용자-시간
                   </Text>
+                  <HStack gap="xs">
+                    <Text weight="bold">
+                      {data?.correlation.usersToTraffic.gbPerUserHour.toFixed(3) || "0"}
+                    </Text>
+                  </HStack>
                 </HStack>
                 <HStack justify="between">
                   <Text tone="muted" size="sm">상관계수</Text>
@@ -603,6 +650,11 @@ export function UsageAnalysis() {
                     {data?.correlation.usersToTraffic.coefficient.toFixed(2) || "0"}
                   </Text>
                 </HStack>
+                {data && data.correlation.usersToTraffic.gbPerUserHour > 10 && (
+                  <Text size="xs" className="text-yellow-600">
+                    ⚠️ 정상 범위 (0.1~5.0 GB) 초과 - 데이터 수집 오류 가능성
+                  </Text>
+                )}
               </VStack>
             </CardContent>
           </Card>
