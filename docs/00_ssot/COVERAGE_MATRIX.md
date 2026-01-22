@@ -1,4 +1,4 @@
-﻿# COVERAGE_MATRIX - 문서 커버리지 현황
+# COVERAGE_MATRIX - 문서 커버리지 현황
 
 > 코드(Snapshot) ↔ 문서(Contract) 매핑 상태를 한 눈에 확인
 

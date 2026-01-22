@@ -84,6 +84,29 @@ function Get-TimestampString {
 }
 
 #######################################
+# UTF-8 인코딩 헬퍼 함수 (BOM 없음)
+#######################################
+
+# UTF-8 BOM 없이 파일 쓰기 (.NET 사용)
+function Write-Utf8NoBom {
+    param(
+        [string]$FilePath,
+        [string]$Content
+    )
+    $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+    [System.IO.File]::WriteAllText($FilePath, $Content, $utf8NoBom)
+}
+
+# UTF-8로 파일 읽기 (BOM 자동 처리)
+function Read-Utf8File {
+    param([string]$FilePath)
+    if (Test-Path -LiteralPath $FilePath) {
+        return Get-Content -LiteralPath $FilePath -Raw -Encoding UTF8 -ErrorAction SilentlyContinue
+    }
+    return ""
+}
+
+#######################################
 # 캐시 함수
 #######################################
 
@@ -94,7 +117,7 @@ function Get-CachedFileContent {
 
     if (-not $script:FileCache.ContainsKey($FilePath)) {
         if (Test-Path -LiteralPath $FilePath) {
-            $script:FileCache[$FilePath] = Get-Content -LiteralPath $FilePath -Raw -ErrorAction SilentlyContinue
+            $script:FileCache[$FilePath] = Get-Content -LiteralPath $FilePath -Raw -Encoding UTF8 -ErrorAction SilentlyContinue
         }
         else {
             $script:FileCache[$FilePath] = ""
@@ -153,7 +176,7 @@ function Parse-CoverageMatrix {
         return $result
     }
 
-    $content = Get-Content $matrixFile -Raw
+    $content = Get-Content $matrixFile -Raw -Encoding UTF8
 
     # 요약 테이블에서 값 추출
     if ($content -match '\|\s*\*\*SYNC\*\*\s*\|\s*(\d+)') {
@@ -787,7 +810,7 @@ function Extract-Evidences {
         $specKey = $_.BaseName
         $currentContract = ""
 
-        Get-Content $_.FullName | ForEach-Object {
+        Get-Content $_.FullName -Encoding UTF8 | ForEach-Object {
             $line = $_
 
             # Contract ID 추출
@@ -916,7 +939,7 @@ function Extract-Contracts {
     Get-ChildItem -Path $SPECS_DIR -Filter "*.md" | ForEach-Object {
         $specKey = $_.BaseName
 
-        Get-Content $_.FullName | ForEach-Object {
+        Get-Content $_.FullName -Encoding UTF8 | ForEach-Object {
             if ($_ -match "^###\s*Contract:\s*(.+)$") {
                 $contractId = $Matches[1].Trim()
                 $contracts += "$specKey|$contractId"
@@ -1106,7 +1129,7 @@ function Cmd-Snapshot {
 "@
 
         if (Test-Path $uiFile) {
-            $content += (Get-Content $uiFile -Raw)
+            $content += (Get-Content $uiFile -Raw -Encoding UTF8)
         }
         else {
             $content += "(스캔된 UI 라우트 없음)"
@@ -1121,7 +1144,7 @@ function Cmd-Snapshot {
 "@
 
         if (Test-Path $apiFile) {
-            $content += (Get-Content $apiFile -Raw)
+            $content += (Get-Content $apiFile -Raw -Encoding UTF8)
         }
         else {
             $content += "(스캔된 API 라우트 없음)"
@@ -1138,7 +1161,7 @@ function Cmd-Snapshot {
 "@
 
         if (Test-Path $componentFile) {
-            $content += (Get-Content $componentFile -Raw)
+            $content += (Get-Content $componentFile -Raw -Encoding UTF8)
         }
         else {
             $content += "(스캔된 UI 컴포넌트 없음)"
@@ -1155,7 +1178,7 @@ function Cmd-Snapshot {
 "@
 
         if (Test-Path $permissionFile) {
-            $content += (Get-Content $permissionFile -Raw)
+            $content += (Get-Content $permissionFile -Raw -Encoding UTF8)
         }
         else {
             $content += "(스캔된 권한 유틸리티 없음)"
@@ -1172,7 +1195,7 @@ function Cmd-Snapshot {
 "@
 
         if (Test-Path $socketFile) {
-            $content += (Get-Content $socketFile -Raw)
+            $content += (Get-Content $socketFile -Raw -Encoding UTF8)
         }
         else {
             $content += "(스캔된 Socket 이벤트 없음)"
@@ -1189,7 +1212,7 @@ function Cmd-Snapshot {
 "@
 
         if (Test-Path $tokenFile) {
-            $content += (Get-Content $tokenFile -Raw)
+            $content += (Get-Content $tokenFile -Raw -Encoding UTF8)
         }
         else {
             $content += "(스캔된 설계 토큰 없음)"
@@ -1206,7 +1229,7 @@ function Cmd-Snapshot {
 "@
 
         if (Test-Path $hookFile) {
-            $content += (Get-Content $hookFile -Raw)
+            $content += (Get-Content $hookFile -Raw -Encoding UTF8)
         }
         else {
             $content += "(스캔된 Feature 훅 없음)"
@@ -1223,7 +1246,7 @@ function Cmd-Snapshot {
 "@
 
         if (Test-Path $cssFile) {
-            $content += (Get-Content $cssFile -Raw)
+            $content += (Get-Content $cssFile -Raw -Encoding UTF8)
         }
         else {
             $content += "(스캔된 CSS 변수 없음)"
@@ -1240,7 +1263,7 @@ function Cmd-Snapshot {
 "@
 
         if (Test-Path $socketHooksFile) {
-            $content += (Get-Content $socketHooksFile -Raw)
+            $content += (Get-Content $socketHooksFile -Raw -Encoding UTF8)
         }
         else {
             $content += "(스캔된 Socket 훅/핸들러 없음)"
@@ -1254,7 +1277,7 @@ function Cmd-Snapshot {
 > **Contract 유형 분류**: PROCESS_BASED(AI_PROTOCOL), INFRA_BASED(INFRA)는 GAP 계산에서 제외
 "@
 
-        $content | Out-File -FilePath $snapshotFile -Encoding utf8
+        Write-Utf8NoBom -FilePath $snapshotFile -Content $content
 
         Print-Success "SPEC_SNAPSHOT.md 갱신 완료"
         Print-Info "위치: $snapshotFile"
@@ -1345,7 +1368,7 @@ function Update-CoverageMatrix {
 "@
 
     if (Test-Path $DetailsFile) {
-        $content += (Get-Content $DetailsFile -Raw)
+        $content += (Get-Content $DetailsFile -Raw -Encoding UTF8)
     }
 
     $content += @"
@@ -1363,7 +1386,7 @@ function Update-CoverageMatrix {
 > **자동 생성**: ``specctl verify`` 실행 시 갱신됨 (v$VERSION)
 "@
 
-    $content | Out-File -FilePath $matrixFile -Encoding utf8
+    Write-Utf8NoBom -FilePath $matrixFile -Content $content
 }
 
 function Update-DriftReport {
@@ -1388,7 +1411,7 @@ function Update-DriftReport {
 
     $driftId = 1
     if ((Test-Path $DriftsFile) -and (Get-Content $DriftsFile -ErrorAction SilentlyContinue)) {
-        Get-Content $DriftsFile | ForEach-Object {
+        Get-Content $DriftsFile -Encoding UTF8 | ForEach-Object {
             $parts = $_ -split '\|'
             if ($parts.Count -ge 2) {
                 $dtype = $parts[0]
@@ -1423,7 +1446,7 @@ function Update-DriftReport {
 > **자동 생성**: $timestamp
 "@
 
-    $content | Out-File -FilePath $reportFile -Encoding utf8
+    Write-Utf8NoBom -FilePath $reportFile -Content $content
 }
 
 function Cmd-Verify {
@@ -1483,7 +1506,7 @@ function Cmd-Verify {
 
     if (Test-Path $snapshotFile) {
         $currentSection = ""
-        Get-Content $snapshotFile | ForEach-Object {
+        Get-Content $snapshotFile -Encoding UTF8 | ForEach-Object {
             # 섹션 헤더 감지
             if ($_ -match '^##\s+(.+)$') {
                 $currentSection = $Matches[1].Trim()
@@ -1584,7 +1607,7 @@ function Cmd-Verify {
 
     # Contract별 검증 (최적화: O(1) 해시 조회)
     if (Test-Path $contractsFile) {
-        $contracts = Get-Content $contractsFile
+        $contracts = Get-Content $contractsFile -Encoding UTF8
 
         foreach ($contractLine in $contracts) {
             if ([string]::IsNullOrWhiteSpace($contractLine)) { continue }
@@ -2019,7 +2042,7 @@ function Cmd-Compile {
             $specName = $_.BaseName
             $content += "## $specName`n`n"
 
-            $specContent = Get-Content $_.FullName -Raw
+            $specContent = Get-Content $_.FullName -Raw -Encoding UTF8
             if ($specContent -match '(?s)<!-- FUNCTIONAL:BEGIN -->(.*)<!-- FUNCTIONAL:END -->') {
                 $content += $Matches[1].Trim() + "`n"
             }
@@ -2036,7 +2059,7 @@ function Cmd-Compile {
 > **Spec 문서 수**: $specCount
 "@
 
-    $content | Out-File -FilePath $devspecFile -Encoding utf8
+    Write-Utf8NoBom -FilePath $devspecFile -Content $content
     Print-Success "DEV_SPEC_LATEST.md 생성 완료"
 
     # User Manual 생성
@@ -2074,7 +2097,7 @@ function Cmd-Compile {
             $specName = $_.BaseName
             $content += "## $specName`n`n"
 
-            $specContent = Get-Content $_.FullName -Raw
+            $specContent = Get-Content $_.FullName -Raw -Encoding UTF8
             if ($specContent -match '(?s)<!-- DESIGN:BEGIN -->(.*)<!-- DESIGN:END -->') {
                 $content += $Matches[1].Trim() + "`n"
             }
@@ -2090,7 +2113,7 @@ function Cmd-Compile {
 > **자동 생성**: $timestamp
 "@
 
-    $content | Out-File -FilePath $manualFile -Encoding utf8
+    Write-Utf8NoBom -FilePath $manualFile -Content $content
     Print-Success "USER_MANUAL_LATEST.md 생성 완료"
 
     Write-Host ""
@@ -2140,7 +2163,7 @@ function Cmd-Status {
     # 마지막 검증 정보
     $matrixFile = Join-Path $SSOT_DIR "COVERAGE_MATRIX.md"
     if (Test-Path $matrixFile) {
-        $content = Get-Content $matrixFile -Raw
+        $content = Get-Content $matrixFile -Raw -Encoding UTF8
         if ($content -match '\|\s*\*\*마지막 검증\*\*\s*\|\s*([^|]+)\s*\|') {
             Write-Host "마지막 검증:   $($Matches[1].Trim())" -ForegroundColor Cyan
         }

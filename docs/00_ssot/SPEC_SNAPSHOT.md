@@ -1,4 +1,4 @@
-﻿# SPEC_SNAPSHOT - 코드 인벤토리
+# SPEC_SNAPSHOT - 코드 인벤토리
 
 > 자동 생성: specctl snapshot (2026-01-21 21:54:47)
 > 버전: v0.5.0 (확장 스캔 지원)

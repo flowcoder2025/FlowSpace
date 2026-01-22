@@ -1,6 +1,6 @@
-﻿# 사용자 매뉴얼
+# 사용자 매뉴얼
 
-> 자동 생성: specctl compile (2026-01-21 16:16:39)
+> 자동 생성: specctl compile (2026-01-22 15:28:43)
 
 ---
 
@@ -11,11 +11,15 @@
 - [AUTH](#AUTH)
 - [CRON](#CRON)
 - [DASHBOARD](#DASHBOARD)
+- [DOCOPS](#DOCOPS)
 - [FOUNDATION](#FOUNDATION)
+- [GAME](#GAME)
 - [GUEST](#GUEST)
 - [INFRA](#INFRA)
 - [LIVEKIT](#LIVEKIT)
+- [PAGE](#PAGE)
 - [PERMISSION](#PERMISSION)
+- [SOCKET](#SOCKET)
 - [SPACE](#SPACE)
 - [UI_COMPONENT](#UI_COMPONENT)
 - [UI_SYSTEM](#UI_SYSTEM)
@@ -32,47 +36,47 @@
 
 ### Contract: AI_PROTOCOL_DESIGN_TASK_STRUCTURE
 - **Tier**: normal
-- **What**: TASK.md 臾몄꽌 援ъ“ ?쒗뵆由?
+- **What**: TASK.md 문서 구조 템플릿
 - **Template**:
   ```markdown
-  # TASK: [?쒖뒪???쒕ぉ]
+  # TASK: [태스크 제목]
 
-  > **紐⑺몴**: [??以??ㅻ챸]
-  > **?쒖옉??*: YYYY-MM-DD
+  > **목표**: [한 줄 설명]
+  > **시작일**: YYYY-MM-DD
 
-  ## ?꾩옱 ?곹깭
-  | ?곹깭 | ?섎웾 | ?ㅻ챸 |
+  ## 현재 상태
+  | 상태 | 수량 | 설명 |
 
-  ## Phase 1: [?④퀎紐?
-  - [ ] 泥댄겕由ъ뒪????ぉ
+  ## Phase 1: [단계명]
+  - [ ] 체크리스트 항목
 
-  ## 吏꾪뻾 ?곹깭
-  | Phase | ?ㅻ챸 | ?곹깭 | ?꾨즺??|
+  ## 진행 상태
+  | Phase | 설명 | 상태 | 완료일 |
 
-  ## 李몄“
+  ## 참조
   - HANDOFF: docs/00_ssot/HANDOFF_*.md
 
-  ## 蹂寃??대젰
-  | ?좎쭨 | 蹂寃??댁슜 |
+  ## 변경 이력
+  | 날짜 | 변경 내용 |
   ```
 - **Evidence**:
   - code: `TASK.md::TASK`
 
 ### Contract: AI_PROTOCOL_DESIGN_HANDOFF_STRUCTURE
 - **Tier**: normal
-- **What**: HANDOFF 臾몄꽌 援ъ“ (?몄뀡 媛?而⑦뀓?ㅽ듃 ?꾨떖)
+- **What**: HANDOFF 문서 구조 (세션 간 컨텍스트 전달)
 - **Template**:
   ```markdown
-  # HANDOFF - [?묒뾽紐?
+  # HANDOFF - [작업명]
 
-  > **?몄뀡 ?몃뱶?ㅽ봽 臾몄꽌**
-  > **?묒꽦??*: YYYY-MM-DD
-  > **?곹깭**: ??吏꾪뻾以?| ???꾨즺
+  > **세션 핸드오프 문서**
+  > **작성일**: YYYY-MM-DD
+  > **상태**: ⏳ 진행중 | ✅ 완료
 
-  ## 1. 諛곌꼍
-  ## 2. ?꾨즺???묒뾽
-  ## 3. ?ㅼ쓬 ?묒뾽
-  ## 4. ?뚯씪 ?꾩튂 ?붿빟
+  ## 1. 배경
+  ## 2. 완료된 작업
+  ## 3. 다음 작업
+  ## 4. 파일 위치 요약
   ```
 - **Evidence**:
   - code: `docs/00_ssot/HANDOFF_2026-01-21_CLAUDE_SLIM.md`
@@ -99,21 +103,111 @@
 
 ---
 
+## DOCOPS
+
+### Contract: DOCOPS_DESIGN_STATUS_FLOW
+
+> 상태 판정 플로우
+
+```
+┌─────────────────────────────────────────┐
+│           Contract 처리 시작            │
+└─────────────────┬───────────────────────┘
+                  │
+                  ▼
+        ┌─────────────────┐
+        │ SPEC_KEY 확인   │
+        └────────┬────────┘
+                 │
+    ┌────────────┼────────────┐
+    │            │            │
+    ▼            ▼            ▼
+┌───────┐   ┌────────┐   ┌────────┐
+│ CODE  │   │PROCESS │   │ INFRA  │
+│ 기반  │   │ 기반   │   │ 기반   │
+└───┬───┘   └───┬────┘   └───┬────┘
+    │           │            │
+    ▼           ▼            ▼
+┌───────┐   ┌────────────┐  ┌───────────┐
+│자동   │   │PROCESS_    │  │INFRA_     │
+│검증   │   │BASED       │  │BASED      │
+└───┬───┘   │(GAP 제외)  │  │(GAP 제외) │
+    │       └────────────┘  └───────────┘
+    ▼
+┌───────────────────┐
+│ Evidence 검증     │
+├───────────────────┤
+│ 파일 존재?        │
+│ 심볼 매칭?        │
+└─────────┬─────────┘
+          │
+    ┌─────┴─────┐
+    │           │
+    ▼           ▼
+┌───────┐   ┌──────────────┐
+│ VALID │   │ BROKEN_      │
+│       │   │ EVIDENCE     │
+└───┬───┘   └──────────────┘
+    │
+    ▼
+┌───────────────────┐
+│ Snapshot 매칭     │
+├───────────────────┤
+│ 라우트 매칭?      │
+│ 컴포넌트 매칭?    │
+│ 훅/이벤트 매칭?   │
+└─────────┬─────────┘
+          │
+    ┌─────┴─────┐
+    │           │
+    ▼           ▼
+┌───────┐   ┌──────────────┐
+│ SYNC  │   │ SNAPSHOT_GAP │
+│       │   │ (CODE만 계산)│
+└───────┘   └──────────────┘
+```
+
+### Contract: DOCOPS_DESIGN_GAP_CALCULATION
+
+> GAP 계산 로직
+
+**CODE 기반 (GAP 포함)**
+
+```
+실제 GAP = SNAPSHOT_GAP (CODE 기반 SPEC만)
+```
+
+**PROCESS/INFRA 기반 (GAP 제외)**
+
+```
+PROCESS_BASED = AI_PROTOCOL Contract 수
+INFRA_BASED = INFRA Contract 수
+```
+
+**자동화율 계산**
+
+```
+자동화율 = SYNC / (SYNC + SNAPSHOT_GAP) × 100%
+         = CODE 기반만 계산
+```
+
+---
+
 ## FOUNDATION
 
 ### Contract: FOUNDATION_DESIGN_A11Y_MODAL
 
 - **Tier**: core
-- **What**: 紐⑤떖 ?묎렐???꾩닔 ?붽뎄?ы빆 ?곸꽭
+- **What**: 모달 접근성 필수 요구사항 상세
 - **Requirements**:
-  | ?붽뎄?ы빆 | 援ы쁽 諛⑸쾿 |
+  | 요구사항 | 구현 방법 |
   |---------|----------|
-  | ?대┫ ???ъ빱???대룞 | 紐⑤떖 ?대? 泥?踰덉㎏ ?ъ빱???붿냼濡?|
-  | ?ъ빱???몃옪 | Tab ?ㅻ줈 紐⑤떖 ?대?留??쒗솚 |
-  | ESC ?リ린 | ?ㅻ낫???몃뱾???깅줉 |
-  | ?ロ옄 ???ъ빱??蹂듦? | ?몃━嫄??붿냼濡?蹂듦? |
-  | ??븷 ?좎뼵 | `role="dialog"` + `aria-modal="true"` |
-  | ?덉씠釉?| `aria-labelledby` ?먮뒗 `aria-label` ?꾩닔 |
+  | 열릴 때 포커스 이동 | 모달 내부 첫 번째 포커스 요소로 |
+  | 포커스 트랩 | Tab 키로 모달 내부만 순환 |
+  | ESC 닫기 | 키보드 핸들러 등록 |
+  | 닫힐 때 포커스 복귀 | 트리거 요소로 복귀 |
+  | 역할 선언 | `role="dialog"` + `aria-modal="true"` |
+  | 레이블 | `aria-labelledby` 또는 `aria-label` 필수 |
 - **Evidence**:
   - ui: `src/components/ui/dialog.tsx::DialogContent`
   - code: `src/components/ui/dialog.tsx::Dialog`
@@ -121,29 +215,34 @@
 ### Contract: FOUNDATION_DESIGN_STATE_MACHINE
 
 - **Tier**: normal
-- **What**: 紐⑤떖 ?곹깭???묒꽦 洹쒖튃 (State Machine)
+- **What**: 모달 상태도 작성 규칙 (State Machine)
 - **States**: `[CLOSED, OPENING, OPEN, CLOSING]`
 - **Events**:
-  | ?대깽??| ?ㅻ챸 |
+  | 이벤트 | 설명 |
   |-------|------|
-  | OPEN_MODAL | 紐⑤떖 ?닿린 ?붿껌 |
-  | CLOSE_MODAL | 紐⑤떖 ?リ린 ?붿껌 |
-  | ANIMATION_END | ?좊땲硫붿씠???꾨즺 |
+  | OPEN_MODAL | 모달 열기 요청 |
+  | CLOSE_MODAL | 모달 닫기 요청 |
+  | ANIMATION_END | 애니메이션 완료 |
 - **Guards**:
-  | Guard | 議곌굔 |
+  | Guard | 조건 |
   |-------|------|
   | canOpen | `currentState === CLOSED` |
   | canClose | `currentState === OPEN` |
 - **Transitions**:
   ```
-  CLOSED ??OPENING: Event=OPEN_MODAL, Guard=canOpen
-  OPENING ??OPEN: Event=ANIMATION_END
-  OPEN ??CLOSING: Event=CLOSE_MODAL, Guard=canClose
-  CLOSING ??CLOSED: Event=ANIMATION_END
+  CLOSED → OPENING: Event=OPEN_MODAL, Guard=canOpen
+  OPENING → OPEN: Event=ANIMATION_END
+  OPEN → CLOSING: Event=CLOSE_MODAL, Guard=canClose
+  CLOSING → CLOSED: Event=ANIMATION_END
   ```
 - **Evidence**:
   - code: `src/components/ui/dialog.tsx::Dialog`
   - code: `src/components/ui/dialog.tsx::DialogContent`
+
+---
+
+## GAME
+
 
 ---
 
@@ -162,7 +261,17 @@
 
 ---
 
+## PAGE
+
+
+---
+
 ## PERMISSION
+
+
+---
+
+## SOCKET
 
 
 ---
@@ -176,14 +285,14 @@
 
 ### Contract: UI_COMPONENT_DESIGN_BUTTON
 
-- **What**: 踰꾪듉 ?쒓컖 ?붿옄??諛??곹샇?묒슜 ?곹깭
+- **What**: 버튼 시각 디자인 및 상호작용 상태
 - **Evidence**:
-  - code: `src/components/ui/button.tsx::variant`
+  - code: `src/components/ui/button.tsx::buttonVariants`
   - code: `src/components/ui/button.tsx::size`
 
 ### Contract: UI_COMPONENT_DESIGN_MODAL
 
-- **What**: 紐⑤떖 ?ㅻ쾭?덉씠 諛??좊땲硫붿씠??
+- **What**: 모달 오버레이 및 애니메이션
 - **Evidence**:
   - code: `src/components/ui/dialog.tsx::DialogOverlay`
   - code: `src/components/ui/dialog.tsx::DialogContent`
@@ -191,15 +300,15 @@
 ### Contract: UI_COMPONENT_DESIGN_BUTTON_HOVER
 
 - **Tier**: core
-- **What**: 踰꾪듉 Hover ?ㅽ???洹쒖튃 (variant蹂??곹샇?묒슜)
+- **What**: 버튼 Hover 스타일 규칙 (variant별 상호작용)
 - **Rules**:
-  | Variant | Hover ???ㅽ???|
+  | Variant | Hover 시 스타일 |
   |---------|----------------|
-  | `default` | 諛곌꼍 ?대몼寃?(primary/90), 洹몃┝??+ ?곸듅 ?④낵 |
-  | `outline` | **?뚮몢由???primary, ?띿뒪????primary, 諛곌꼍 ???щ챸 ?좎?** |
-  | `destructive` | 諛곌꼍 ?대몼寃?(destructive/90), 洹몃┝??+ ?곸듅 ?④낵 |
-  | `ghost` | 諛곌꼍 accent ?곸슜 |
-- **Critical**: outline 踰꾪듉 hover ??**諛곌꼍??蹂寃?湲덉?**, ?뚮몢由ъ? ?띿뒪?몃쭔 primary濡?蹂寃?
+  | `default` | 배경 어둡게 (primary/90), 그림자 + 상승 효과 |
+  | `outline` | **테두리 → primary, 텍스트 → primary, 배경 → 투명 유지** |
+  | `destructive` | 배경 어둡게 (destructive/90), 그림자 + 상승 효과 |
+  | `ghost` | 배경 accent 적용 |
+- **Critical**: outline 버튼 hover 시 **배경색 변경 금지**, 테두리와 텍스트만 primary로 변경
 - **Evidence**:
   - code: `src/components/ui/button.tsx::buttonVariants`
   - code: `src/app/globals.css`
@@ -219,4 +328,4 @@
 
 ---
 
-> **자동 생성**: 2026-01-21 16:16:39
+> **자동 생성**: 2026-01-22 15:28:43
