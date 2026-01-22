@@ -68,7 +68,30 @@ code: src/legacy/utils.js#L10-L20
 
 **기본값**: tier 미명시 시 `normal`로 간주
 
-### 3.3 Contract ID 규칙 (slug 기반)
+### 3.3 SPEC_KEY별 Level 강제 규칙
+
+> AI 에이전트는 해당 SPEC_KEY의 Contract 작성 시 반드시 지정된 Level 이상을 충족해야 합니다.
+
+| SPEC_KEY | 강제 Level | 이유 |
+|----------|:----------:|------|
+| SOCKET | 2 | 실시간 통신 핵심 |
+| LIVEKIT | 2 | 음성/영상 통신 |
+| SPACE | 2 | 메인 기능 |
+| GAME | 2 | 게임 엔진 |
+| 기타 | 1 | 단순 API |
+
+#### Level 2 필수 필드
+
+Level 2 Contract는 다음 필드를 반드시 포함해야 합니다:
+
+| 필드 | 필수 여부 | 설명 |
+|------|:--------:|------|
+| **Tier** | 필수 | `core` 또는 `normal` 명시 |
+| **Rules** 섹션 | 필수 | 동작 규칙 (테이블 또는 목록) |
+| **Inputs/Outputs** | 권장 | API인 경우 필수 |
+| **변경 이력** 섹션 | 필수 | 문서 하단에 테이블 형식 |
+
+### 3.4 Contract ID 규칙 (slug 기반)
 
 ```
 CONTRACT_ID = <SPEC_KEY>_<FUNC|DESIGN>_<SLUG>

@@ -24,8 +24,8 @@
 |------|-----|
 | **마지막 검증** | 2026-01-22 |
 | **검증 레벨** | soft |
-| **총 항목** | 131 |
-| **SYNC** | 112 |
+| **총 항목** | 135 |
+| **SYNC** | 116 |
 | **SNAPSHOT_GAP** | 0 |
 | **PROCESS_BASED** | 11 |
 | **INFRA_BASED** | 8 |
@@ -37,7 +37,7 @@
 
 | 지표 | 값 |
 |------|-----|
-| **CODE 기반 SYNC** | 112 |
+| **CODE 기반 SYNC** | 116 |
 | **CODE 기반 GAP** | 0 |
 | **자동화율** | 100% |
 
@@ -108,6 +108,8 @@
 | LIVEKIT | LIVEKIT_API_WEBHOOK | O | O | O | SYNC |
 | LIVEKIT | LIVEKIT_COMP_PROVIDER | O | O | O | SYNC |
 | LIVEKIT | LIVEKIT_HOOK_MEDIA | O | O | O | SYNC |
+| LIVEKIT | LIVEKIT_HOOK_AUDIOGATE | O | O | O | SYNC |
+| LIVEKIT | LIVEKIT_FUNC_TRACK_REPLACE | O | O | O | SYNC |
 | LIVEKIT | LIVEKIT_HOOK_AUDIO | O | O | O | SYNC |
 | LIVEKIT | LIVEKIT_HOOK_VIDEO | O | O | O | SYNC |
 | LIVEKIT | LIVEKIT_HOOK_VOLUME | O | O | O | SYNC |
@@ -155,7 +157,9 @@
 | SPACE | SPACE_API_MESSAGES | O | O | O | SYNC |
 | SPACE | SPACE_API_MY_SPACES | O | O | O | SYNC |
 | SPACE | SPACE_API_TEMPLATES | O | O | O | SYNC |
-| SPACE | SPACE_COMP_LAYOUT | O | O | O | SYNC |
+| SPACE | SPACE_COMP_LAYOUT_CORE | O | O | O | SYNC |
+| SPACE | SPACE_COMP_LAYOUT_MEDIA | O | O | O | SYNC |
+| SPACE | SPACE_COMP_LAYOUT_SOCKET | O | O | O | SYNC |
 | SPACE | SPACE_COMP_VIDEO_TILE | O | O | O | SYNC |
 | SPACE | SPACE_COMP_CONTROL_BAR | O | O | O | SYNC |
 | SPACE | SPACE_COMP_CHAT_OVERLAY | O | O | O | SYNC |
@@ -186,7 +190,7 @@
 
 | 날짜 | SYNC | GAP | PROCESS | INFRA | BROKEN | MISSING | HALLU | 자동화율 |
 |------|:----:|:---:|:-------:|:-----:|:------:|:-------:|:-----:|:--------:|
-| 2026-01-22 | 112 | 0 | 11 | 8 | 0 | 0 | 0 | 100% |
+| 2026-01-22 | 116 | 0 | 11 | 8 | 0 | 0 | 0 | 100% |
 
 ---
 

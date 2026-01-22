@@ -71,12 +71,51 @@ status_rules:
   SNAPSHOT_GAP: "코드X, 문서O (CODE 기반) → 드리프트 (스캔 범위 확장 필요)"
   PROCESS_BASED: "AI_PROTOCOL 등 프로세스 기반 → GAP 제외"
   INFRA_BASED: "INFRA 등 인프라 기반 → GAP 제외"
+  INCOMPLETE_DOC: "Level 미달 문서 (Level 2 필수 필드 누락)"
 
 drift_check:
   - MISSING_DOC > 0: 드리프트
   - HALLUCINATION > 0: 드리프트
   - BROKEN_EVIDENCE > 0: 드리프트
   - SNAPSHOT_GAP > 0: 드리프트 (CODE 기반이면 스캔 범위 확장 필요)
+  - INCOMPLETE_DOC > 0: 경고 (soft 모드), 드리프트 (strict 모드)
+```
+
+### Step 3.5: Level 검증 (신규)
+
+핵심 SPEC_KEY의 Contract가 Level 2 요구사항을 충족하는지 검증:
+
+```yaml
+level_enforcement:
+  # Level 2 강제 SPEC_KEY
+  level_2_required:
+    - SOCKET
+    - LIVEKIT
+    - SPACE
+    - GAME
+
+  # Level 1 필수 필드 (MVP)
+  level_1_check:
+    - What 필드 존재
+    - Evidence 최소 1개
+
+  # Level 2 필수 필드
+  level_2_check:
+    - Tier 필드 존재 (core 또는 normal)
+    - Rules 섹션 존재 (테이블 또는 목록)
+    - 변경 이력 섹션 존재 (문서 하단)
+
+  # 검증 결과
+  on_level_violation:
+    soft_mode: "INCOMPLETE_DOC으로 경고, 작업 계속"
+    strict_mode: "INCOMPLETE_DOC으로 차단"
+
+level_check_output: |
+  Level 검증 결과:
+    ✓ Level 2 충족: {level_2_pass_count}
+    ⚠ Level 미달: {level_2_fail_count}
+
+  {level_violation_details if any}
 ```
 
 ### Step 4: 심볼 검증 (--fast 아닐 때만)
@@ -118,6 +157,7 @@ format: |
   | **HALLUCINATION** | {hallu_count} |
   | **BROKEN_EVIDENCE** | {broken_count} |
   | **SNAPSHOT_GAP** | {gap_count} |
+  | **INCOMPLETE_DOC** | {incomplete_count} |
 
 # DRIFT_REPORT.md 갱신
 update_file: docs/00_ssot/DRIFT_REPORT.md
@@ -125,6 +165,7 @@ add_to_active:
   - BROKEN_EVIDENCE 항목
   - MISSING_DOC 항목 (새로 발견된 것만)
   - SNAPSHOT_GAP 항목 (CODE 기반, 스캔 범위 확장 필요)
+  - INCOMPLETE_DOC 항목 (Level 미달 문서)
 ```
 
 ### Step 7: 결과 보고
@@ -139,10 +180,19 @@ output_format: |
     {status_icon} HALLUCINATION: {hallu_count}
     {status_icon} BROKEN_EVIDENCE: {broken_count}
     {status_icon} SNAPSHOT_GAP: {gap_count}
+    {status_icon} INCOMPLETE_DOC: {incomplete_count}
+
+  {level_check_section if any}
 
   {drift_section if any}
 
   [DocOps Verify] {final_message}
+
+level_check_section_format: |
+  Level 검증 결과:
+  | SPEC_KEY | 강제 Level | 현재 상태 | 미달 필드 |
+  |----------|:----------:|:---------:|----------|
+  {level_rows}
 
 drift_section_format: |
   Active 드리프트:
@@ -159,6 +209,7 @@ drift_conditions:
   - HALLUCINATION > 0
   - BROKEN_EVIDENCE > 0
   - SNAPSHOT_GAP > 0 (CODE 기반만, PROCESS_BASED/INFRA_BASED 제외)
+  - INCOMPLETE_DOC > 0 (strict 모드만)
 ```
 
 ---
@@ -210,6 +261,10 @@ performance_target:
   ✓ HALLUCINATION: 0
   ✓ BROKEN_EVIDENCE: 0
   ⚠ SNAPSHOT_GAP: 62 (자동화 범위 밖)
+  ✓ INCOMPLETE_DOC: 0
+
+Level 검증 결과:
+  ✓ Level 2 충족: SOCKET, LIVEKIT, SPACE, GAME
 
 [DocOps Verify] 드리프트 없음. 작업을 시작하세요.
 ```
@@ -224,6 +279,15 @@ performance_target:
   ✗ HALLUCINATION: 0
   ✗ BROKEN_EVIDENCE: 3
   ⚠ SNAPSHOT_GAP: 62
+  ⚠ INCOMPLETE_DOC: 1
+
+Level 검증 결과:
+| SPEC_KEY | 강제 Level | 현재 상태 | 미달 필드 |
+|----------|:----------:|:---------:|----------|
+| SOCKET | 2 | ✓ | - |
+| LIVEKIT | 2 | ⚠ | Rules, Tier 누락 |
+| SPACE | 2 | ✓ | - |
+| GAME | 2 | ✓ | - |
 
 [DocOps Verify] 드리프트 발견! 먼저 해결이 필요합니다.
 
@@ -233,6 +297,7 @@ Active 드리프트:
 | DRIFT-001 | BROKEN_EVIDENCE | DOCOPS_FUNC_SNAPSHOT | Evidence 링크 수정 |
 | DRIFT-002 | BROKEN_EVIDENCE | DOCOPS_FUNC_VERIFY | Evidence 링크 수정 |
 | DRIFT-003 | MISSING_DOC | /api/new-endpoint | Contract 추가 필요 |
+| DRIFT-004 | INCOMPLETE_DOC | LIVEKIT.md | Level 2 필수 필드 추가 필요 |
 
 해결하시겠습니까? (/docops-verify --fix)
 ```
