@@ -317,6 +317,10 @@ export function useSocket({
 
     socket.io.on("reconnect", (attempt) => {
       console.log(`[Socket] Reconnected after ${attempt} attempts`)
+      // 🔧 FIX: 재연결 시 게임 Ready 상태 리셋 (Race Condition 방지)
+      // MainScene이 재연결을 인지하고 GAME_READY를 다시 emit할 때까지 대기
+      gameReadyRef.current = false
+      pendingPlayersRef.current = []
       // 재연결 성공 시 공간에 다시 입장
       socket.emit("join:space", { spaceId, playerId, nickname, avatarColor, avatarConfig, sessionToken })
     })
@@ -340,19 +344,37 @@ export function useSocket({
       if (IS_DEV) {
         console.log("[Socket] Game ready, syncing", pendingCount, "pending players")
       }
-      // 📊 Phase 2.7: players Map에서 최신 위치 가져오기 (이동 이벤트 손실 방지)
-      // pendingPlayersRef는 입장 시점 스냅샷이므로, 게임 로드 중 이동한 경우 옛날 위치가 됨
+      // 🔧 FIX: pendingPlayersRef 대신 players Map에서 직접 동기화
+      // 이렇게 하면 room:joined가 GAME_READY 이후에 와도 안전
       setPlayers((currentPlayers) => {
+        // pending 큐에 있는 플레이어 ID 추적 (중복 emit 방지)
+        const emittedIds = new Set<string>()
+
+        // 1. pending 큐 처리 (기존 로직 - 최신 위치 사용)
         pendingPlayersRef.current.forEach((player) => {
           if (player.id !== playerId) {
             // 📊 최신 위치 사용 (없으면 입장 시점 위치 사용)
             const latestPlayer = currentPlayers.get(player.id) || player
             if (IS_DEV) {
-              console.log("[Socket] Emitting REMOTE_PLAYER_JOIN for:", latestPlayer.id, latestPlayer.nickname, "at", latestPlayer.x, latestPlayer.y)
+              console.log("[Socket] Emitting REMOTE_PLAYER_JOIN for queued:", latestPlayer.id, latestPlayer.nickname, "at", latestPlayer.x, latestPlayer.y)
             }
             eventBridge.emit(GameEvents.REMOTE_PLAYER_JOIN, latestPlayer)
+            emittedIds.add(player.id)
           }
         })
+
+        // 2. 🔧 FIX: Map에 있지만 pending에 없던 플레이어 처리
+        // (GAME_READY와 room:joined 순서 역전 또는 재연결 대응)
+        currentPlayers.forEach((player, id) => {
+          if (id !== playerId && !emittedIds.has(id)) {
+            if (IS_DEV) {
+              console.log("[Socket] Emitting REMOTE_PLAYER_JOIN for map-only:", player.id, player.nickname, "at", player.x, player.y)
+            }
+            // MainScene.addRemotePlayer는 이미 있으면 skip하므로 중복 안전
+            eventBridge.emit(GameEvents.REMOTE_PLAYER_JOIN, player)
+          }
+        })
+
         return currentPlayers // 상태 변경 없음
       })
       pendingPlayersRef.current = [] // Clear after sync
