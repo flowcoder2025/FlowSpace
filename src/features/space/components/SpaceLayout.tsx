@@ -524,6 +524,9 @@ function SpaceLayoutContent({
   const hasReplacedTrackRef = useRef(false)
   const prevSensitivityRef = useRef(audioSettings.inputSensitivity)  // 📌 sensitivity 전환 감지용
 
+  // 📌 마이크가 켜진 후 트랙 교체를 위한 pending 상태 추적
+  const pendingGateEnableRef = useRef(false)
+
   useEffect(() => {
     const prevSensitivity = prevSensitivityRef.current
     const currSensitivity = audioSettings.inputSensitivity
@@ -536,38 +539,56 @@ function SpaceLayoutContent({
     if (wasGateEnabled && !isGateEnabled && mediaState.isMicrophoneEnabled) {
       console.log("[SpaceLayout] 노이즈 게이트 비활성화 - 마이크 재시작")
       hasReplacedTrackRef.current = false
+      pendingGateEnableRef.current = false
       restartMicrophoneWithOptions(audioCaptureOptions)
     }
 
-    // 📌 게이트 비활성화 → 활성화: 플래그 리셋
+    // 📌 게이트 비활성화 → 활성화
     if (!wasGateEnabled && isGateEnabled) {
       console.log("[SpaceLayout] 노이즈 게이트 활성화 - 트랙 교체 준비")
       hasReplacedTrackRef.current = false
+      // 🔧 마이크가 꺼진 상태면 pending으로 표시 (마이크 켜질 때 처리)
+      if (!mediaState.isMicrophoneEnabled) {
+        console.log("[SpaceLayout] 마이크가 꺼져있음 - 마이크 활성화 시 트랙 교체 예정")
+        pendingGateEnableRef.current = true
+      }
     }
 
     // 📌 이전 값 업데이트
     prevSensitivityRef.current = currSensitivity
 
-    // 📌 기존 트랙 교체 로직 (변경 없음)
+    // 📌 트랙 교체 조건 (마이크가 켜져 있을 때만)
     // 조건: 게이트 초기화 완료 + 처리된 트랙 존재 + 마이크 활성화 + 아직 교체 안함 + sensitivity > 0
     // sensitivity가 0이면 AudioWorklet을 사용하지 않고 원본 LiveKit 트랙 사용
-    if (
+    const shouldReplaceTrack =
       isGateInitialized &&
       processedTrack &&
       mediaState.isMicrophoneEnabled &&
       !hasReplacedTrackRef.current &&
-      currSensitivity > 0 // 📌 노이즈 게이트 활성화 시에만 트랙 교체
-    ) {
-      replaceAudioTrackWithProcessed(processedTrack)
-        .then((success) => {
-          if (success) {
-            hasReplacedTrackRef.current = true
-            console.log("[SpaceLayout] AudioWorklet 처리된 트랙으로 교체 완료")
-          }
-        })
-        .catch((err) => {
-          console.error("[SpaceLayout] 트랙 교체 실패:", err)
-        })
+      currSensitivity > 0
+
+    if (shouldReplaceTrack) {
+      // 🔧 마이크 트랙이 실제로 publish될 때까지 약간의 지연
+      const delay = pendingGateEnableRef.current ? 500 : 0
+
+      setTimeout(() => {
+        // 조건 재확인 (비동기 실행 중 상태 변경 대응)
+        if (!mediaState.isMicrophoneEnabled || hasReplacedTrackRef.current) {
+          return
+        }
+
+        replaceAudioTrackWithProcessed(processedTrack)
+          .then((success) => {
+            if (success) {
+              hasReplacedTrackRef.current = true
+              pendingGateEnableRef.current = false
+              console.log("[SpaceLayout] AudioWorklet 처리된 트랙으로 교체 완료")
+            }
+          })
+          .catch((err) => {
+            console.error("[SpaceLayout] 트랙 교체 실패:", err)
+          })
+      }, delay)
     }
 
     // 마이크가 꺼지면 다음에 다시 교체할 수 있도록 플래그 리셋
