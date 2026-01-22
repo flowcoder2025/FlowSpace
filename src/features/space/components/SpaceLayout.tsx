@@ -19,7 +19,7 @@ import { EditorPanel, EditorModeIndicator } from "./editor"
 import { IOSAudioActivator } from "./IOSAudioActivator"
 import { useSocket } from "../socket"
 import { LiveKitRoomProvider, useLiveKitMedia, useProximitySubscription, type Position } from "../livekit"
-import { useNotificationSound, useChatStorage, usePastMessages, mergePastMessages, useAudioSettings, useAudioGateProcessor, usePartyZone } from "../hooks"
+import { useNotificationSound, useChatStorage, usePastMessages, mergePastMessages, useAudioSettings, usePartyZone } from "../hooks"
 import { generateFullHelpMessages, getNextRotatingHint, getWelcomeMessage, HINT_INTERVAL_MS } from "../utils/commandHints"
 import { useEditorCommands } from "../hooks/useEditorCommands"
 import { useEditorStore } from "../stores/editorStore"
@@ -494,123 +494,24 @@ function SpaceLayoutContent({
     toggleScreenShare,
     participantTracks,
     localParticipantId,
-    localAudioTrack,
-    replaceAudioTrackWithProcessed,
     restartCamera,           // 📌 비디오 설정 적용용
     switchCameraDevice,      // 📌 카메라 장치 전환용
-    restartMicrophoneWithOptions,  // 📌 마이크 재시작용 (노이즈 게이트 전환)
   } = useLiveKitMedia()
 
-  // 📌 오디오 설정 (VAD 감도)
-  const { settings: audioSettings, audioCaptureOptions } = useAudioSettings()
+  // 📌 오디오 설정 (시각적 표시용)
+  const { settings: audioSettings } = useAudioSettings()
 
-  // 🔊 AudioWorklet 기반 전문급 노이즈 게이트
-  // - 별도 스레드에서 오디오 처리 (메인 스레드 차단 없음)
-  // - 부드러운 Attack/Release 엔벨로프
-  // - 히스테리시스로 채터링 방지
-  const {
-    processedTrack,
-    // isGateOpen, // 향후 UI 피드백용 (게이트 상태 표시)
-    isInitialized: isGateInitialized,
-    error: gateError,
-  } = useAudioGateProcessor({
-    inputTrack: localAudioTrack,
-    sensitivity: audioSettings.inputSensitivity,
-    enabled: mediaState.isMicrophoneEnabled && audioSettings.inputSensitivity > 0,
-  })
-
-  // 🔊 AudioWorklet 처리된 트랙을 LiveKit에 적용
-  // processedTrack이 준비되면 기존 마이크 트랙을 교체
-  const hasReplacedTrackRef = useRef(false)
-  const prevSensitivityRef = useRef(audioSettings.inputSensitivity)  // 📌 sensitivity 전환 감지용
-
-  // 📌 마이크가 켜진 후 트랙 교체를 위한 pending 상태 추적
-  const pendingGateEnableRef = useRef(false)
-
-  useEffect(() => {
-    const prevSensitivity = prevSensitivityRef.current
-    const currSensitivity = audioSettings.inputSensitivity
-
-    // 📌 sensitivity 0 ↔ non-zero 전환 감지
-    const wasGateEnabled = prevSensitivity > 0
-    const isGateEnabled = currSensitivity > 0
-
-    // 📌 게이트 활성화 → 비활성화: 마이크 재시작으로 원본 트랙 복원
-    if (wasGateEnabled && !isGateEnabled && mediaState.isMicrophoneEnabled) {
-      console.log("[SpaceLayout] 노이즈 게이트 비활성화 - 마이크 재시작")
-      hasReplacedTrackRef.current = false
-      pendingGateEnableRef.current = false
-      restartMicrophoneWithOptions(audioCaptureOptions)
-    }
-
-    // 📌 게이트 비활성화 → 활성화
-    if (!wasGateEnabled && isGateEnabled) {
-      console.log("[SpaceLayout] 노이즈 게이트 활성화 - 트랙 교체 준비")
-      hasReplacedTrackRef.current = false
-      // 🔧 마이크가 꺼진 상태면 pending으로 표시 (마이크 켜질 때 처리)
-      if (!mediaState.isMicrophoneEnabled) {
-        console.log("[SpaceLayout] 마이크가 꺼져있음 - 마이크 활성화 시 트랙 교체 예정")
-        pendingGateEnableRef.current = true
-      }
-    }
-
-    // 📌 이전 값 업데이트
-    prevSensitivityRef.current = currSensitivity
-
-    // 📌 트랙 교체 조건 (마이크가 켜져 있을 때만)
-    // 조건: 게이트 초기화 완료 + 처리된 트랙 존재 + 마이크 활성화 + 아직 교체 안함 + sensitivity > 0
-    // sensitivity가 0이면 AudioWorklet을 사용하지 않고 원본 LiveKit 트랙 사용
-    const shouldReplaceTrack =
-      isGateInitialized &&
-      processedTrack &&
-      mediaState.isMicrophoneEnabled &&
-      !hasReplacedTrackRef.current &&
-      currSensitivity > 0
-
-    if (shouldReplaceTrack) {
-      // 🔧 마이크 트랙이 실제로 publish될 때까지 약간의 지연
-      const delay = pendingGateEnableRef.current ? 500 : 0
-
-      setTimeout(() => {
-        // 조건 재확인 (비동기 실행 중 상태 변경 대응)
-        if (!mediaState.isMicrophoneEnabled || hasReplacedTrackRef.current) {
-          return
-        }
-
-        replaceAudioTrackWithProcessed(processedTrack)
-          .then((success) => {
-            if (success) {
-              hasReplacedTrackRef.current = true
-              pendingGateEnableRef.current = false
-              console.log("[SpaceLayout] AudioWorklet 처리된 트랙으로 교체 완료")
-            }
-          })
-          .catch((err) => {
-            console.error("[SpaceLayout] 트랙 교체 실패:", err)
-          })
-      }, delay)
-    }
-
-    // 마이크가 꺼지면 다음에 다시 교체할 수 있도록 플래그 리셋
-    if (!mediaState.isMicrophoneEnabled) {
-      hasReplacedTrackRef.current = false
-    }
-  }, [
-    isGateInitialized,
-    processedTrack,
-    mediaState.isMicrophoneEnabled,
-    replaceAudioTrackWithProcessed,
-    audioSettings.inputSensitivity,
-    audioCaptureOptions,
-    restartMicrophoneWithOptions,
-  ])
-
-  // 🔊 게이트 에러 로깅 (개발 모드)
-  useEffect(() => {
-    if (gateError && process.env.NODE_ENV === "development") {
-      console.warn("[SpaceLayout] AudioGate 에러:", gateError)
-    }
-  }, [gateError])
+  // 🔊 입력 감도 기능 비활성화 안내
+  // 📌 이전 구현에서 AudioWorklet 노이즈 게이트가 음성을 차단하는 문제 발생
+  // 📌 입력 감도는 현재 시각적 표시용으로만 사용 (VolumeMeter에서 기준선 표시)
+  // 📌 실제 오디오 처리(노이즈 게이트)는 추후 별도 기능으로 구현 필요
+  //
+  // 비활성화된 기능:
+  // - useAudioGateProcessor: AudioWorklet 기반 노이즈 게이트
+  // - replaceAudioTrackWithProcessed: 처리된 트랙으로 교체
+  //
+  // 입력 감도 설정(audioSettings.inputSensitivity)은 유지되며,
+  // AudioSettingsTab의 VolumeMeter에서 시각적 가이드로만 사용됨
 
   // ============================================
   // 📍 Phase 3: 근접 기반 커뮤니케이션 (Proximity Chat)
