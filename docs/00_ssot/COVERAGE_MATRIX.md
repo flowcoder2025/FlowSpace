@@ -25,8 +25,8 @@
 | **마지막 검증** | 2026-01-22 |
 | **검증 레벨** | soft |
 | **총 항목** | 131 |
-| **SYNC** | 103 |
-| **SNAPSHOT_GAP** | 9 |
+| **SYNC** | 110 |
+| **SNAPSHOT_GAP** | 2 |
 | **PROCESS_BASED** | 11 |
 | **INFRA_BASED** | 8 |
 | **BROKEN_EVIDENCE** | 0 |
@@ -37,9 +37,9 @@
 
 | 지표 | 값 |
 |------|-----|
-| **CODE 기반 SYNC** | 103 |
-| **CODE 기반 GAP** | 9 |
-| **자동화율** | 92% |
+| **CODE 기반 SYNC** | 110 |
+| **CODE 기반 GAP** | 2 |
+| **자동화율** | 98.2% |
 
 > **Note**: PROCESS_BASED(11), INFRA_BASED(8)는 GAP 계산에서 제외됨
 
@@ -132,14 +132,14 @@
 | PERMISSION | PERMISSION_FUNC_CHAT_MANAGE | O | O | O | SYNC |
 | PERMISSION | PERMISSION_FUNC_SUBSCRIPTION | O | O | O | SYNC |
 | SOCKET | SOCKET_FUNC_EVENTS | - | O | O | SNAPSHOT_GAP |
-| SOCKET | SOCKET_FUNC_SESSION_VERIFY | - | O | O | SNAPSHOT_GAP |
-| SOCKET | SOCKET_FUNC_ROOM_STATE | - | O | O | SNAPSHOT_GAP |
-| SOCKET | SOCKET_FUNC_METRICS | - | O | O | SNAPSHOT_GAP |
+| SOCKET | SOCKET_FUNC_SESSION_VERIFY | O | O | O | SYNC |
+| SOCKET | SOCKET_FUNC_ROOM_STATE | O | O | O | SYNC |
+| SOCKET | SOCKET_FUNC_METRICS | O | O | O | SYNC |
 | SOCKET | SOCKET_FUNC_LOGGING | - | O | - | SNAPSHOT_GAP |
-| SOCKET | SOCKET_FUNC_DISCORD | - | O | O | SNAPSHOT_GAP |
-| SOCKET | SOCKET_FUNC_PROXIMITY | - | O | O | SNAPSHOT_GAP |
-| SOCKET | SOCKET_FUNC_PARTY | - | O | O | SNAPSHOT_GAP |
-| SOCKET | SOCKET_FUNC_EVENT_LOGGING | - | O | O | SNAPSHOT_GAP |
+| SOCKET | SOCKET_FUNC_DISCORD | O | O | O | SYNC |
+| SOCKET | SOCKET_FUNC_PROXIMITY | O | O | O | SYNC |
+| SOCKET | SOCKET_FUNC_PARTY | O | O | O | SYNC |
+| SOCKET | SOCKET_FUNC_EVENT_LOGGING | O | O | O | SYNC |
 | SPACE | SPACE_API_CRUD | O | O | O | SYNC |
 | SPACE | SPACE_API_JOIN | O | O | O | SYNC |
 | SPACE | SPACE_API_INVITE | O | O | O | SYNC |
@@ -186,7 +186,7 @@
 
 | 날짜 | SYNC | GAP | PROCESS | INFRA | BROKEN | MISSING | HALLU | 자동화율 |
 |------|:----:|:---:|:-------:|:-----:|:------:|:-------:|:-----:|:--------:|
-| 2026-01-22 | 103 | 9 | 11 | 8 | 0 | 0 | 0 | 92% |
+| 2026-01-22 | 110 | 2 | 11 | 8 | 0 | 0 | 0 | 98.2% |
 
 ---
 
