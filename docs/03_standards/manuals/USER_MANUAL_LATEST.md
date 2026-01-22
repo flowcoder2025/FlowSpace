@@ -1,10 +1,11 @@
 # 사용자 매뉴얼
 
-> 자동 생성: specctl compile (2026-01-22 15:28:43)
+> 자동 생성: specctl compile (2026-01-22 15:37:37)
 
 ---
 
 ## 목차
+
 - [ADMIN](#ADMIN)
 - [AI_PROTOCOL](#AI_PROTOCOL)
 - [ARCH](#ARCH)
@@ -33,6 +34,7 @@
 ---
 
 ## AI_PROTOCOL
+
 
 ### Contract: AI_PROTOCOL_DESIGN_TASK_STRUCTURE
 - **Tier**: normal
@@ -81,6 +83,7 @@
 - **Evidence**:
   - code: `docs/00_ssot/HANDOFF_2026-01-21_CLAUDE_SLIM.md`
 
+
 ---
 
 ## ARCH
@@ -104,6 +107,7 @@
 ---
 
 ## DOCOPS
+
 
 ### Contract: DOCOPS_DESIGN_STATUS_FLOW
 
@@ -191,9 +195,11 @@ INFRA_BASED = INFRA Contract 수
          = CODE 기반만 계산
 ```
 
+
 ---
 
 ## FOUNDATION
+
 
 ### Contract: FOUNDATION_DESIGN_A11Y_MODAL
 
@@ -239,6 +245,7 @@ INFRA_BASED = INFRA Contract 수
   - code: `src/components/ui/dialog.tsx::Dialog`
   - code: `src/components/ui/dialog.tsx::DialogContent`
 
+
 ---
 
 ## GAME
@@ -283,6 +290,7 @@ INFRA_BASED = INFRA Contract 수
 
 ## UI_COMPONENT
 
+
 ### Contract: UI_COMPONENT_DESIGN_BUTTON
 
 - **What**: 버튼 시각 디자인 및 상호작용 상태
@@ -313,6 +321,7 @@ INFRA_BASED = INFRA Contract 수
   - code: `src/components/ui/button.tsx::buttonVariants`
   - code: `src/app/globals.css`
 
+
 ---
 
 ## UI_SYSTEM
@@ -328,4 +337,4 @@ INFRA_BASED = INFRA Contract 수
 
 ---
 
-> **자동 생성**: 2026-01-22 15:28:43
+> **자동 생성**: 2026-01-22 15:37:37

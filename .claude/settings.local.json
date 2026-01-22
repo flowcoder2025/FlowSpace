@@ -13,7 +13,11 @@
       "Bash(vercel env add:*)",
       "Bash(scp:*)",
       "Bash(npx prisma db pull:*)",
-      "Bash(findstr:*)"
+      "Bash(findstr:*)",
+      "Bash(while read f)",
+      "Bash(do if file \"$f\")",
+      "Bash(fi)",
+      "Bash(done)"
     ]
   }
 }

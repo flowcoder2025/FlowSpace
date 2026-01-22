@@ -1,10 +1,11 @@
 # 개발 사양서 (DEV_SPEC)
 
-> 자동 생성: specctl compile (2026-01-22 15:28:43)
+> 자동 생성: specctl compile (2026-01-22 15:37:37)
 
 ---
 
 ## 목차
+
 - [ADMIN](#ADMIN)
 - [AI_PROTOCOL](#AI_PROTOCOL)
 - [ARCH](#ARCH)
@@ -28,6 +29,7 @@
 ---
 
 ## ADMIN
+
 
 ### Contract: ADMIN_API_SPACES
 
@@ -73,9 +75,11 @@
 - **Evidence**:
   - code: `src/app/api/admin/oci-metrics/route.ts::GET`
 
+
 ---
 
 ## AI_PROTOCOL
+
 
 ### Contract: AI_PROTOCOL_FUNC_SESSION_START
 - **Tier**: core
@@ -161,9 +165,11 @@
 - **Evidence**:
   - code: `package.json`
 
+
 ---
 
 ## ARCH
+
 
 ### Contract: ARCH_FUNC_NEXTJS_PLATFORM
 
@@ -202,9 +208,11 @@
   - code: `prisma/schema.prisma::Space`
   - code: `src/lib/prisma.ts::prisma`
 
+
 ---
 
 ## AUTH
+
 
 ### Contract: AUTH_API_NEXTAUTH
 
@@ -229,9 +237,11 @@
   - code: `src/app/api/user/consent/route.ts::POST`
   - code: `prisma/schema.prisma`
 
+
 ---
 
 ## CRON
+
 
 ### Contract: CRON_API_CLEANUP_MESSAGES
 
@@ -259,9 +269,11 @@
 - **Evidence**:
   - code: `src/app/api/cron/aggregate-usage/route.ts::GET`
 
+
 ---
 
 ## DASHBOARD
+
 
 ### Contract: DASHBOARD_API_STATS
 
@@ -277,9 +289,11 @@
   - code: `src/app/api/dashboard/spaces/[id]/export/route.ts::GET`
   - code: `src/lib/space-permissions.ts::hasPermission`
 
+
 ---
 
 ## DOCOPS
+
 
 ### Contract: DOCOPS_FUNC_SNAPSHOT
 
@@ -344,9 +358,11 @@
 | **HALLUCINATION** | 0 |
 ```
 
+
 ---
 
 ## FOUNDATION
+
 
 ### Contract: FOUNDATION_FUNC_DESIGN_TOKENS
 
@@ -378,9 +394,11 @@
   - code: `src/lib/text-config.ts::DEPLOYMENT_ENV`
   - code: `src/lib/text-config.ts::LABEL_TEXT`
 
+
 ---
 
 ## GAME
+
 
 ### Contract: GAME_FUNC_PHASER_WRAPPER
 
@@ -451,9 +469,11 @@
 - **Evidence**:
   - code: `src/features/space/game/objects/InteractiveObject.ts`
 
+
 ---
 
 ## GUEST
+
 
 ### Contract: GUEST_API_CREATE
 
@@ -482,9 +502,11 @@
 - **Evidence**:
   - code: `src/app/api/guest/exit/route.ts::POST`
 
+
 ---
 
 ## INFRA
+
 
 ### Contract: INFRA_FUNC_VERCEL_DEPLOY
 
@@ -551,9 +573,11 @@
 - **Evidence**:
   - code: `src/app/api/cron/collect-metrics/route.ts::POST`
 
+
 ---
 
 ## LIVEKIT
+
 
 ### Contract: LIVEKIT_API_TOKEN
 
@@ -624,9 +648,11 @@
 - **Evidence**:
   - code: `src/features/space/hooks/useMediaDevices.ts`
 
+
 ---
 
 ## PAGE
+
 
 ### Contract: PAGE_HOME
 
@@ -718,9 +744,11 @@
 - **Evidence**:
   - ui: `src/app/login/page.tsx::LoginPage`
 
+
 ---
 
 ## PERMISSION
+
 
 ### Contract: PERMISSION_FUNC_SPACE_ROLE
 
@@ -755,9 +783,11 @@
   - code: `prisma/schema.prisma::Subscription`
   - code: `src/lib/space-auth.ts::canCreateSpace`
 
+
 ---
 
 ## SOCKET
+
 
 ### Contract: SOCKET_FUNC_EVENTS
 
@@ -900,9 +930,11 @@
 - **Evidence**:
   - code: `server/services/event-logger.ts`
 
+
 ---
 
 ## SPACE
+
 
 ### Contract: SPACE_API_CRUD
 
@@ -1087,9 +1119,11 @@
   - code: `src/features/space/utils/chatParser.ts`
   - code: `src/features/space/utils/commandHints.ts`
 
+
 ---
 
 ## UI_COMPONENT
+
 
 ### Contract: UI_COMPONENT_FUNC_BUTTON
 
@@ -1147,9 +1181,11 @@
 - **Evidence**:
   - code: `src/components/space/MemberSearchInput.tsx`
 
+
 ---
 
 ## UI_SYSTEM
+
 
 ### Contract: UI_SYSTEM_FUNC_TOKEN_FLOW
 
@@ -1166,9 +1202,11 @@
   - code: `src/lib/text-config.ts::BUTTON_TEXT`
   - code: `src/lib/text-config.ts::isAppsInToss`
 
+
 ---
 
 ## USER
+
 
 ### Contract: USER_API_NAV
 
@@ -1184,10 +1222,11 @@
   - code: `src/app/api/users/search/route.ts::GET`
   - code: `prisma/schema.prisma::User`
 
----
-
 
 ---
 
-> **자동 생성**: 2026-01-22 15:28:43
+
+---
+
+> **자동 생성**: 2026-01-22 15:37:37
 > **Spec 문서 수**: 19

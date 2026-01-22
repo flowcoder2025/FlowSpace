@@ -1,25 +1,20 @@
 # 인코딩 스캔 리포트
 
-생성일시: 2026-01-22T06:23:46.309Z
+생성일시: 2026-01-22T06:34:27.681Z
 
 ## 요약
 
 | 항목 | 파일 수 |
 |------|---------|
-| BOM 발견 | 6 |
+| BOM 발견 | 1 |
 | Mixed EOL | 3 |
-| 모지바케 의심 | 31 |
-| 정상 | 309 |
+| 모지바케 의심 | 30 |
+| 정상 | 314 |
 
 ---
 
 ## BOM 발견 파일
 
-- `docs\00_ssot\COVERAGE_MATRIX.md`
-- `docs\00_ssot\DRIFT_REPORT.md`
-- `docs\00_ssot\SPEC_SNAPSHOT.md`
-- `docs\03_standards\devspec\DEV_SPEC_LATEST.md`
-- `docs\03_standards\manuals\USER_MANUAL_LATEST.md`
 - `scripts\specctl.ps1`
 
 ## Mixed EOL 파일
@@ -31,7 +26,6 @@
 ## 모지바케 의심 파일
 
 - `docs\00_ssot\AGENT_GUIDE.md`
-- `docs\03_standards\devspec\DEV_SPEC_LATEST.md`
 - `docs\03_standards\manuals\USER_MANUAL_LATEST.md`
 - `docs\03_standards\specs\ARCH.md`
 - `docs\03_standards\specs\DOCOPS.md`

@@ -38,6 +38,9 @@ $script:EvidenceByContract = @{}
 # 파일 내용 캐시: Key="path" Value="content"
 $script:FileCache = @{}
 
+# 파일 존재 여부 캐시: Key="path" Value=$true/$false (v0.5.2 성능 최적화)
+$script:FileExistsCache = @{}
+
 # Snapshot 라우트 해시: Key="route" Value=$true
 $script:SnapshotRoutes = @{}
 
@@ -733,10 +736,21 @@ function Scan-SocketHooksAndHandlers {
 
     # socket 관련 파일들
     $files = @(
+        # 클라이언트
         (Join-Path $ProjectRoot "src\features\space\hooks\useSocket.ts"),
         (Join-Path $ProjectRoot "src\features\space\socket\useSocket.ts"),
-        (Join-Path $ProjectRoot "server\socket-server.ts"),
-        (Join-Path $ProjectRoot "server\socket-handlers.ts")
+        # 서버 핸들러
+        (Join-Path $ProjectRoot "server\handlers\index.ts"),
+        (Join-Path $ProjectRoot "server\handlers\room.ts"),
+        (Join-Path $ProjectRoot "server\handlers\media.ts"),
+        (Join-Path $ProjectRoot "server\handlers\party.ts"),
+        # 서버 코어
+        (Join-Path $ProjectRoot "server\state.ts"),
+        (Join-Path $ProjectRoot "server\index.ts"),
+        (Join-Path $ProjectRoot "server\config.ts"),
+        # 서버 유틸/서비스
+        (Join-Path $ProjectRoot "server\utils\logger.ts"),
+        (Join-Path $ProjectRoot "server\services\event-logger.ts")
     )
 
     foreach ($file in $files) {
@@ -865,8 +879,11 @@ function Validate-Evidence {
 
     $fullPath = Join-Path $ProjectRoot $filePath
 
-    # 파일 존재 확인 (-LiteralPath로 [id] 등 특수문자 경로 지원)
-    if (-not (Test-Path -LiteralPath $fullPath)) {
+    # 파일 존재 확인 (v0.5.2: 캐시 기반 - 성능 최적화)
+    if (-not $script:FileExistsCache.ContainsKey($fullPath)) {
+        $script:FileExistsCache[$fullPath] = Test-Path -LiteralPath $fullPath
+    }
+    if (-not $script:FileExistsCache[$fullPath]) {
         return "FILE_NOT_FOUND"
     }
 
@@ -1778,8 +1795,8 @@ function Cmd-Verify {
                         }
                     }
 
-                    # v0.5.0: Socket 훅/핸들러 매칭
-                    if ($evPath -match 'useSocket\.ts|socket-server\.ts|socket-handlers\.ts') {
+                    # v0.5.0: Socket 훅/핸들러 매칭 (v0.5.2: 서버 핸들러 경로 확장)
+                    if ($evPath -match 'useSocket\.ts|socket-server\.ts|socket-handlers\.ts|server[\\/](handlers[\\/](index|room|media|party)|state|index|config|utils[\\/]logger|services[\\/]event-logger)\.ts') {
                         if ($evSymbol -and $script:SnapshotSocketHooks.ContainsKey($evSymbol)) {
                             $inSnapshot = $true
                             break
