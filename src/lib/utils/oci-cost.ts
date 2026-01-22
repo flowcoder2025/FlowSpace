@@ -152,10 +152,11 @@ export function calculateCostEstimate(
 
 /**
  * 리소스 사용량 퍼센트 계산
+ * 소수점 1자리까지 반환 (예: 0.2%)
  */
 export function calculateResourcePercent(used: number, limit: number): number {
   if (limit <= 0) return 0
-  return Math.round((used / limit) * 100)
+  return Math.round((used / limit) * 1000) / 10  // 소수점 1자리
 }
 
 /**
