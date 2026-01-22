@@ -49,7 +49,7 @@
   | S→C | `proximity:error` | `{ message }` | 근접 설정 에러 |
   | S→C | `error` | `{ message }` | 일반 에러 |
 - **Evidence**:
-  - code: `server/socket-server.ts`
+  - code: `server/handlers/`
 
 ### Contract: SOCKET_FUNC_SESSION_VERIFY
 
@@ -61,7 +61,7 @@
   - 개발환경: 경고 후 진행 허용
   - `dev-*` 세션: 검증 스킵
 - **Evidence**:
-  - code: `server/socket-server.ts::connection`
+  - code: `server/handlers/room.ts`
 
 ### Contract: SOCKET_FUNC_ROOM_STATE
 
@@ -80,7 +80,7 @@
   }
   ```
 - **Evidence**:
-  - code: `server/socket-server.ts`
+  - code: `server/state.ts`
 
 ### Contract: SOCKET_FUNC_METRICS
 
@@ -90,7 +90,7 @@
   - 응답: `{ server, version, timestamp, uptime, connections, parties, process, storage }`
   - storage: `{ totalGB, usedGB, availableGB, usedPercent, mountPoint }`
 - **Evidence**:
-  - code: `server/socket-server.ts`
+  - code: `server/index.ts`
 
 ### Contract: SOCKET_FUNC_LOGGING
 
@@ -110,7 +110,7 @@
   | `info` | 정보 |
   | `debug` | 개발 모드만 |
 - **Evidence**:
-  - code: `server/socket-server.ts`
+  - code: `server/utils/logger.ts`, `server/config.ts`
 
 ### Contract: SOCKET_FUNC_DISCORD
 
@@ -120,7 +120,7 @@
   - 알림 대상: 서버 에러 (심각), 연결 에러
   - 메시지: embed 형식 (title, description, color, fields)
 - **Evidence**:
-  - code: `server/socket-server.ts`
+  - code: `server/utils/logger.ts`
 
 ### Contract: SOCKET_FUNC_PROXIMITY
 
@@ -130,7 +130,7 @@
   - `proximity:changed`: 전체 브로드캐스트
   - `proximity:error`: 권한 없음 등 에러
 - **Evidence**:
-  - code: `server/socket-server.ts`
+  - code: `server/handlers/media.ts`
 
 ### Contract: SOCKET_FUNC_PARTY
 
@@ -139,7 +139,7 @@
   - `joinParty` / `leaveParty`: 파티 존 입/퇴장
   - `party:*` 이벤트: 파티 생성, 초대, 수락, 거절, 탈퇴, 메시지
 - **Evidence**:
-  - code: `server/socket-server.ts`
+  - code: `server/handlers/party.ts`
 
 ### Contract: SOCKET_FUNC_EVENT_LOGGING
 
@@ -151,7 +151,7 @@
   | `guest-*` | logGuestEvent | Guest API 로깅 |
   | `auth-*` | logAuthUserEvent | Visit API 로깅 |
 - **Evidence**:
-  - code: `server/socket-server.ts`
+  - code: `server/services/event-logger.ts`
 
 <!-- FUNCTIONAL:END -->
 
@@ -214,11 +214,21 @@ cors: {
 
 ## 참조
 
-- 서버: `server/socket-server.ts`
+- 서버 진입점: `server/index.ts`
+- 핸들러: `server/handlers/`
+- 서비스: `server/services/`
+- 상태 관리: `server/state.ts`
+- 설정: `server/config.ts`
+- 유틸리티: `server/utils/`
 - 클라이언트: `src/features/space/socket/useSocket.ts`
 - 타입: `src/features/space/socket/types.ts`
 - 인프라: `docs/03_standards/specs/INFRA.md`
 
 ---
 
-> **생성일**: 2026-01-21 DocOps SPEC 통합
+## 변경 이력
+
+| 날짜 | 요약 | 커밋 |
+|------|------|------|
+| 2026-01-22 | 모듈화 리팩토링 (단일 파일 → 23개 모듈) | f226bcb |
+| 2026-01-21 | DocOps SPEC 통합 | - |
