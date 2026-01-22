@@ -498,10 +498,11 @@ function SpaceLayoutContent({
     replaceAudioTrackWithProcessed,
     restartCamera,           // 📌 비디오 설정 적용용
     switchCameraDevice,      // 📌 카메라 장치 전환용
+    restartMicrophoneWithOptions,  // 📌 마이크 재시작용 (노이즈 게이트 전환)
   } = useLiveKitMedia()
 
   // 📌 오디오 설정 (VAD 감도)
-  const { settings: audioSettings } = useAudioSettings()
+  const { settings: audioSettings, audioCaptureOptions } = useAudioSettings()
 
   // 🔊 AudioWorklet 기반 전문급 노이즈 게이트
   // - 별도 스레드에서 오디오 처리 (메인 스레드 차단 없음)
@@ -521,16 +522,41 @@ function SpaceLayoutContent({
   // 🔊 AudioWorklet 처리된 트랙을 LiveKit에 적용
   // processedTrack이 준비되면 기존 마이크 트랙을 교체
   const hasReplacedTrackRef = useRef(false)
+  const prevSensitivityRef = useRef(audioSettings.inputSensitivity)  // 📌 sensitivity 전환 감지용
 
   useEffect(() => {
-    // 📌 조건: 게이트 초기화 완료 + 처리된 트랙 존재 + 마이크 활성화 + 아직 교체 안함 + sensitivity > 0
+    const prevSensitivity = prevSensitivityRef.current
+    const currSensitivity = audioSettings.inputSensitivity
+
+    // 📌 sensitivity 0 ↔ non-zero 전환 감지
+    const wasGateEnabled = prevSensitivity > 0
+    const isGateEnabled = currSensitivity > 0
+
+    // 📌 게이트 활성화 → 비활성화: 마이크 재시작으로 원본 트랙 복원
+    if (wasGateEnabled && !isGateEnabled && mediaState.isMicrophoneEnabled) {
+      console.log("[SpaceLayout] 노이즈 게이트 비활성화 - 마이크 재시작")
+      hasReplacedTrackRef.current = false
+      restartMicrophoneWithOptions(audioCaptureOptions)
+    }
+
+    // 📌 게이트 비활성화 → 활성화: 플래그 리셋
+    if (!wasGateEnabled && isGateEnabled) {
+      console.log("[SpaceLayout] 노이즈 게이트 활성화 - 트랙 교체 준비")
+      hasReplacedTrackRef.current = false
+    }
+
+    // 📌 이전 값 업데이트
+    prevSensitivityRef.current = currSensitivity
+
+    // 📌 기존 트랙 교체 로직 (변경 없음)
+    // 조건: 게이트 초기화 완료 + 처리된 트랙 존재 + 마이크 활성화 + 아직 교체 안함 + sensitivity > 0
     // sensitivity가 0이면 AudioWorklet을 사용하지 않고 원본 LiveKit 트랙 사용
     if (
       isGateInitialized &&
       processedTrack &&
       mediaState.isMicrophoneEnabled &&
       !hasReplacedTrackRef.current &&
-      audioSettings.inputSensitivity > 0 // 📌 노이즈 게이트 활성화 시에만 트랙 교체
+      currSensitivity > 0 // 📌 노이즈 게이트 활성화 시에만 트랙 교체
     ) {
       replaceAudioTrackWithProcessed(processedTrack)
         .then((success) => {
@@ -548,7 +574,15 @@ function SpaceLayoutContent({
     if (!mediaState.isMicrophoneEnabled) {
       hasReplacedTrackRef.current = false
     }
-  }, [isGateInitialized, processedTrack, mediaState.isMicrophoneEnabled, replaceAudioTrackWithProcessed, audioSettings.inputSensitivity])
+  }, [
+    isGateInitialized,
+    processedTrack,
+    mediaState.isMicrophoneEnabled,
+    replaceAudioTrackWithProcessed,
+    audioSettings.inputSensitivity,
+    audioCaptureOptions,
+    restartMicrophoneWithOptions,
+  ])
 
   // 🔊 게이트 에러 로깅 (개발 모드)
   useEffect(() => {
