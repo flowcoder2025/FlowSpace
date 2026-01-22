@@ -49,6 +49,8 @@
   | S→C | `proximity:error` | `{ message }` | 근접 설정 에러 |
   | S→C | `error` | `{ message }` | 일반 에러 |
 - **Evidence**:
+  - code: `src/features/space/socket/types.ts::ClientToServerEvents`
+  - code: `src/features/space/socket/types.ts::ServerToClientEvents`
   - code: `server/handlers/index.ts::registerHandlers`
 
 ### Contract: SOCKET_FUNC_SESSION_VERIFY
@@ -110,7 +112,8 @@
   | `info` | 정보 |
   | `debug` | 개발 모드만 |
 - **Evidence**:
-  - code: `server/utils/logger.ts`, `server/config.ts`
+  - code: `server/utils/logger.ts::logger`
+  - code: `server/config.ts::ErrorCode`
 
 ### Contract: SOCKET_FUNC_DISCORD
 

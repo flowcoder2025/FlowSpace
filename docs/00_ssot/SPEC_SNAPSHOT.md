@@ -1,6 +1,6 @@
 # SPEC_SNAPSHOT - 코드 인벤토리
 
-> 자동 생성: specctl snapshot (2026-01-21 21:54:47)
+> 자동 생성: specctl snapshot (2026-01-22 17:57:42)
 > 버전: v0.5.0 (확장 스캔 지원)
 
 ---
@@ -9,10 +9,10 @@
 
 | 항목 | 값 |
 |------|-----|
-| **생성일** | 2026-01-21 |
+| **생성일** | 2026-01-22 |
 | **도구** | specctl v0.5.0 |
 | **프로젝트** | flow_metaverse |
-| **총 항목** | 405 |
+| **총 항목** | 384 |
 
 ### 세부 카운트
 
@@ -22,11 +22,11 @@
 | API 라우트 | 0 |
 | UI 컴포넌트 | 99 |
 | 권한 유틸리티 | 22 |
-| Socket 이벤트 | 25 |
+| Socket 이벤트 | 0 |
 | 설계 토큰 | 12 |
 | Feature 훅 | 19 |
 | CSS 변수 | 53 |
-| Socket 훅/핸들러 | 175 |
+| Socket 훅/핸들러 | 179 |
 
 ---
 
@@ -243,31 +243,6 @@
 > 자동 스캔: server/socket-server.ts
 | Event | File | SPEC_KEY | Direction |
 |-------|------|----------|-----------|
-| join:space | server/socket-server.ts | SOCKET | client→server |
-| leave:space | server/socket-server.ts | SOCKET | client→server |
-| player:move | server/socket-server.ts | SOCKET | client→server |
-| player:jump | server/socket-server.ts | SOCKET | client→server |
-| chat:message | server/socket-server.ts | SOCKET | client→server |
-| reaction:toggle | server/socket-server.ts | SOCKET | client→server |
-| whisper:send | server/socket-server.ts | SOCKET | client→server |
-| party:join | server/socket-server.ts | SOCKET | client→server |
-| party:leave | server/socket-server.ts | SOCKET | client→server |
-| party:message | server/socket-server.ts | SOCKET | client→server |
-| player:updateProfile | server/socket-server.ts | SOCKET | client→server |
-| admin:mute | server/socket-server.ts | SOCKET | client→server |
-| admin:unmute | server/socket-server.ts | SOCKET | client→server |
-| admin:kick | server/socket-server.ts | SOCKET | client→server |
-| admin:deleteMessage | server/socket-server.ts | SOCKET | client→server |
-| admin:announce | server/socket-server.ts | SOCKET | client→server |
-| recording:start | server/socket-server.ts | SOCKET | client→server |
-| recording:stop | server/socket-server.ts | SOCKET | client→server |
-| spotlight:activate | server/socket-server.ts | SOCKET | client→server |
-| spotlight:deactivate | server/socket-server.ts | SOCKET | client→server |
-| proximity:set | server/socket-server.ts | SOCKET | client→server |
-| object:place | server/socket-server.ts | SOCKET | client→server |
-| object:update | server/socket-server.ts | SOCKET | client→server |
-| object:delete | server/socket-server.ts | SOCKET | client→server |
-| disconnect | server/socket-server.ts | SOCKET | client→server |
 
 ---
 
@@ -456,120 +431,113 @@
 | activateSpotlight | src/features/space/socket/useSocket.ts | PERMISSION | callback |
 | deactivateSpotlight | src/features/space/socket/useSocket.ts | PERMISSION | callback |
 | setProximity | src/features/space/socket/useSocket.ts | PERMISSION | callback |
-| error | server/socket-server.ts | SOCKET | emit |
-| error | server/socket-server.ts | SOCKET | emit |
-| room:joined | server/socket-server.ts | SOCKET | emit |
-| objects:sync | server/socket-server.ts | SOCKET | emit |
-| recording:status | server/socket-server.ts | SOCKET | emit |
-| spotlight:status | server/socket-server.ts | SOCKET | emit |
-| proximity:status | server/socket-server.ts | SOCKET | emit |
-| chat:error | server/socket-server.ts | SOCKET | emit |
-| chat:error | server/socket-server.ts | SOCKET | emit |
-| whisper:error | server/socket-server.ts | SOCKET | emit |
-| whisper:error | server/socket-server.ts | SOCKET | emit |
-| whisper:error | server/socket-server.ts | SOCKET | emit |
-| whisper:error | server/socket-server.ts | SOCKET | emit |
-| whisper:sent | server/socket-server.ts | SOCKET | emit |
-| whisper:messageIdUpdate | server/socket-server.ts | SOCKET | emit |
-| whisper:messageFailed | server/socket-server.ts | SOCKET | emit |
-| party:joined | server/socket-server.ts | SOCKET | emit |
-| party:left | server/socket-server.ts | SOCKET | emit |
-| party:error | server/socket-server.ts | SOCKET | emit |
-| party:error | server/socket-server.ts | SOCKET | emit |
-| admin:error | server/socket-server.ts | SOCKET | emit |
-| admin:error | server/socket-server.ts | SOCKET | emit |
-| admin:error | server/socket-server.ts | SOCKET | emit |
-| admin:error | server/socket-server.ts | SOCKET | emit |
-| admin:error | server/socket-server.ts | SOCKET | emit |
-| admin:error | server/socket-server.ts | SOCKET | emit |
-| admin:error | server/socket-server.ts | SOCKET | emit |
-| admin:error | server/socket-server.ts | SOCKET | emit |
-| admin:error | server/socket-server.ts | SOCKET | emit |
-| admin:error | server/socket-server.ts | SOCKET | emit |
-| admin:error | server/socket-server.ts | SOCKET | emit |
-| admin:error | server/socket-server.ts | SOCKET | emit |
-| admin:error | server/socket-server.ts | SOCKET | emit |
-| admin:error | server/socket-server.ts | SOCKET | emit |
-| admin:error | server/socket-server.ts | SOCKET | emit |
-| admin:error | server/socket-server.ts | SOCKET | emit |
-| admin:error | server/socket-server.ts | SOCKET | emit |
-| admin:error | server/socket-server.ts | SOCKET | emit |
-| admin:error | server/socket-server.ts | SOCKET | emit |
-| admin:error | server/socket-server.ts | SOCKET | emit |
-| admin:error | server/socket-server.ts | SOCKET | emit |
-| admin:error | server/socket-server.ts | SOCKET | emit |
-| admin:error | server/socket-server.ts | SOCKET | emit |
-| admin:error | server/socket-server.ts | SOCKET | emit |
-| admin:error | server/socket-server.ts | SOCKET | emit |
-| admin:error | server/socket-server.ts | SOCKET | emit |
-| admin:error | server/socket-server.ts | SOCKET | emit |
-| admin:error | server/socket-server.ts | SOCKET | emit |
-| recording:error | server/socket-server.ts | SOCKET | emit |
-| recording:error | server/socket-server.ts | SOCKET | emit |
-| recording:error | server/socket-server.ts | SOCKET | emit |
-| recording:error | server/socket-server.ts | SOCKET | emit |
-| recording:error | server/socket-server.ts | SOCKET | emit |
-| recording:error | server/socket-server.ts | SOCKET | emit |
-| recording:error | server/socket-server.ts | SOCKET | emit |
-| recording:error | server/socket-server.ts | SOCKET | emit |
-| spotlight:error | server/socket-server.ts | SOCKET | emit |
-| spotlight:error | server/socket-server.ts | SOCKET | emit |
-| spotlight:error | server/socket-server.ts | SOCKET | emit |
-| spotlight:error | server/socket-server.ts | SOCKET | emit |
-| spotlight:error | server/socket-server.ts | SOCKET | emit |
-| spotlight:error | server/socket-server.ts | SOCKET | emit |
-| spotlight:error | server/socket-server.ts | SOCKET | emit |
-| proximity:error | server/socket-server.ts | SOCKET | emit |
-| proximity:error | server/socket-server.ts | SOCKET | emit |
-| proximity:error | server/socket-server.ts | SOCKET | emit |
-| object:error | server/socket-server.ts | SOCKET | emit |
-| object:error | server/socket-server.ts | SOCKET | emit |
-| object:error | server/socket-server.ts | SOCKET | emit |
-| object:error | server/socket-server.ts | SOCKET | emit |
-| object:error | server/socket-server.ts | SOCKET | emit |
-| object:error | server/socket-server.ts | SOCKET | emit |
-| object:error | server/socket-server.ts | SOCKET | emit |
-| object:error | server/socket-server.ts | SOCKET | emit |
-| object:error | server/socket-server.ts | SOCKET | emit |
-| object:error | server/socket-server.ts | SOCKET | emit |
-| object:error | server/socket-server.ts | SOCKET | emit |
-| join:space | server/socket-server.ts | SOCKET | on |
-| leave:space | server/socket-server.ts | SOCKET | on |
-| player:move | server/socket-server.ts | SOCKET | on |
-| player:jump | server/socket-server.ts | SOCKET | on |
-| chat:message | server/socket-server.ts | SOCKET | on |
-| reaction:toggle | server/socket-server.ts | SOCKET | on |
-| whisper:send | server/socket-server.ts | SOCKET | on |
-| party:join | server/socket-server.ts | SOCKET | on |
-| party:leave | server/socket-server.ts | SOCKET | on |
-| party:message | server/socket-server.ts | SOCKET | on |
-| player:updateProfile | server/socket-server.ts | SOCKET | on |
-| admin:mute | server/socket-server.ts | SOCKET | on |
-| admin:unmute | server/socket-server.ts | SOCKET | on |
-| admin:kick | server/socket-server.ts | SOCKET | on |
-| admin:deleteMessage | server/socket-server.ts | SOCKET | on |
-| admin:announce | server/socket-server.ts | SOCKET | on |
-| recording:start | server/socket-server.ts | SOCKET | on |
-| recording:stop | server/socket-server.ts | SOCKET | on |
-| spotlight:activate | server/socket-server.ts | SOCKET | on |
-| spotlight:deactivate | server/socket-server.ts | SOCKET | on |
-| proximity:set | server/socket-server.ts | SOCKET | on |
-| object:place | server/socket-server.ts | SOCKET | on |
-| object:update | server/socket-server.ts | SOCKET | on |
-| object:delete | server/socket-server.ts | SOCKET | on |
-| disconnect | server/socket-server.ts | SOCKET | on |
-| connection | server/socket-server.ts | SOCKET | io.on |
-
----
-
-## Server 핸들러/유틸리티 (v0.5.1)
-
-> 수동 추가: server/handlers/*.ts, server/utils/*.ts
-| Name | File | SPEC_KEY | Type |
-|------|------|----------|------|
+| PartyState | src/features/space/socket/useSocket.ts | SOCKET | interface |
+| SocketError | src/features/space/socket/useSocket.ts | SOCKET | type |
+| PlayerPosition | src/features/space/socket/types.ts | SOCKET | interface |
+| PlayerMoveData | src/features/space/socket/types.ts | SOCKET | interface |
+| PlayerJumpData | src/features/space/socket/types.ts | SOCKET | interface |
+| MemberMutedData | src/features/space/socket/types.ts | SOCKET | interface |
+| MemberUnmutedData | src/features/space/socket/types.ts | SOCKET | interface |
+| MemberKickedData | src/features/space/socket/types.ts | SOCKET | interface |
+| RoleChangedData | src/features/space/socket/types.ts | SOCKET | interface |
+| MessageDeletedData | src/features/space/socket/types.ts | SOCKET | interface |
+| AnnouncementData | src/features/space/socket/types.ts | SOCKET | interface |
+| AdminMuteRequest | src/features/space/socket/types.ts | SOCKET | interface |
+| AdminUnmuteRequest | src/features/space/socket/types.ts | SOCKET | interface |
+| AdminKickRequest | src/features/space/socket/types.ts | SOCKET | interface |
+| AdminDeleteMessageRequest | src/features/space/socket/types.ts | SOCKET | interface |
+| AdminAnnounceRequest | src/features/space/socket/types.ts | SOCKET | interface |
+| GridPosition | src/features/space/socket/types.ts | SOCKET | interface |
+| MapObjectData | src/features/space/socket/types.ts | SOCKET | interface |
+| ObjectPlaceRequest | src/features/space/socket/types.ts | SOCKET | interface |
+| ObjectUpdateRequest | src/features/space/socket/types.ts | SOCKET | interface |
+| ObjectDeleteRequest | src/features/space/socket/types.ts | SOCKET | interface |
+| ObjectPlacedData | src/features/space/socket/types.ts | SOCKET | interface |
+| ObjectUpdatedData | src/features/space/socket/types.ts | SOCKET | interface |
+| ObjectDeletedData | src/features/space/socket/types.ts | SOCKET | interface |
+| ObjectsSyncData | src/features/space/socket/types.ts | SOCKET | interface |
+| RecordingStatusData | src/features/space/socket/types.ts | SOCKET | interface |
+| RecordingStartRequest | src/features/space/socket/types.ts | SOCKET | interface |
+| RecordingStopRequest | src/features/space/socket/types.ts | SOCKET | interface |
+| ReplyToData | src/features/space/socket/types.ts | SOCKET | interface |
+| SpotlightGrantedData | src/features/space/socket/types.ts | SOCKET | interface |
+| SpotlightRevokedData | src/features/space/socket/types.ts | SOCKET | interface |
+| SpotlightActivatedData | src/features/space/socket/types.ts | SOCKET | interface |
+| SpotlightStatusData | src/features/space/socket/types.ts | SOCKET | interface |
+| SpotlightActivateRequest | src/features/space/socket/types.ts | SOCKET | interface |
+| SpotlightDeactivateRequest | src/features/space/socket/types.ts | SOCKET | interface |
+| ReactionAddRequest | src/features/space/socket/types.ts | SOCKET | interface |
+| ReactionData | src/features/space/socket/types.ts | SOCKET | interface |
+| ChatMessageData | src/features/space/socket/types.ts | SOCKET | interface |
+| RoomData | src/features/space/socket/types.ts | SOCKET | interface |
+| ProfileUpdateData | src/features/space/socket/types.ts | SOCKET | interface |
+| ClientToServerEvents | src/features/space/socket/types.ts | SOCKET | interface |
+| ServerToClientEvents | src/features/space/socket/types.ts | SOCKET | interface |
+| InterServerEvents | src/features/space/socket/types.ts | SOCKET | interface |
+| SocketData | src/features/space/socket/types.ts | SOCKET | interface |
+| AvatarColor | src/features/space/socket/types.ts | SOCKET | type |
+| MessageType | src/features/space/socket/types.ts | SOCKET | type |
+| SpaceRole | src/features/space/socket/types.ts | SOCKET | type |
+| ChatRestriction | src/features/space/socket/types.ts | SOCKET | type |
+| ReactionType | src/features/space/socket/types.ts | SOCKET | type |
 | registerHandlers | server/handlers/index.ts | SOCKET | function |
-| logger | server/utils/logger.ts | SOCKET | module |
-| config | server/config.ts | SOCKET | module |
+| registerRoomHandlers | server/handlers/room.ts | SOCKET | function |
+| error | server/handlers/room.ts | SOCKET | emit |
+| error | server/handlers/room.ts | SOCKET | emit |
+| room:joined | server/handlers/room.ts | SOCKET | emit |
+| objects:sync | server/handlers/room.ts | SOCKET | emit |
+| recording:status | server/handlers/room.ts | SOCKET | emit |
+| spotlight:status | server/handlers/room.ts | SOCKET | emit |
+| proximity:status | server/handlers/room.ts | SOCKET | emit |
+| join:space | server/handlers/room.ts | SOCKET | on |
+| leave:space | server/handlers/room.ts | SOCKET | on |
+| registerMediaHandlers | server/handlers/media.ts | SOCKET | function |
+| recording:error | server/handlers/media.ts | SOCKET | emit |
+| recording:error | server/handlers/media.ts | SOCKET | emit |
+| recording:error | server/handlers/media.ts | SOCKET | emit |
+| recording:error | server/handlers/media.ts | SOCKET | emit |
+| recording:error | server/handlers/media.ts | SOCKET | emit |
+| recording:error | server/handlers/media.ts | SOCKET | emit |
+| recording:error | server/handlers/media.ts | SOCKET | emit |
+| recording:error | server/handlers/media.ts | SOCKET | emit |
+| spotlight:error | server/handlers/media.ts | SOCKET | emit |
+| spotlight:error | server/handlers/media.ts | SOCKET | emit |
+| spotlight:error | server/handlers/media.ts | SOCKET | emit |
+| spotlight:error | server/handlers/media.ts | SOCKET | emit |
+| spotlight:error | server/handlers/media.ts | SOCKET | emit |
+| spotlight:error | server/handlers/media.ts | SOCKET | emit |
+| spotlight:error | server/handlers/media.ts | SOCKET | emit |
+| proximity:error | server/handlers/media.ts | SOCKET | emit |
+| proximity:error | server/handlers/media.ts | SOCKET | emit |
+| proximity:error | server/handlers/media.ts | SOCKET | emit |
+| recording:start | server/handlers/media.ts | SOCKET | on |
+| recording:stop | server/handlers/media.ts | SOCKET | on |
+| spotlight:activate | server/handlers/media.ts | SOCKET | on |
+| spotlight:deactivate | server/handlers/media.ts | SOCKET | on |
+| proximity:set | server/handlers/media.ts | SOCKET | on |
+| registerPartyHandlers | server/handlers/party.ts | SOCKET | function |
+| party:joined | server/handlers/party.ts | SOCKET | emit |
+| party:left | server/handlers/party.ts | SOCKET | emit |
+| party:error | server/handlers/party.ts | SOCKET | emit |
+| party:error | server/handlers/party.ts | SOCKET | emit |
+| party:join | server/handlers/party.ts | SOCKET | on |
+| party:leave | server/handlers/party.ts | SOCKET | on |
+| party:message | server/handlers/party.ts | SOCKET | on |
+| getOrCreateRoom | server/state.ts | SOCKET | function |
+| removePlayerFromRoom | server/state.ts | SOCKET | function |
+| getPartyRoomId | server/state.ts | SOCKET | function |
+| getOrCreatePartyRoom | server/state.ts | SOCKET | function |
+| removeFromPartyRoom | server/state.ts | SOCKET | function |
+| getOrCreateSpotlightState | server/state.ts | SOCKET | function |
+| getProximityState | server/state.ts | SOCKET | function |
+| setProximityState | server/state.ts | SOCKET | function |
+| ActiveSpotlight | server/state.ts | SOCKET | interface |
+| connection | server/index.ts | SOCKET | io.on |
+| LogContext | server/config.ts | SOCKET | interface |
+| ErrorCode | server/config.ts | SOCKET | type |
+| LogLevel | server/config.ts | SOCKET | type |
+| logGuestEvent | server/services/event-logger.ts | SOCKET | function |
+| logAuthUserEvent | server/services/event-logger.ts | SOCKET | function |
 
 ---
 

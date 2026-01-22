@@ -25,8 +25,8 @@
 | **마지막 검증** | 2026-01-22 |
 | **검증 레벨** | soft |
 | **총 항목** | 131 |
-| **SYNC** | 110 |
-| **SNAPSHOT_GAP** | 2 |
+| **SYNC** | 112 |
+| **SNAPSHOT_GAP** | 0 |
 | **PROCESS_BASED** | 11 |
 | **INFRA_BASED** | 8 |
 | **BROKEN_EVIDENCE** | 0 |
@@ -37,9 +37,9 @@
 
 | 지표 | 값 |
 |------|-----|
-| **CODE 기반 SYNC** | 110 |
-| **CODE 기반 GAP** | 2 |
-| **자동화율** | 98.2% |
+| **CODE 기반 SYNC** | 112 |
+| **CODE 기반 GAP** | 0 |
+| **자동화율** | 100% |
 
 > **Note**: PROCESS_BASED(11), INFRA_BASED(8)는 GAP 계산에서 제외됨
 
@@ -131,11 +131,11 @@
 | PERMISSION | PERMISSION_FUNC_SPACE_AUTH | O | O | O | SYNC |
 | PERMISSION | PERMISSION_FUNC_CHAT_MANAGE | O | O | O | SYNC |
 | PERMISSION | PERMISSION_FUNC_SUBSCRIPTION | O | O | O | SYNC |
-| SOCKET | SOCKET_FUNC_EVENTS | - | O | O | SNAPSHOT_GAP |
+| SOCKET | SOCKET_FUNC_EVENTS | O | O | O | SYNC |
 | SOCKET | SOCKET_FUNC_SESSION_VERIFY | O | O | O | SYNC |
 | SOCKET | SOCKET_FUNC_ROOM_STATE | O | O | O | SYNC |
 | SOCKET | SOCKET_FUNC_METRICS | O | O | O | SYNC |
-| SOCKET | SOCKET_FUNC_LOGGING | - | O | - | SNAPSHOT_GAP |
+| SOCKET | SOCKET_FUNC_LOGGING | O | O | O | SYNC |
 | SOCKET | SOCKET_FUNC_DISCORD | O | O | O | SYNC |
 | SOCKET | SOCKET_FUNC_PROXIMITY | O | O | O | SYNC |
 | SOCKET | SOCKET_FUNC_PARTY | O | O | O | SYNC |
@@ -186,7 +186,7 @@
 
 | 날짜 | SYNC | GAP | PROCESS | INFRA | BROKEN | MISSING | HALLU | 자동화율 |
 |------|:----:|:---:|:-------:|:-----:|:------:|:-------:|:-----:|:--------:|
-| 2026-01-22 | 110 | 2 | 11 | 8 | 0 | 0 | 0 | 98.2% |
+| 2026-01-22 | 112 | 0 | 11 | 8 | 0 | 0 | 0 | 100% |
 
 ---
 

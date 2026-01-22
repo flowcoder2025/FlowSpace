@@ -739,6 +739,7 @@ function Scan-SocketHooksAndHandlers {
         # 클라이언트
         (Join-Path $ProjectRoot "src\features\space\hooks\useSocket.ts"),
         (Join-Path $ProjectRoot "src\features\space\socket\useSocket.ts"),
+        (Join-Path $ProjectRoot "src\features\space\socket\types.ts"),
         # 서버 핸들러
         (Join-Path $ProjectRoot "server\handlers\index.ts"),
         (Join-Path $ProjectRoot "server\handlers\room.ts"),
@@ -798,6 +799,21 @@ function Scan-SocketHooksAndHandlers {
             $name = $match.Groups[1].Value
             $specKey = if ($relFile -match 'useSocket') { "PERMISSION" } else { "SOCKET" }
             $items += "| $name | $relFile | $specKey | callback |"
+            $found++
+        }
+
+        # v0.5.2: export interface/type 추출 (types.ts 등)
+        $interfaceMatches = [regex]::Matches($content, 'export\s+interface\s+([A-Z][a-zA-Z0-9]*)')
+        foreach ($match in $interfaceMatches) {
+            $name = $match.Groups[1].Value
+            $items += "| $name | $relFile | SOCKET | interface |"
+            $found++
+        }
+
+        $typeMatches = [regex]::Matches($content, 'export\s+type\s+([A-Z][a-zA-Z0-9]*)')
+        foreach ($match in $typeMatches) {
+            $name = $match.Groups[1].Value
+            $items += "| $name | $relFile | SOCKET | type |"
             $found++
         }
     }
